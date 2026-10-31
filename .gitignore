@@ -1,0 +1,11 @@
+# ferramentas locais do canvas/agente
+.maestri/
+.claude/settings.local.json
+
+# build
+/dist/
+/bin/
+*.exe
+*.test
+*.out
+coverage.*
