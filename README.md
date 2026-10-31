@@ -59,7 +59,7 @@ pacman e Flatpak (Linux). Também baixa releases do GitHub e URLs diretas, sempr
 ### Catálogo
 
 Cada app é declarado uma vez em `catalog/catalog.yaml`, com uma lista de formas de instalar por SO, em
-ordem de preferência. Você escolhe "Discord" e o toolkit usa o primeiro gerenciador disponível na máquina.
+ordem de preferência. Você escolhe "Discord" e o toolkit usa o primeiro gerenciador que existir na máquina.
 
 ```yaml
 apps:

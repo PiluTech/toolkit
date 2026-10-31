@@ -405,7 +405,7 @@ está sem orçamento e nunca vou executar winget, dism ou reboot de verdade nest
     | 0x8A15010F | INSTALL_BLOCKED_BY_POLICY | erro claro |
     | 0x8A150104 / 0x8A150105 / 0x8A150107 | MISSING_DEPENDENCY / DISK_FULL / NO_NETWORK | erro com a mensagem oficial |
 
-  - Se o winget não estiver disponível (primeiro login ainda não registrou o App Installer [5]), o
+  - Se o winget não estiver instalado ou registrado (primeiro login ainda não registrou o App Installer [5]), o
     diagnóstico oferece `Add-AppxPackage -RegisterByFamilyName -MainPackage
     Microsoft.DesktopAppInstaller_8wekyb3d8bbwe`, que é o comando da documentação oficial (pergunta 17).
 - **brew** [6][7]:
@@ -416,7 +416,7 @@ está sem orçamento e nunca vou executar winget, dism ou reboot de verdade nest
     `brew update` por execução) e `HOMEBREW_NO_ENV_HINTS=1` [6].
   - Nunca rodo brew com sudo: o FAQ do Homebrew explica que ele roda como a conta dona da instalação [7].
 - **apt** [8][9]:
-  - Versões vêm de `apt-cache madison <pkg>`, que mostra as versões disponíveis nos repositórios
+  - Versões vêm de `apt-cache madison <pkg>`, que mostra as versões que existem nos repositórios
     configurados [8]. Instalo com `apt-get install -y pkg=versão` [9].
   - O estado instalado vem de `dpkg-query -W -f='${Status}\t${Version}' pkg`.
   - O apt-get sai com 100 em qualquer erro [9], então o diagnóstico precisa vir do stderr.
