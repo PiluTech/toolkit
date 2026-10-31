@@ -2,7 +2,7 @@
 
 Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (catálogo YAML de apps, providers, receitas multi-etapa que sobrevivem a reboot, TUI Bubble Tea, bootstraps). Nome provisório, centralizado em `internal/buildinfo`.
 
-**Estado atual:** repositório `PiluVitu/toolkit`, **privado por enquanto** (planejado para ser público). Licença MIT. As 22 perguntas da proposta foram respondidas, com todas as recomendações aceitas (`docs/decisoes.md`). A fase 1 **não** começou e aguarda a aprovação do Paulo.
+**Estado atual:** repositório `PiluVitu/toolkit`, **privado por enquanto** (planejado para ser público). Licença MIT. As 22 perguntas da proposta foram respondidas, com todas as recomendações aceitas (`docs/decisoes.md`). Por decisão do Paulo, o projeto fica **só na documentação**: nenhuma fase começa até nova ordem.
 
 ## Documentos
 - `README.md`: o que é, comandos planejados, plataformas, o que o toolkit não faz.
