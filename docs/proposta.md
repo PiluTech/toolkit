@@ -1,6 +1,8 @@
 # Proposta — toolkit (etapa "Antes de começar")
 
 > Resposta à seção "Antes de começar" do `docs/briefing.md`. Nada da fase 1 foi implementado.
+> **Respondida em 2026-10-31:** todas as recomendações foram aceitas. As decisões estão em
+> [decisoes.md](decisoes.md), e este documento fica como histórico.
 > Data: 2026-10-31. Fontes oficiais citadas em [Fontes](#5-fontes) com [n].
 
 Resumo: mantenho a arquitetura do briefing e acrescento seis pacotes de apoio (`buildinfo`, `tmpl`,
@@ -570,10 +572,12 @@ Versões exatas em `go.mod`, `go.sum` commitado e `go mod verify` no `ci.sh`.
 | YAML | ver pergunta 4 | `gopkg.in/yaml.v3` está **arquivado e sem manutenção** desde 2025-04-01 [26] |
 | golang.org/x/sys | já vem transitiva do Bubble Tea [25] | uso direto em `elevate` (pergunta 6) |
 
-## 4. Perguntas para o Paulo
+## 4. Perguntas para o Paulo (respondidas)
 
-Cada pergunta traz a minha recomendação (**Rec.**). Se concordar com tudo, basta responder "ok
-para as recomendações".
+> **Todas respondidas em 2026-10-31, com as recomendações aceitas.** Ver [decisoes.md](decisoes.md).
+> Na 2, o repositório está privado por enquanto.
+
+Cada pergunta traz a minha recomendação (**Rec.**).
 
 1. **Seleção de versão com id em template** (`Python.Python.{{major_minor}}`, `python@{{major_minor}}`):
    o id muda com a versão, então `ListVersions` do gerenciador não sabe quais existem. **Rec.:** quando

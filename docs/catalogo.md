@@ -1,11 +1,15 @@
 # Catálogo de apps
 
-> Formato proposto, ainda sem implementação (fase 1). Detalhes de cada provider em
-> [arquitetura.md](arquitetura.md#33-providers).
+> Formato decidido ([decisoes.md](decisoes.md)), ainda sem implementação (fase 1). Detalhes de cada
+> provider em [arquitetura.md](arquitetura.md#33-providers).
 
-O catálogo padrão fica em `catalog/catalog.yaml` e vai embutido no binário. Um catálogo externo pode ser
-passado com `--catalog <arquivo>`: ele é mesclado sobre o embutido, e um app com o mesmo id substitui o
-original. Uma URL remota só será aceita junto com o SHA-256 do arquivo.
+O catálogo padrão fica em `catalog/catalog.yaml` e vai embutido no binário. Um catálogo externo entra com
+`--catalog`:
+
+- `--catalog <arquivo>`: caminho local, aceito sem hash.
+- `--catalog <url> --catalog-sha256 <hash>`: URL só com o SHA-256 do arquivo. Sem o hash, é recusada.
+- Por padrão o externo é **mesclado** sobre o embutido, e um app com o mesmo id substitui o original.
+  Com `--catalog-replace`, o externo substitui o embutido inteiro.
 
 ## Estrutura
 
@@ -14,7 +18,7 @@ apps:
   <id-do-app>:
     name: <nome exibido>
     category: <categoria>
-    versions: true | [lista]     # opcional: habilita a seleção de versão
+    versions: true | [lista]     # opcional: habilita a seleção de versão (ver Versões)
     windows: [<instalador>, ...] # em ordem de preferência
     macos:   [<instalador>, ...]
     linux:   [<instalador>, ...]
@@ -23,13 +27,29 @@ apps:
 
 - **id**: minúsculas, números e hífen (`^[a-z0-9][a-z0-9-]*$`). É o nome usado na CLI
   (`toolkit install discord`) e nas receitas (`install: [discord]`).
-- **category**: uma das categorias definidas no código. Categoria desconhecida é erro, para que um erro
-  de digitação não crie uma aba nova na TUI.
+- **category**: uma das categorias fixas (ver [Categorias](#categorias)).
 - **Ordem**: o toolkit percorre a lista do SO atual e usa o primeiro instalador cujo gerenciador existe na
   máquina. Se o pacote não tiver instalador aplicável (por exemplo, sem build para arm64 no winget), ele
   tenta o próximo da lista.
 - **Validação**: na carga, com erro no formato `catalog.yaml:42:7: app "discord": provider "winget"
   exige "id"`. Chave desconhecida também é erro (pega `pakage:` no lugar de `package:`).
+
+## Categorias
+
+Lista fixa definida no código. Categoria desconhecida é erro, para que um erro de digitação não crie uma
+aba nova na TUI. Uma categoria nova é uma linha na lista do código.
+
+`comunicacao`, `dev`, `navegadores`, `midia`, `utilitarios`, `seguranca`, `escritorio`, `jogos`,
+`drivers`, `sistema`.
+
+## Versões
+
+- `versions: true`: só para id fixo. As versões vêm do gerenciador (winget, apt, dnf). Nos que não
+  listam (brew, pacman, flatpak), a única opção é `latest`.
+- `versions: ["3.13", "3.12", "3.11"]`: obrigatório quando o id tem `{{...}}`, porque o id muda com a
+  versão e o gerenciador não sabe quais existem. A primeira da lista é a padrão. O validador recusa
+  id com template sem essa lista.
+- Sem `versions`, instala a versão padrão do gerenciador e não aceita `app@versão`.
 
 ## Campos por provider
 

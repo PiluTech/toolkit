@@ -38,7 +38,8 @@ toolkit recipe status
 toolkit resume                  # chamado sozinho depois do reboot; pode ser rodado à mão
 ```
 
-Flags para automação: `--no-tui`, `--yes`, `--dry-run`, `--verbose` e `--catalog <arquivo>`.
+Flags para automação: `--no-tui`, `--yes`, `--dry-run`, `--verbose` e `--catalog <arquivo>` (uma URL
+só com `--catalog-sha256 <hash>`).
 
 ## Plataformas
 
@@ -100,7 +101,8 @@ Diagnósticos (RAM, disco, `sfc`, DISM, rede) também são receitas. Formato com
 
 ## Documentação
 
-- [docs/arquitetura.md](docs/arquitetura.md): pastas, interfaces Go e decisões.
+- [docs/arquitetura.md](docs/arquitetura.md): pastas, interfaces Go e decisões técnicas.
+- [docs/decisoes.md](docs/decisoes.md): as decisões tomadas sobre a proposta, uma por linha.
 - [docs/catalogo.md](docs/catalogo.md): formato do catálogo de apps.
 - [docs/receitas.md](docs/receitas.md): formato das receitas e ciclo de reboot e retomada.
 - [CONTRIBUTING.md](CONTRIBUTING.md): como adicionar um app ou uma receita.
@@ -110,5 +112,4 @@ Diagnósticos (RAM, disco, `sfc`, DISM, rede) também são receitas. Formato com
 
 ## Licença
 
-A definir. Até lá, nenhum direito de uso, cópia ou redistribuição é concedido além do que o GitHub
-permite para visualizar e fazer fork.
+[MIT](LICENSE). Copyright (c) 2026 PiluTech.

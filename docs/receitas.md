@@ -1,6 +1,6 @@
 # Receitas
 
-> Formato proposto, ainda sem implementação (fase 3). Detalhes da engine em
+> Formato decidido ([decisoes.md](decisoes.md)), ainda sem implementação (fase 3). Detalhes da engine em
 > [arquitetura.md](arquitetura.md#34-receitas-e-engine).
 
 Uma receita é uma sequência de etapas para um SO, num arquivo YAML em `recipes/<so>/<id>.yaml`. Serve
@@ -52,14 +52,20 @@ Cada `check` ou `run` tem exatamente um destes campos:
    pede confirmação (ou segue direto com `--yes`) e reinicia. Nunca há reboot sem a retomada registrada.
 3. Depois do boot, `toolkit resume` continua da etapa pendente:
    - Windows: Tarefa Agendada no logon do usuário que iniciou a receita, com privilégio elevado.
-   - Linux: unit systemd oneshot depois de `network-online.target`.
-   - macOS: LaunchAgent no login do usuário.
+   - Linux: unit systemd de sistema, oneshot, no boot e depois de `network-online.target`. Roda sem
+     terminal (`toolkit resume --yes --no-tui`), e o resultado fica no log e em `toolkit recipe status`.
+   - macOS: LaunchAgent no login do usuário, que abre o Terminal para mostrar o progresso.
+   - Nomes: a tarefa agendada e o label do launchd usam `dev.pilutech.<name>`.
 4. Ao terminar, com sucesso ou falha, o registro de retomada é removido.
 
 Proteções:
 
 - Se o `resume` rodar sem que a máquina tenha reiniciado de fato (o boot ID não mudou), nada avança.
-- Se a etapa tiver `check` e ele falhar depois do reboot, a receita para e reporta. Não há segundo reboot.
+- Cada etapa tem 1 tentativa depois da retomada. Se o `check` falhar depois do reboot, ou a etapa falhar,
+  a receita para, desregistra a retomada e reporta. Não há segundo reboot. `toolkit recipe reset <id>`
+  libera uma nova tentativa manual.
+- Se o usuário recusar o reboot, a retomada continua registrada e a receita fica `awaiting-reboot`. Ela
+  continua no próximo boot (Linux) ou logon (Windows e macOS).
 - Se o YAML da receita mudar entre os boots (binário atualizado), a retomada para em vez de continuar
   uma receita diferente.
 - Uma etapa que ficou `running` (queda de energia) só é repetida se tiver `check`. Sem `check`, ela

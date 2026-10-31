@@ -31,4 +31,6 @@ O projeto ainda não tem código (a fase 1 não começou). Os passos abaixo vale
 - Testes nunca executam instalador, gerenciador de pacotes ou reboot: use o `Runner` falso de
   `internal/exec/exectest`.
 - Dependência nova só com justificativa no PR, versão exata no `go.mod` e `go.sum` commitado.
-- Mensagens ao usuário, docs e comentários em pt-BR. Identificadores em inglês.
+- Mensagens ao usuário, docs e comentários em pt-BR, com as strings de UI no pacote central de
+  mensagens. Identificadores e nomes de arquivo em inglês.
+- Ao contribuir, você concorda em licenciar sua contribuição sob a [licença MIT](LICENSE).

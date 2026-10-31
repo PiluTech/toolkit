@@ -1,7 +1,7 @@
 # Arquitetura
 
-> Derivada da [proposta](proposta.md), sem as perguntas em aberto. O código ainda não existe: a fase 1
-> não começou, e o que está aqui pode mudar quando as decisões pendentes forem fechadas.
+> Derivada da [proposta](proposta.md), com as decisões de [decisoes.md](decisoes.md) já aplicadas. O
+> código ainda não existe: a fase 1 não começou.
 > Fontes oficiais em [Fontes](#fontes), citadas com [n].
 
 Resumo: a lógica de cada SO fica em **funções puras que montam comandos** (`[]exec.Cmd`), sem build
@@ -355,8 +355,10 @@ nenhum teste pode executar winget, dism ou reboot de verdade, e o gate de qualid
 - Decodifico para `yaml.Node` e valido em cima dele. Cada erro sai como `catalog.yaml:42:7: app
   "discord": provider "winget" exige "id"`. Chave desconhecida é erro, o que pega erro de digitação
   em `pakage:`.
-- O id do app segue `^[a-z0-9][a-z0-9-]*$`. A categoria vem de uma lista fixa definida no código
- .
+- O id do app segue `^[a-z0-9][a-z0-9-]*$`. A categoria vem de uma lista fixa definida no código.
+- Quando o id tem `{{...}}`, o YAML declara a lista de versões. `versions: true` fica para ids fixos.
+- `--catalog` aceita caminho local sem hash. URL só com `--catalog-sha256`. O externo é mesclado sobre
+  o embutido (mesmo id substitui), e `--catalog-replace` troca o embutido inteiro.
 - `os: any` vale como fallback: se a lista do SO atual não existir, o Selector usa `any`.
 - Os templates `{{os}}`, `{{arch}}`, `{{version}}`, `{{major}}`, `{{major_minor}}` e
   `{{toolkit_version}}` são resolvidos por `tmpl`, um substituidor estrito. Não uso `text/template`,
@@ -532,6 +534,9 @@ nenhum teste pode executar winget, dism ou reboot de verdade, e o gate de qualid
 
 ### 3.9 CI local
 
+O repositório está privado por enquanto, então o GitHub Actions consome a cota da conta, que está sem
+orçamento. Por isso o gate é local.
+
 Fatos [21]: runners padrão são **gratuitos em repositório público**. Em privado, o plano Free inclui
 US$ 12/mês de compute, e o minuto custa US$ 0,006 no Linux, US$ 0,010 no Windows e US$ 0,062 no
 macOS, cerca de 10 vezes o Linux. Sem forma de pagamento, o uso é bloqueado quando o incluído acaba.
@@ -548,12 +553,13 @@ Proposta:
 2. **Hook `pre-push` opcional** (`make hooks`) rodando o `ci.sh`, que funciona como o "CI" de fato
    enquanto não houver Actions.
 3. **`ci.yml` escrito com a matriz pedida** (`windows-latest`, `ubuntu-latest`, `macos-latest`), mas
-   com `on: workflow_dispatch` até a fase 1 estar estável. Como o repositório é público, os runners
-   padrão não são cobrados [21], e depois basta acrescentar `push` e `pull_request`.
+   com `on: workflow_dispatch` apenas. Não dispara sozinho nem gasta cota. Quando o repositório for
+   público, os runners padrão deixam de ser cobrados [21], e basta acrescentar `push` e `pull_request`.
 4. **`release.yml`** dispara por tag `v*`. Enquanto não houver Actions, a release sai localmente com
    `goreleaser release --clean` (precisa de `GITHUB_TOKEN`), e `make snapshot` testa sem publicar.
-5. **Lacuna real**: sem runner Windows, nada roda de fato no Windows. Proponho um smoke manual numa
-   VM Windows 11 ARM (UTM) ao fim das fases 2 e 3, sempre com `--dry-run` primeiro.
+5. **Lacuna real**: sem runner Windows, nada roda de fato no Windows. Ao fim das fases 2 e 3, o Paulo
+   faz um smoke manual numa VM Windows 11 seguindo um roteiro entregue junto, sempre com `--dry-run`
+   primeiro.
 
 ### 3.10 Dependências (supply chain)
 
@@ -564,9 +570,19 @@ Versões exatas em `go.mod`, `go.sum` commitado e `go mod verify` no `ci.sh`.
 | Go | 1.27.3 [23] | o Bubble Tea v2 exige `go 1.26` [25] |
 | github.com/spf13/cobra | v1.10.2 [24] | |
 | charm.land/bubbletea/v2 | v2.1.1 [25] | v2 mudou o caminho do módulo para `charm.land/...` |
-| charm.land/bubbles/v2, charm.land/lipgloss/v2 | a confirmar na fase 4 | mesmo esquema de caminho |
-| YAML | `go.yaml.in/yaml/v3` (proposto) [27] | `gopkg.in/yaml.v3` está **arquivado e sem manutenção** desde 2025-04-01 [26] |
-| golang.org/x/sys | já vem transitiva do Bubble Tea [25] | uso direto em `elevate` |
+| charm.land/bubbles/v2, charm.land/lipgloss/v2 | versão exata fixada na fase 4 | mesmo esquema de caminho |
+| YAML | `go.yaml.in/yaml/v3` [27] | `gopkg.in/yaml.v3` está **arquivado e sem manutenção** desde 2025-04-01 [26] |
+| golang.org/x/sys | já vem transitiva do Bubble Tea [25] | uso direto em `elevate` (aceito fora da lista do briefing) |
+
+Ferramentas locais: Go 1.27.3 via `GOTOOLCHAIN` (conferido pelo checksum DB do Go) e golangci-lint
+v2.15.0 pelo binário oficial da release, com SHA-256 conferido.
+
+### 3.11 Idioma e identificadores
+
+- Identificadores e nomes de arquivo em inglês. Mensagens ao usuário, docs e comentários em pt-BR.
+- Strings de UI centralizadas num pacote, para permitir outro idioma depois.
+- Label do launchd e nome da tarefa agendada: `dev.pilutech.<name>`, derivado de `buildinfo.Name`.
+- Licença MIT.
 
 ## Fontes
 
