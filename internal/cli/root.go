@@ -14,6 +14,11 @@ import (
 
 // NewRootCmd cria o comando raiz com saída e erro injetáveis (testes usam buffers).
 func NewRootCmd(out, errOut io.Writer) *cobra.Command {
+	return NewRootCmdWith(out, errOut, DefaultDeps())
+}
+
+// NewRootCmdWith permite injetar as dependências (testes).
+func NewRootCmdWith(out, errOut io.Writer, deps Deps) *cobra.Command {
 	root := &cobra.Command{
 		Use:           buildinfo.Name,
 		Short:         msg.RootShort,
@@ -23,7 +28,7 @@ func NewRootCmd(out, errOut io.Writer) *cobra.Command {
 	}
 	root.SetOut(out)
 	root.SetErr(errOut)
-	root.AddCommand(newVersionCmd())
+	root.AddCommand(newVersionCmd(), newListCmd(deps))
 	return root
 }
 
