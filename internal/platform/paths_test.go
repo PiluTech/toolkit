@@ -25,6 +25,8 @@ func TestResolvePaths(t *testing.T) {
 			Paths{`C:\Users\u\AppData\Local\toolkit`, `C:\Users\u\AppData\Local\toolkit\logs`, `C:\Users\u\AppData\Local\toolkit\bin`}},
 		{"windows usuário sem LOCALAPPDATA", Info{OS: Windows}, Env{Home: `C:\Users\u`},
 			Paths{`C:\Users\u\AppData\Local\toolkit`, `C:\Users\u\AppData\Local\toolkit\logs`, `C:\Users\u\AppData\Local\toolkit\bin`}},
+		{"windows usuário, LOCALAPPDATA em UNC (duas barras)", Info{OS: Windows}, Env{Getenv: env(map[string]string{"LOCALAPPDATA": `\\srv\perfis\u`})},
+			Paths{`\\srv\perfis\u\toolkit`, `\\srv\perfis\u\toolkit\logs`, `\\srv\perfis\u\toolkit\bin`}},
 		{"linux root", Info{OS: Linux, IsAdmin: true}, Env{},
 			Paths{"/var/lib/toolkit", "/var/lib/toolkit/logs", "/usr/local/bin"}},
 		{"linux usuário com XDG", Info{OS: Linux}, Env{Home: home, Getenv: env(map[string]string{"XDG_STATE_HOME": "/x"})},
@@ -58,6 +60,7 @@ func TestResolvePathsErros(t *testing.T) {
 		{"linux usuário com Home relativo", Info{OS: Linux}, Env{Home: "home/u"}, ErrNoHome},
 		{"macos usuário sem Home", Info{OS: Darwin}, Env{}, ErrNoHome},
 		{"windows usuário sem LOCALAPPDATA nem Home", Info{OS: Windows}, Env{}, ErrNoHome},
+		{"windows usuário, LOCALAPPDATA com uma barra só e sem Home", Info{OS: Windows}, Env{Getenv: env(map[string]string{"LOCALAPPDATA": `\srv\x`})}, ErrNoHome},
 		{"windows usuário, Home relativo", Info{OS: Windows}, Env{Home: `Users\u`}, ErrNoHome},
 		{"SO desconhecido", Info{OS: "plan9"}, Env{Home: "/h"}, ErrUnsupportedOS},
 	}

@@ -30,6 +30,9 @@ func NewDryRunRunner(inner Runner) *DryRunRunner { return &DryRunRunner{Inner: i
 
 // Run executa só leituras explícitas; registra o resto (exit code 0, sem saída).
 func (d *DryRunRunner) Run(ctx context.Context, c Cmd) (Result, error) {
+	if err := validateEnv(c.Env); err != nil { // mesma recusa do Runner real: o dry-run não pode aprovar o que falharia
+		return Result{}, err
+	}
 	if c.ReadOnly && !c.Elevate {
 		return d.Inner.Run(ctx, c)
 	}

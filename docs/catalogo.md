@@ -50,6 +50,11 @@ aba nova na TUI. Uma categoria nova é uma linha na lista do código.
   versão e o gerenciador não sabe quais existem. A primeira da lista é a padrão. O validador recusa
   id com template sem essa lista.
 - Sem `versions`, instala a versão padrão do gerenciador e não aceita `app@versão`.
+- Cada versão da lista segue o mesmo formato dos valores de template (ver Templates): letra ou número na frente, sem `-` inicial.
+
+### Texto sem caractere de controle
+
+Qualquer texto do arquivo (chaves e valores: `name`, versões, `args`...) com caractere de controle (ESC, BEL, quebra de linha, tab, DEL, C1) é erro de carga. Esses textos vão para o terminal, e eles reescreveriam a tela.
 
 ## Campos por provider
 
@@ -86,7 +91,7 @@ no máximo 2000 apps. Ao mesclar um catálogo local (`--catalog`) sobre o embuti
 ## Templates
 
 Campos de texto aceitam variáveis entre chaves duplas. Variável desconhecida é erro na carga. Na expansão, todo valor
-tem de casar com `^[A-Za-z0-9._+~-]+$` (sem `..`), e a versão pedida tem de estar em `versions` (`App.VersionVars`).
+tem de casar com `^[A-Za-z0-9][A-Za-z0-9._+~-]*$` (nunca começa com `-`, e sem `..`), e a versão pedida tem de estar em `versions` (`App.VersionVars`).
 
 | Variável | Exemplo |
 |---|---|

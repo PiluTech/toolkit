@@ -86,3 +86,14 @@ func TestDryRunLookPathDelega(t *testing.T) {
 		t.Fatal("esperava erro")
 	}
 }
+
+func TestDryRunRecusaEnvInvalidoComoORunnerReal(t *testing.T) {
+	dry := exec.NewDryRunRunner(exectest.New(t))
+	_, err := dry.Run(context.Background(), exec.Cmd{Name: "x", Env: []string{"-i"}, Elevate: true})
+	if !errors.Is(err, exec.ErrInvalidEnv) {
+		t.Fatalf("esperava ErrInvalidEnv, veio %v", err)
+	}
+	if len(dry.Planned()) != 0 {
+		t.Errorf("comando inválido não deve entrar no plano: %v", dry.Planned())
+	}
+}

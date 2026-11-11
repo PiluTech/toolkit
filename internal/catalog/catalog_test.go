@@ -292,3 +292,51 @@ func mustParse(t *testing.T, name, src string) *Catalog {
 	}
 	return c
 }
+
+// Caractere de controle em qualquer texto do catálogo é erro: o `list` (e a TUI) imprime name e versões, e
+// ESC/OSC/BEL/quebra de linha permitiriam reescrever o terminal do usuário.
+func TestParseRecusaCaractereDeControle(t *testing.T) {
+	const tail = "\n    category: dev\n    any: [{provider: apt, package: g}]"
+	cases := []struct{ name, yaml string }{
+		{"ESC no name", "apps:\n  g:\n    name: \"Git\\e[2J\"" + tail},
+		{"OSC e BEL no name", "apps:\n  g:\n    name: \"Git\\e]0;pwned\\a\"" + tail},
+		{"BEL no name", "apps:\n  g:\n    name: \"Git\\a\"" + tail},
+		{"quebra de linha no name", "apps:\n  g:\n    name: \"Git\\nFALSO  x\"" + tail},
+		{"CR no name", "apps:\n  g:\n    name: \"Git\\rFALSO\"" + tail},
+		{"DEL no name", "apps:\n  g:\n    name: \"Git\\x7f\"" + tail},
+		{"C1 (CSI 8 bits) no name", "apps:\n  g:\n    name: \"Git\\u009b2J\"" + tail},
+		{"tab no name", "apps:\n  g:\n    name: \"Git\\tx\"" + tail},
+		{"ESC em item de versions", "apps:\n  g:\n    name: G\n    versions: [\"1\", \"2\\e[2J\"]" + tail},
+		{"quebra de linha em item de versions", "apps:\n  g:\n    name: G\n    versions: [\"1\\n2\"]" + tail},
+		{"ESC na categoria", "apps:\n  g:\n    name: G\n    category: \"dev\\e\"\n    any: [{provider: apt, package: g}]"},
+		{"ESC no id do instalador", "apps:\n  g:\n    name: G\n    category: dev\n    any: [{provider: apt, package: \"g\\e]0;x\\a\"}]"},
+		{"ESC em args", "apps:\n  g:\n    name: G\n    category: dev\n    any: [{provider: url, url: \"https://x.com/a.msi\", sha256: " + strings.Repeat("a", 64) + ", args: [\"/q\\e[2J\"]}]"},
+		{"ESC em chave desconhecida", "apps:\n  g:\n    name: G\n    \"x\\e\": 1" + tail},
+		{"ESC no id do app", "apps:\n  \"g\\e\":\n    name: G" + tail},
+	}
+	for _, c := range cases {
+		_, err := Parse("catalog.yaml", []byte(c.yaml))
+		if err == nil {
+			t.Errorf("%s: esperava erro", c.name)
+			continue
+		}
+		if !strings.Contains(err.Error(), "caractere de controle") {
+			t.Errorf("%s: erro sem \"caractere de controle\": %v", c.name, err)
+		}
+		// a mensagem de erro também vai ao terminal: não pode carregar o byte cru.
+		for _, r := range err.Error() {
+			if r < 0x20 && r != '\n' || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+				t.Errorf("%s: a mensagem de erro contém o controle %U cru", c.name, r)
+			}
+		}
+	}
+}
+
+func TestParseVersionsRecusaValorHostil(t *testing.T) {
+	for _, v := range []string{"-rf", "--force", "1/../x", "a b"} {
+		src := "apps:\n  g:\n    name: G\n    category: dev\n    versions: [\"" + v + "\"]\n    any: [{provider: apt, package: g}]"
+		if _, err := Parse("catalog.yaml", []byte(src)); err == nil {
+			t.Errorf("versão %q deveria ser recusada na carga", v)
+		}
+	}
+}
