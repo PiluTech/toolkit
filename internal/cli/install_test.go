@@ -215,3 +215,33 @@ func TestInstallDryRunNoWindowsMarcaPassoQueExigeAdmin(t *testing.T) {
 	}
 	onlyReads(t, f)
 }
+
+// Advisor: app com lista e um instalador SEM template; sem "@", a versão padrão não pode virar pkg=3.13.
+func TestInstallListaSemVersaoPedidaNaoFixaInstaladorSemTemplate(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "c.yaml")
+	src := "apps:\n  tool:\n    name: Tool\n    category: dev\n    versions: [\"2\", \"1\"]\n    linux:\n      - { provider: flatpak, id: org.example.Tool }\n      - { provider: apt, package: tool }\n"
+	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := aptFake(t).On(`dpkg-query -W "-f=${db:Status-Status}\t${Version}\n" tool`, notInstalled()).WithPath("flatpak", "/x").
+		On("flatpak list --app --columns=application,version", exectest.Exit(0, ""))
+	out, _, err := runInstallCmd(t, f, "linux", "tool", "--dry-run", "--catalog", path)
+	if err != nil {
+		t.Fatalf("err = %v\nout:\n%s", err, out)
+	}
+	if strings.Contains(out, "tool=") || strings.Contains(out, "ErrVersionUnsupported") || strings.Contains(out, "só instala a versão atual") {
+		t.Errorf("a versão padrão foi fixada sem pedido:\n%s", out)
+	}
+	if !strings.Contains(out, "flatpak install --system") {
+		t.Errorf("o primeiro instalador (flatpak) devia servir sem versão:\n%s", out)
+	}
+	onlyReads(t, f)
+	// com versão pedida, o flatpak recusa e o apt (sem template) recebe tool=1
+	f = aptFake(t).On(`dpkg-query -W "-f=${db:Status-Status}\t${Version}\n" tool`, notInstalled()).WithPath("flatpak", "/x").
+		On("flatpak list --app --columns=application,version", exectest.Exit(0, ""))
+	out, _, err = runInstallCmd(t, f, "linux", "tool@1", "--dry-run", "--catalog", path)
+	if err != nil || !strings.Contains(out, "apt-get install -y --no-remove tool=1") {
+		t.Errorf("err=%v out:\n%s", err, out)
+	}
+}

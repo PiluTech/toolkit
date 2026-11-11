@@ -77,7 +77,8 @@ func parseTarget(arg string) (id, version string, err error) {
 
 // resolveVersion devolve as variáveis de template e a versão a passar ao InstallApp:
 //   - app com lista (versions: [...]): a versão vai para o template (VersionVars valida: tem de estar na lista;
-//     vazia = a primeira) e o InstallApp confere que o id montado é o dela (VersionApplied);
+//     vazia = a primeira) e o InstallApp confere que o id montado é o dela (VersionApplied). Sem versão pedida,
+//     nada é passado ao provider (a padrão só vale nos templates);
 //   - app com versions: true: a versão (com época do Debian, por exemplo) vai direto ao provider, validada pelo
 //     InstallApp (ValidVersion), nunca por tmpl.ValidValue;
 //   - app sem versions: não aceita app@versão.
@@ -88,7 +89,10 @@ func resolveVersion(app catalog.App, requested string) (map[string]string, strin
 		if err != nil {
 			return nil, "", err
 		}
-		return vars, vars["version"], nil
+		// Passa o que o usuário PEDIU (vazio = padrão): a versão padrão da lista só entra nos templates. Se a
+		// passássemos, um instalador sem template (apt pkg=3.13, winget --version, brew recusando) ficaria
+		// preso a uma versão que ninguém pediu.
+		return vars, requested, nil
 	case app.Versions.Query:
 		return map[string]string{}, requested, nil
 	}
