@@ -1,6 +1,6 @@
 # Catálogo de apps
 
-> Formato decidido ([decisoes.md](decisoes.md)), ainda sem implementação (fase 1). Detalhes de cada
+> Formato decidido ([decisoes.md](decisoes.md)), implementado na fase 1 (`internal/catalog`; a carga por URL com `--catalog-sha256` ainda não). Detalhes de cada
 > provider em [arquitetura.md](arquitetura.md#33-providers).
 
 O catálogo padrão fica em `catalog/catalog.yaml` e vai embutido no binário. Um catálogo externo entra com

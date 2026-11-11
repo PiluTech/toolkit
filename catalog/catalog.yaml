@@ -1,0 +1,59 @@
+# Catálogo padrão embutido no binário. Formato em docs/catalogo.md.
+apps:
+  git:
+    name: Git
+    category: dev
+    versions: true
+    windows: [{ provider: winget, id: Git.Git }]
+    macos:   [{ provider: brew, formula: git }]
+    linux:
+      - { provider: apt, package: git }
+      - { provider: dnf, package: git }
+      - { provider: pacman, package: git }
+
+  vscode:
+    name: Visual Studio Code
+    category: dev
+    windows: [{ provider: winget, id: Microsoft.VisualStudioCode }]
+    macos:   [{ provider: brew, cask: visual-studio-code }]
+    linux:   [{ provider: flatpak, id: com.visualstudio.code }]
+
+  python:
+    name: Python
+    category: dev
+    versions: ["3.13", "3.12", "3.11"]
+    windows: [{ provider: winget, id: "Python.Python.{{major_minor}}" }]
+    macos:   [{ provider: brew, formula: "python@{{major_minor}}" }]
+    linux:   [{ provider: apt, package: "python{{major_minor}}" }]
+
+  discord:
+    name: Discord
+    category: comunicacao
+    windows: [{ provider: winget, id: Discord.Discord }]
+    macos:   [{ provider: brew, cask: discord }]
+    linux:
+      - { provider: flatpak, id: com.discordapp.Discord }
+
+  firefox:
+    name: Mozilla Firefox
+    category: navegadores
+    windows: [{ provider: winget, id: Mozilla.Firefox }]
+    macos:   [{ provider: brew, cask: firefox }]
+    linux:   [{ provider: flatpak, id: org.mozilla.firefox }]
+
+  vlc:
+    name: VLC
+    category: midia
+    windows: [{ provider: winget, id: VideoLAN.VLC }]
+    macos:   [{ provider: brew, cask: vlc }]
+    linux:   [{ provider: flatpak, id: org.videolan.VLC }]
+
+  7zip:
+    name: 7-Zip
+    category: utilitarios
+    windows: [{ provider: winget, id: 7zip.7zip }]
+    macos:   [{ provider: brew, formula: sevenzip }]
+    linux:
+      - { provider: apt, package: p7zip-full }
+      - { provider: dnf, package: p7zip }
+      - { provider: pacman, package: p7zip }
