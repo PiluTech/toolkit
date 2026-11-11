@@ -42,13 +42,15 @@ const (
 
 // Provider implementa providers.Provider para o winget.
 type Provider struct {
-	r exec.Runner
+	rn providers.Runners // Read: só leitura; Mutate: só mutação (guardas do exec)
 	// Sleep espera entre as tentativas de INSTALL_IN_PROGRESS; os testes trocam por uma versão instantânea.
 	Sleep func(ctx context.Context, d time.Duration) error
 }
 
 // New cria o provider sobre o Runner.
-func New(r exec.Runner) *Provider { return &Provider{r: r, Sleep: sleep} }
+func New(r exec.Runner) *Provider {
+	return &Provider{rn: providers.NewRunners(r), Sleep: sleep}
+}
 
 func sleep(ctx context.Context, d time.Duration) error {
 	t := time.NewTimer(d)
@@ -66,7 +68,7 @@ func (*Provider) Name() string { return catalog.ProviderWinget }
 
 // Available diz se o winget está no PATH.
 func (p *Provider) Available(context.Context) bool {
-	_, err := p.r.LookPath("winget")
+	_, err := p.rn.Read.LookPath("winget")
 	return err == nil
 }
 
@@ -117,7 +119,7 @@ func installCmd(ref providers.PackageRef, version string) exec.Cmd {
 
 // IsInstalled roda "winget list --id X -e" (ReadOnly). 0x8A150014 = não instalado.
 func (p *Provider) IsInstalled(ctx context.Context, ref providers.PackageRef) (bool, string, error) {
-	res, err := p.r.Run(ctx, listCmd(ref))
+	res, err := p.rn.Read.Run(ctx, listCmd(ref))
 	if err != nil {
 		return false, "", err
 	}
@@ -139,7 +141,7 @@ func (p *Provider) IsInstalled(ctx context.Context, ref providers.PackageRef) (b
 
 // ListVersions roda "winget show --id X -e --versions" (ReadOnly).
 func (p *Provider) ListVersions(ctx context.Context, ref providers.PackageRef) ([]string, error) {
-	res, err := p.r.Run(ctx, showVersionsCmd(ref))
+	res, err := p.rn.Read.Run(ctx, showVersionsCmd(ref))
 	if err != nil {
 		return nil, err
 	}
@@ -158,6 +160,9 @@ func (p *Provider) ListVersions(ctx context.Context, ref providers.PackageRef) (
 	return out, nil
 }
 
+// SupportsVersion aceita sempre: o winget instala versões específicas (--version), então sempre aceita.
+func (*Provider) SupportsVersion(providers.PackageRef, string) error { return nil }
+
 // Install instala e traduz o exit code. version vazia ou "latest" = a padrão.
 func (p *Provider) Install(ctx context.Context, ref providers.PackageRef, version string) (providers.InstallResult, error) {
 	if version != "" && version != providers.Latest && !providers.ValidVersion(version) {
@@ -168,7 +173,7 @@ func (p *Provider) Install(ctx context.Context, ref providers.PackageRef, versio
 	}
 	var last error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		res, err := p.r.Run(ctx, installCmd(ref, version))
+		res, err := p.rn.Mutate.Run(ctx, installCmd(ref, version))
 		if err != nil {
 			return providers.InstallResult{}, err
 		}

@@ -296,3 +296,22 @@ func TestParseTableSemTabela(t *testing.T) {
 }
 
 var _ providers.Provider = (*Provider)(nil)
+
+func TestSupportsVersionSempreAceita(t *testing.T) {
+	if err := newP(exectest.New(t)).SupportsVersion(ref("Git.Git"), "2.47.0"); err != nil {
+		t.Error(err)
+	}
+}
+
+// Leitura e mutação passam por Runners separados: o Cmd de cada operação tem a marca certa.
+func TestCmdsTemAMarcaCertaParaOsRunners(t *testing.T) {
+	r := ref("Git.Git")
+	for name, c := range map[string]exec.Cmd{"list": listCmd(r), "show": showVersionsCmd(r)} {
+		if !c.ReadOnly || c.Elevate {
+			t.Errorf("%s deve ser ReadOnly sem Elevate", name)
+		}
+	}
+	if c := installCmd(r, ""); c.ReadOnly || c.Elevate {
+		t.Error("install não é ReadOnly nem Elevate")
+	}
+}
