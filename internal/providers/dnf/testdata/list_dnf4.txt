@@ -1,0 +1,6 @@
+Available Packages
+git.x86_64                2.43.0-1.fc40                updates
+git.x86_64                2.42.0-1.fc40                fedora
+git-lfs.x86_64            3.4.1-1.fc40                 fedora
+libreoffice-langpack-pt-BR.x86_64
+                          1:24.2.1-2.fc40              updates

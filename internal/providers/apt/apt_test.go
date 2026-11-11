@@ -61,7 +61,7 @@ func TestValidate(t *testing.T) {
 		}
 	}
 	bad := []providers.PackageRef{
-		ref(""), ref("-y"), ref("--allow-unauthenticated"), ref("a b"), ref("git;ls"),
+		ref(""), ref("-y"), ref("dir/x.deb"), ref("X.DEB"), ref("--allow-unauthenticated"), ref("a b"), ref("git;ls"),
 		{Provider: "apt", Package: "git", ID: "x"},
 		{Provider: "apt", Package: "git", Args: []string{"--force-yes"}},
 	}

@@ -49,7 +49,13 @@ func (*Provider) Validate(ref providers.PackageRef) error {
 	if err := providers.OnlyFields(ref, "package"); err != nil {
 		return err
 	}
-	return providers.CheckName("package", ref.Package)
+	if err := providers.CheckName("package", ref.Package); err != nil {
+		return err
+	}
+	if strings.HasSuffix(strings.ToLower(ref.Package), ".deb") {
+		return fmt.Errorf("%w: package %q (o apt-get lê nome terminado em .deb como arquivo local)", providers.ErrInvalidRef, ref.Package)
+	}
+	return nil
 }
 
 // base é o nome sem "/suite": dpkg-query e apt-cache madison usam só o nome.
