@@ -329,3 +329,18 @@ func TestOnlyFieldsRecusaArgs(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+func TestSnippetLimpaControleELimita(t *testing.T) {
+	if got := Snippet([]byte("\n  \n\x1b[2Jerro\x07 feio\r\n")); got != "[2Jerro feio" {
+		t.Errorf("got %q", got)
+	}
+	if got := Snippet([]byte("\r   - \rerro de verdade\n")); got != "erro de verdade" {
+		t.Errorf("spinner: %q", got)
+	}
+	if got := Snippet([]byte(strings.Repeat("a", 300))); len([]rune(got)) != 201 {
+		t.Errorf("len = %d", len([]rune(got)))
+	}
+	if Snippet(nil) != "" {
+		t.Error("vazio")
+	}
+}
