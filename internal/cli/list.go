@@ -30,6 +30,10 @@ type Deps struct {
 	Providers func(exec.Runner) []providers.Provider
 	// CheckElevation avisa, no dry-run, quando um passo exigiria administrador (nil = OSRunner).
 	CheckElevation func(exec.Cmd) error
+	// Stdin e Interactive decidem a confirmação do install real: sem terminal (Interactive false) exige --yes.
+	// Nil = os.Stdin e "stdin é um terminal".
+	Stdin       io.Reader
+	Interactive func() bool
 }
 
 // DefaultDeps usa o sistema atual e o catálogo embutido no binário.

@@ -204,3 +204,28 @@ func (r OSRunner) Run(ctx context.Context, c Cmd) (Result, error) {
 
 // LookPath procura o executável no PATH.
 func (OSRunner) LookPath(name string) (string, error) { return osexec.LookPath(name) }
+
+// Display devolve a linha de comando COMO SERÁ EXECUTADA, para o plano do dry-run: com Elevate no Unix,
+// "sudo -n -- env VAR=valor ... cmd args"; sem Elevate mas com Env, "VAR=valor ... cmd args" (o Env vai para o
+// ambiente do processo). Cmd com Secret não mostra os Args. Se a elevação for recusada (Windows sem token), cai
+// em Cmd.String.
+func (r OSRunner) Display(c Cmd) string {
+	if c.Secret {
+		return c.String()
+	}
+	name, args, viaSudo, err := r.argv(c)
+	if err != nil {
+		return c.String()
+	}
+	parts := make([]string, 0, len(args)+len(c.Env)+1)
+	if !viaSudo {
+		for _, e := range c.Env {
+			parts = append(parts, quote(e))
+		}
+	}
+	parts = append(parts, quote(name))
+	for _, a := range args {
+		parts = append(parts, quote(a))
+	}
+	return strings.Join(parts, " ")
+}
