@@ -1,0 +1,4 @@
+Name    Id            Version  Available Source
+-------------------------------------------------
+Git     Git.Git       < 2.40.0 2.47.1    winget
+Git LFS GitHub.GitLFS 3.6.0              winget

@@ -1,0 +1,5 @@
+Encontrado Git [Git.Git]
+Versão
+-----------
+2.47.1
+2.47.0

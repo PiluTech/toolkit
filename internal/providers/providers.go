@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/PiluVitu/toolkit/internal/catalog"
 	"github.com/PiluVitu/toolkit/internal/exec"
@@ -209,4 +210,34 @@ func SameVersion(have, want string) bool {
 		return true
 	}
 	return !strings.Contains(w, "-") && strings.HasPrefix(h, w+"-")
+}
+
+// Snippet devolve a primeira linha não vazia de uma saída de comando, só com caracteres imprimíveis e no
+// máximo 200 caracteres, para mensagens de erro: a saída de um gerenciador (ou de um pacote) nunca chega crua
+// ao terminal.
+func Snippet(b []byte) string {
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimRight(line, "\r")
+		if i := strings.LastIndex(line, "\r"); i >= 0 {
+			line = line[i+1:]
+		}
+		var sb strings.Builder
+		for _, r := range line {
+			if unicode.IsPrint(r) || r == ' ' || r == '\t' {
+				if r == '\t' {
+					r = ' '
+				}
+				sb.WriteRune(r)
+			}
+		}
+		s := strings.TrimSpace(sb.String())
+		if s == "" {
+			continue
+		}
+		if rs := []rune(s); len(rs) > 200 {
+			s = string(rs[:200]) + "…"
+		}
+		return s
+	}
+	return ""
 }
