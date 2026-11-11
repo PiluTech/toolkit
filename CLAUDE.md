@@ -2,7 +2,7 @@
 
 Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (catálogo YAML de apps, providers, receitas multi-etapa que sobrevivem a reboot, TUI Bubble Tea, bootstraps). Nome provisório, centralizado em `internal/buildinfo`.
 
-**Estado atual:** repositório `PiluVitu/toolkit`, **privado por enquanto** (planejado para ser público). Licença MIT. As 22 perguntas da proposta foram respondidas, com todas as recomendações aceitas (`docs/decisoes.md`). **Fase 1 (esqueleto) em andamento** desde 2026-11-11, em PRs pequenos: PR1 módulo + Cobra `version` + gate local (feito), PR2 `exec`, PR3 `platform`, PR4 `catalog`, PR5 `toolkit list`.
+**Estado atual:** repositório `PiluVitu/toolkit`, **privado por enquanto** (planejado para ser público). Licença MIT. As 22 perguntas da proposta foram respondidas, com todas as recomendações aceitas (`docs/decisoes.md`). **Fase 1 (esqueleto) em andamento** desde 2026-11-11, em PRs pequenos: PR1 módulo + Cobra `version` + gate local (feito), PR2 `exec` (feito), PR3 `platform`, PR4 `catalog`, PR5 `toolkit list`.
 
 ## Documentos
 - `README.md`: o que é, comandos planejados, plataformas, o que o toolkit não faz.
@@ -24,6 +24,7 @@ Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (
 
 ## Código (fase 1)
 - `cmd/toolkit/main.go`: só chama `cli.Execute`. `internal/cli`: comandos Cobra (hoje só `version`). `internal/buildinfo`: nome, versão, commit e data (via `-ldflags -X`). `internal/msg`: strings de UI em pt-BR.
+- `internal/exec`: `Runner` (Run/LookPath), `OSRunner` (exit code != 0 não é erro; `Timeout` vira `ErrTimeout` só se o ctx derivado expirou, prazo do chamador sai como erro do ctx; timeout/cancel encerram o grupo de processos (Unix, `Setpgid` + SIGTERM/SIGKILL em `-pgid`) ou o Job Object (Windows); `Elevate` = `sudo -n -- [env VAR=..] cmd` no Unix (nunca pede senha, recusa do sudo = `ErrNotElevated`) e `ErrNotElevated` no Windows sem token; teto de memória `MaxOutput` por stream, `Result.Truncated`; falha do tee é reportada ao fim), `DryRunRunner` (FALHA FECHADO: só executa `Cmd.ReadOnly` sem `Elevate`; o resto só é registrado em `Plan()`/`Planned()`; `CheckElevation` põe `ErrNotElevated` no plano). Todo `Cmd` de leitura precisa de `ReadOnly: true`. `internal/exec/exectest.FakeRunner`: respostas por linha de comando (`On`, `OnElevated` para `Elevate`, `WithPath`, `Exit`), comando sem roteiro falha o teste. Testes do `OSRunner` só re-executam o binário de teste (helper process) e um `sudo` falso num PATH temporário, nunca comando do sistema.
 - Toolchain: Go 1.27.3 (o `go.mod` baixa sozinho via `GOTOOLCHAIN`) e golangci-lint v2.15.0 em `~/.local/bin`, instalado por `scripts/instalar-ferramentas.sh` (baixa o tarball oficial e confere o SHA-256 versionado em `tools.sha256`; o workflow usa o mesmo script). Config em `.golangci.yml` (sem `misspell`: ele é só inglês e acusa pt-BR).
 - Gate: `scripts/ci.sh` (ou `make ci`; `~/.local/bin` entra no FIM do PATH; o gofmt vai por `scripts/check-gofmt.sh`, que reprova também sintaxe quebrada, com autoteste em `scripts/check-gofmt_test.sh`). Actions do workflow fixadas por SHA de commit (versão em comentário) e checkout com `persist-credentials: false`. Heavy pelo build-slot: `~/.maestri-local/build-slot.sh ./scripts/ci.sh`. `.github/workflows/ci.yml` só em `workflow_dispatch`.
 
