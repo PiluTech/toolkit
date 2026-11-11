@@ -12,6 +12,7 @@ Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (
 - `docs/receitas.md`: formato das receitas, ciclo de reboot e retomada, exemplos.
 - `SECURITY.md`: como reportar e as regras garantidas (hash obrigatório etc.).
 - `CONTRIBUTING.md`: como adicionar um app ou receita.
+- `docs/smoke.md`: roteiro de smoke manual (saídas reais a capturar, conferências no Mac e na VM). Cresce até o `toolkit install`.
 - `docs/briefing.md`: pedido original do Paulo (fases 1–6, requisitos). Não editar.
 - `docs/proposta.md`: proposta original com as perguntas (todas respondidas). Histórico; não editar além da marcação de respondidas.
 - `LICENSE`: MIT, Copyright (c) 2026 PiluTech.

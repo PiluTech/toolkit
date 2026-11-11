@@ -133,6 +133,19 @@ func (p *Provider) IsInstalled(ctx context.Context, ref providers.PackageRef) (b
 	return true, v, nil
 }
 
+// needsSudoPassword casa só as duas mensagens do sudo sem terminal, no início da linha: "sudo: a password is
+// required" e "sudo: a terminal is required...". Qualquer outro "sudo:" (por exemplo "sudo: command not found")
+// não é pedido de senha.
+func needsSudoPassword(stderr []byte) bool {
+	for _, line := range strings.Split(string(stderr), "\n") {
+		l := strings.ToLower(strings.TrimSpace(line))
+		if strings.HasPrefix(l, "sudo: a password is required") || strings.HasPrefix(l, "sudo: a terminal is required") {
+			return true
+		}
+	}
+	return false
+}
+
 func notInstalledMsg(stderr []byte) bool {
 	low := strings.ToLower(strings.TrimSpace(string(stderr)))
 	if low == "" {
@@ -218,7 +231,7 @@ func (p *Provider) Install(ctx context.Context, ref providers.PackageRef, versio
 	if res.ExitCode != 0 {
 		stderr := providers.Snippet(res.Stderr)
 		low := strings.ToLower(stderr)
-		if strings.Contains(low, "a password is required") || strings.Contains(low, "a terminal is required") || strings.Contains(low, "sudo:") {
+		if needsSudoPassword(res.Stderr) {
 			return providers.InstallResult{}, fmt.Errorf("brew install: %w: um cask de pkg pede a senha do sudo ao próprio brew e o toolkit não tem terminal para ela (%s); instale-o à mão uma vez no terminal", providers.ErrNeedsAdmin, stderr)
 		}
 		if strings.Contains(low, "no available formula") || strings.Contains(low, "no cask with this name") {
