@@ -160,3 +160,25 @@ func TestListCatalogoEmbutidoRealFunciona(t *testing.T) {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
 }
+
+// O catálogo local que substitui um app embutido é avisado em stderr; o stdout (--json) fica limpo.
+func TestListAvisaQuandoCatalogoLocalSubstituiAppEmbutido(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "extra.yaml")
+	src := "apps:\n  git:\n    name: Git Custom\n    category: dev\n    any: [{ provider: apt, package: git }]\n"
+	if err := os.WriteFile(p, []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	cmd := NewRootCmdWith(&out, &errOut, Deps{GOOS: "linux", EmbeddedYML: []byte(embedded)})
+	cmd.SetArgs([]string{"list", "--catalog", p, "--json"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(errOut.String(), `substituiu o app embutido "git"`) {
+		t.Fatalf("stderr: %q", errOut.String())
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
+		t.Fatalf("stdout deve continuar JSON puro: %v\n%s", err, out.String())
+	}
+}

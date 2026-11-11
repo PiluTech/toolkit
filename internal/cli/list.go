@@ -50,7 +50,7 @@ func newListCmd(deps Deps) *cobra.Command {
 		Long:  msg.ListLong,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runList(cmd.OutOrStdout(), deps, f)
+			return runList(cmd.OutOrStdout(), cmd.ErrOrStderr(), deps, f)
 		},
 	}
 	fl := cmd.Flags()
@@ -68,7 +68,7 @@ func isURL(s string) bool {
 	return strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://")
 }
 
-func loadCatalog(deps Deps, f listFlags) (*catalog.Catalog, error) {
+func loadCatalog(deps Deps, f listFlags, errOut io.Writer) (*catalog.Catalog, error) {
 	if f.replace && f.catalog == "" {
 		return nil, fmt.Errorf("%s", msg.ErrReplaceNoCat)
 	}
@@ -89,10 +89,14 @@ func loadCatalog(deps Deps, f listFlags) (*catalog.Catalog, error) {
 	if err != nil {
 		return nil, err
 	}
-	return catalog.Merge(base, ext, f.replace), nil
+	merged, replaced := catalog.Merge(base, ext, f.replace)
+	for _, id := range replaced { // stderr: não polui a saída --json
+		_, _ = fmt.Fprintf(errOut, msg.WarnReplaced+"\n", id)
+	}
+	return merged, nil
 }
 
-func runList(out io.Writer, deps Deps, f listFlags) error {
+func runList(out, errOut io.Writer, deps Deps, f listFlags) error {
 	goos := f.os
 	if goos == "" {
 		goos = deps.GOOS
@@ -103,7 +107,7 @@ func runList(out io.Writer, deps Deps, f listFlags) error {
 	if f.category != "" && !slices.Contains(catalog.Categories, f.category) {
 		return fmt.Errorf(msg.ErrUnknownCat, f.category, strings.Join(catalog.Categories, ", "))
 	}
-	cat, err := loadCatalog(deps, f)
+	cat, err := loadCatalog(deps, f, errOut)
 	if err != nil {
 		return err
 	}

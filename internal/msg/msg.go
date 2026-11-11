@@ -27,6 +27,7 @@ const (
 	ErrReplaceNoCat   = "--catalog-replace exige --catalog"
 	ErrUnknownOS      = "sistema desconhecido %q (use windows, linux ou darwin)"
 	ErrUnknownCat     = "categoria desconhecida %q (use: %s)"
+	WarnReplaced      = "aviso: o catálogo local substituiu o app embutido %q"
 	ListEmpty         = "Nenhum app encontrado."
 	ListHeaderID      = "ID"
 	ListHeaderName    = "NOME"
