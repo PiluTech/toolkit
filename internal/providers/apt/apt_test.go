@@ -61,7 +61,7 @@ func TestValidate(t *testing.T) {
 		}
 	}
 	bad := []providers.PackageRef{
-		ref(""), ref("-y"), ref("--allow-unauthenticated"), ref("a b"), ref("git;ls"),
+		ref(""), ref("-y"), ref("dir/x.deb"), ref("X.DEB"), ref("--allow-unauthenticated"), ref("a b"), ref("git;ls"),
 		{Provider: "apt", Package: "git", ID: "x"},
 		{Provider: "apt", Package: "git", Args: []string{"--force-yes"}},
 	}
@@ -125,7 +125,7 @@ func TestListVersionsComEpoca(t *testing.T) {
 }
 
 func TestInstallSudoEEnv(t *testing.T) {
-	f := exectest.New(t).OnElevated("apt-get install -y git", exectest.Exit(0, ""))
+	f := exectest.New(t).OnElevated("apt-get install -y --no-remove git", exectest.Exit(0, ""))
 	if _, err := New(f).Install(context.Background(), ref("git"), ""); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestInstallSudoEEnv(t *testing.T) {
 }
 
 func TestInstallVersaoFixadaUsaIgual(t *testing.T) {
-	f := exectest.New(t).OnElevated("apt-get install -y git=1:2.43.0-1ubuntu7", exectest.Exit(0, ""))
+	f := exectest.New(t).OnElevated("apt-get install -y --no-remove git=1:2.43.0-1ubuntu7", exectest.Exit(0, ""))
 	res, err := New(f).Install(context.Background(), ref("git/noble"), "1:2.43.0-1ubuntu7")
 	if err != nil || res.Version != "1:2.43.0-1ubuntu7" {
 		t.Errorf("res=%+v err=%v", res, err)
@@ -169,13 +169,13 @@ func TestInstallExit100ClassificaPeloStderr(t *testing.T) {
 		{"E: Could not open lock file - open (13: Permission denied)\n", providers.ErrNeedsAdmin},
 	}
 	for _, c := range cases {
-		f := exectest.New(t).OnElevated("apt-get install -y git", reply(100, c.stderr))
+		f := exectest.New(t).OnElevated("apt-get install -y --no-remove git", reply(100, c.stderr))
 		_, err := New(f).Install(context.Background(), ref("git"), "")
 		if !errors.Is(err, c.want) {
 			t.Errorf("%q: err = %v, queria %v", c.stderr, err, c.want)
 		}
 	}
-	f := exectest.New(t).OnElevated("apt-get install -y git", reply(100, "\x1b[2JE: algo estranho\n"))
+	f := exectest.New(t).OnElevated("apt-get install -y --no-remove git", reply(100, "\x1b[2JE: algo estranho\n"))
 	_, err := New(f).Install(context.Background(), ref("git"), "")
 	if err == nil || strings.ContainsRune(err.Error(), 0x1b) || !strings.Contains(err.Error(), "algo estranho") {
 		t.Errorf("err = %v", err)
@@ -183,7 +183,7 @@ func TestInstallExit100ClassificaPeloStderr(t *testing.T) {
 }
 
 func TestSudoSemCredencialViraErrNeedsAdmin(t *testing.T) {
-	f := exectest.New(t).OnElevated("apt-get install -y git", exectest.Reply{Err: exec.ErrNotElevated})
+	f := exectest.New(t).OnElevated("apt-get install -y --no-remove git", exectest.Reply{Err: exec.ErrNotElevated})
 	_, err := New(f).Install(context.Background(), ref("git"), "")
 	if !errors.Is(err, providers.ErrNeedsAdmin) {
 		t.Errorf("err = %v", err)
@@ -223,3 +223,17 @@ var (
 	_ providers.Provider = (*Provider)(nil)
 	_ providers.Preparer = (*Provider)(nil)
 )
+
+// Crivo #12: a classificação lê texto do apt; LC_ALL=C em todo comando, e --no-remove no install.
+func TestTodoComandoTemLCALLCeInstallTemNoRemove(t *testing.T) {
+	r := ref("git")
+	for name, c := range map[string]exec.Cmd{"dpkg-query": statusCmd(r), "madison": madisonCmd(r), "update": updateCmd(), "install": installCmd(r, "")} {
+		if !hasEnv(c, "LC_ALL=C") {
+			t.Errorf("%s sem LC_ALL=C", name)
+		}
+	}
+	args := strings.Join(installCmd(r, "").Args, " ")
+	if !strings.Contains(args, "--no-remove") {
+		t.Errorf("install sem --no-remove: %s", args)
+	}
+}

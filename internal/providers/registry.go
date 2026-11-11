@@ -111,6 +111,12 @@ func InstallApp(ctx context.Context, cands []Candidate, version string) (Outcome
 	if len(cands) == 0 {
 		return Outcome{}, ErrNoApplicableInstaller
 	}
+	// Versão já aplicada ao id (python@{{major_minor}}) tem de ser a pedida: senão o id instalaria outra em silêncio.
+	for _, c := range cands {
+		if c.Ref.VersionInID && version != "" && version != Latest && version != c.Ref.VersionApplied {
+			return Outcome{}, fmt.Errorf("%w: o instalador %s foi montado para a versão %q, mas %q foi pedida", ErrInvalidRef, c.Provider.Name(), c.Ref.VersionApplied, version)
+		}
+	}
 	var out Outcome
 	var lastErr error
 	for _, c := range cands {
@@ -119,7 +125,7 @@ func InstallApp(ctx context.Context, cands []Candidate, version string) (Outcome
 		}
 		// Versão já aplicada ao id pelo template (python@{{major_minor}}): não vai de novo ao provider.
 		ver := version
-		if c.Ref.VersionInID {
+		if c.Ref.VersionInID { // já conferida acima: é igual à aplicada
 			ver = ""
 		}
 		pinned := ver != "" && ver != Latest

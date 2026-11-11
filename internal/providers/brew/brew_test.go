@@ -277,3 +277,12 @@ func TestOutroSudoNaoViraErrNeedsAdmin(t *testing.T) {
 		t.Errorf("linha própria: %v", err)
 	}
 }
+
+func TestTodoComandoTemLCALLC(t *testing.T) {
+	r := formula("git")
+	for name, c := range map[string]exec.Cmd{"list": listCmd(r), "info": infoCmd(r), "update": updateCmd(), "install": installCmd(r)} {
+		if !hasEnv(c, "LC_ALL=C") {
+			t.Errorf("%s sem LC_ALL=C", name)
+		}
+	}
+}

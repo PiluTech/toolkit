@@ -24,7 +24,7 @@ import (
 var ErrRoot = errors.New("o Homebrew não roda como root: rode o toolkit como o usuário dono da instalação, sem sudo")
 
 // env: sem auto-update a cada pacote (um único "brew update" por execução, em Prepare) e sem dicas.
-var env = []string{"HOMEBREW_NO_AUTO_UPDATE=1", "HOMEBREW_NO_ENV_HINTS=1"}
+var env = []string{"HOMEBREW_NO_AUTO_UPDATE=1", "HOMEBREW_NO_ENV_HINTS=1", "LC_ALL=C"}
 
 const timeout = 30 * time.Minute
 

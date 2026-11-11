@@ -1,0 +1,5 @@
+Installed packages
+git.x86_64 2.43.0-1.fc40 <unknown>
+Available packages
+git.x86_64 2.43.0-1.fc40 updates
+git.x86_64 2.42.0-1.fc40 fedora
