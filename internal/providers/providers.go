@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/PiluVitu/toolkit/internal/catalog"
+	"github.com/PiluVitu/toolkit/internal/exec"
 	"github.com/PiluVitu/toolkit/internal/tmpl"
 )
 
@@ -69,8 +70,12 @@ type Provider interface {
 	IsInstalled(ctx context.Context, ref PackageRef) (bool, string, error)
 	// ListVersions devolve as versões instaláveis; ["latest"] se o gerenciador não lista.
 	ListVersions(ctx context.Context, ref PackageRef) ([]string, error)
+	// SupportsVersion diz, SEM executar nada (nem leitura, nem Prepare), se o gerenciador instala esta versão
+	// (version nunca é vazia nem "latest" aqui). Não suportar = ErrVersionUnsupported (brew, pacman, flatpak só
+	// têm a atual). O orquestrador chama antes de Prepare, para não rodar apt-get update/brew update à toa.
+	SupportsVersion(ref PackageRef, version string) error
 	// Install instala. version vazia = a padrão. Versão que o gerenciador não permite = ErrVersionUnsupported
-	// (nunca instala a última em silêncio).
+	// (nunca instala a última em silêncio). Chamado por InstallApp, que já validou a versão.
 	Install(ctx context.Context, ref PackageRef, version string) (InstallResult, error)
 }
 
@@ -94,6 +99,12 @@ const MaxFieldLen = 200
 // CheckName valida um nome de pacote, id ou remote que vira argumento de comando (inclusive sob sudo):
 // começa por letra ou número (nunca "-", que seria lido como opção), só letras, números e . _ + @ / -,
 // sem "..", até MaxFieldLen. O "--" antes do argumento é uma segunda camada, não a única.
+//
+// Atenção: "@" e "/" são aceitos de propósito e SÃO SINTAXE do gerenciador: "python@3.12" escolhe a fórmula
+// versionada no brew, "pkg/suite" escolhe o suite no apt e "tap/formula" um tap no brew. Um nome com "@" ou "/"
+// pode então escolher outra versão ou origem do que o id parece dizer; o autor do catálogo responde por isso
+// (um catálogo local é confiança do usuário), e a versão escolhida pelo usuário nunca entra por aqui: vai por
+// Install(version), validada por ValidVersion.
 func CheckName(field, s string) error {
 	if s == "" {
 		return fmt.Errorf("%w: %q vazio", ErrInvalidRef, field)
@@ -164,4 +175,38 @@ func RefFrom(app catalog.App, in catalog.Installer, vars map[string]string) (Pac
 		}
 	}
 	return ref, nil
+}
+
+// Runners reúne os dois Runners de um provider. Read só aceita leitura (Available, IsInstalled, ListVersions);
+// Mutate recusa ReadOnly=true (Install, Prepare). O contrato deixa de depender da disciplina de cada builder:
+// um Cmd no Runner errado volta ErrWrongRunner em vez de executar.
+type Runners struct{ Read, Mutate exec.Runner }
+
+// NewRunners embrulha r nos dois guardas.
+func NewRunners(r exec.Runner) Runners {
+	return Runners{Read: exec.ReadOnlyRunner(r), Mutate: exec.MutatingRunner(r)}
+}
+
+// CheckVersionArg valida a versão pedida: vazia, Latest ou ValidVersion; senão ErrInvalidRef.
+func CheckVersionArg(v string) error {
+	if v == "" || v == Latest || ValidVersion(v) {
+		return nil
+	}
+	return fmt.Errorf("%w: versão %q com caracteres não permitidos", ErrInvalidRef, v)
+}
+
+var epochRe = regexp.MustCompile(`^[0-9]+:`)
+
+// NormalizeVersion tira a época do Debian ("1:2.45-1" → "2.45-1").
+func NormalizeVersion(v string) string { return epochRe.ReplaceAllString(v, "") }
+
+// SameVersion compara a versão instalada (have) com a pedida (want) ignorando a época: "1:2.45-1" casa com
+// "2.45-1" e, quando want não traz revisão do pacote, com "2.45" (o apt mostra a revisão, o usuário pede a
+// versão do upstream).
+func SameVersion(have, want string) bool {
+	h, w := NormalizeVersion(have), NormalizeVersion(want)
+	if h == w {
+		return true
+	}
+	return !strings.Contains(w, "-") && strings.HasPrefix(h, w+"-")
 }

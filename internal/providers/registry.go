@@ -87,18 +87,28 @@ type Outcome struct {
 	Provider string
 	Ref      PackageRef
 	Result   InstallResult
-	// Tried lista os providers que falharam com ErrNoApplicableInstaller/ErrNotFound antes do que deu certo.
+	// Tried lista os providers que recusaram (não aplicável, não encontrado, versão não suportada) antes do que deu certo.
 	Tried []string
 }
 
-// InstallApp instala o app pelo primeiro candidato que serve. Para cada um: IsInstalled (leitura) primeiro, de
-// modo que rodar duas vezes não reinstala; Prepare (se o provider tiver); Install. ErrNoApplicableInstaller e
-// ErrNotFound passam para o próximo candidato; qualquer outro erro encerra. version vazia = a padrão; com
-// versão, "já instalado" só vale se a versão instalada for a pedida.
+// InstallApp instala o app pelo primeiro candidato que serve. A versão é validada UMA vez, no começo (vazia,
+// Latest ou ValidVersion; senão ErrInvalidRef antes de qualquer método de provider). O chamador continua
+// passando por App.VersionVars quando o id tem template: esta checagem é a segunda camada, e a única para
+// apps com versions: true, cuja versão (com época do Debian, por exemplo) não passa por tmpl.ValidValue.
+//
+// Para cada candidato: IsInstalled (leitura) primeiro, de modo que rodar duas vezes não reinstala (com versão,
+// "já instalado" usa SameVersion: época do Debian ignorada); depois SupportsVersion (sem mutação); depois
+// Prepare (se o provider tiver); depois Install. ErrNoApplicableInstaller, ErrNotFound e ErrVersionUnsupported
+// passam para o próximo candidato (se todos recusarem, o último erro é o resultado); qualquer outro erro
+// encerra.
 func InstallApp(ctx context.Context, cands []Candidate, version string) (Outcome, error) {
+	if err := CheckVersionArg(version); err != nil {
+		return Outcome{}, err
+	}
 	if len(cands) == 0 {
 		return Outcome{}, ErrNoApplicableInstaller
 	}
+	pinned := version != "" && version != Latest
 	var out Outcome
 	var lastErr error
 	for _, c := range cands {
@@ -109,10 +119,20 @@ func InstallApp(ctx context.Context, cands []Candidate, version string) (Outcome
 		if err != nil && !skippable(err) {
 			return out, fmt.Errorf("%s: %w", c.Provider.Name(), err)
 		}
-		if err == nil && installed && (version == "" || version == Latest || version == have) {
+		if err == nil && installed && (!pinned || SameVersion(have, version)) {
 			out.Provider, out.Ref = c.Provider.Name(), c.Ref
 			out.Result = InstallResult{AlreadyInstalled: true, Version: have}
 			return out, nil
+		}
+		if pinned {
+			if err := c.Provider.SupportsVersion(c.Ref, version); err != nil {
+				if skippable(err) {
+					out.Tried = append(out.Tried, c.Provider.Name())
+					lastErr = fmt.Errorf("%s: %w", c.Provider.Name(), err)
+					continue
+				}
+				return out, fmt.Errorf("%s: %w", c.Provider.Name(), err)
+			}
 		}
 		if p, ok := c.Provider.(Preparer); ok {
 			if err := p.Prepare(ctx); err != nil {
@@ -135,5 +155,5 @@ func InstallApp(ctx context.Context, cands []Candidate, version string) (Outcome
 }
 
 func skippable(err error) bool {
-	return errors.Is(err, ErrNoApplicableInstaller) || errors.Is(err, ErrNotFound)
+	return errors.Is(err, ErrNoApplicableInstaller) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrVersionUnsupported)
 }

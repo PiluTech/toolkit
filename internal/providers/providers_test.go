@@ -17,6 +17,7 @@ type fakeProvider struct {
 	have      string
 	isErr     error
 	installEr error
+	noVersion bool
 	calls     []string
 	prepared  int
 }
@@ -31,6 +32,13 @@ func (f *fakeProvider) IsInstalled(context.Context, PackageRef) (bool, string, e
 func (f *fakeProvider) ListVersions(context.Context, PackageRef) ([]string, error) {
 	return []string{Latest}, nil
 }
+func (f *fakeProvider) SupportsVersion(PackageRef, string) error {
+	f.calls = append(f.calls, "supports")
+	if f.noVersion {
+		return ErrVersionUnsupported
+	}
+	return nil
+}
 func (f *fakeProvider) Install(_ context.Context, _ PackageRef, v string) (InstallResult, error) {
 	f.calls = append(f.calls, "install:"+v)
 	if f.installEr != nil {
@@ -38,7 +46,11 @@ func (f *fakeProvider) Install(_ context.Context, _ PackageRef, v string) (Insta
 	}
 	return InstallResult{Version: "1.0"}, nil
 }
-func (f *fakeProvider) Prepare(context.Context) error { f.prepared++; return nil }
+func (f *fakeProvider) Prepare(context.Context) error {
+	f.calls = append(f.calls, "prepare")
+	f.prepared++
+	return nil
+}
 
 func testApp(t *testing.T) catalog.App {
 	t.Helper()
@@ -169,7 +181,7 @@ func TestInstallAppVersaoDiferenteReinstala(t *testing.T) {
 	if err != nil || out.Result.AlreadyInstalled {
 		t.Fatalf("out=%+v err=%v", out, err)
 	}
-	if strings.Join(p.calls, ",") != "is,install:3.0" || p.prepared != 1 {
+	if strings.Join(p.calls, ",") != "is,supports,prepare,install:3.0" || p.prepared != 1 {
 		t.Errorf("calls=%v prepared=%d", p.calls, p.prepared)
 	}
 }
@@ -184,7 +196,7 @@ func TestInstallAppTentaOProximoEmNaoAplicavel(t *testing.T) {
 }
 
 func TestInstallAppErroFatalNaoTentaOProximo(t *testing.T) {
-	for _, bad := range []error{ErrHashMismatch, ErrVersionUnsupported, ErrNeedsAdmin, ErrRetryable} {
+	for _, bad := range []error{ErrHashMismatch, ErrNeedsAdmin, ErrRetryable} {
 		a := &fakeProvider{name: "winget", installEr: bad}
 		b := &fakeProvider{name: "brew"}
 		_, err := InstallApp(context.Background(), []Candidate{cand(a), cand(b)}, "")
@@ -219,5 +231,101 @@ func TestInstallAppCtxCancelado(t *testing.T) {
 	a := &fakeProvider{name: "apt"}
 	if _, err := InstallApp(ctx, []Candidate{cand(a)}, ""); !errors.Is(err, context.Canceled) || len(a.calls) != 0 {
 		t.Errorf("err=%v calls=%v", err, a.calls)
+	}
+}
+
+// BLOQUEANTE do Crivo: a versão é validada uma vez, no começo, sem chamar o provider.
+func TestInstallAppValidaVersaoAntesDeQualquerMetodo(t *testing.T) {
+	for _, v := range []string{"--force", "-1", "1;2", "1 2", "1..2", "$(x)", "1\n2", ":1"} {
+		p := &fakeProvider{name: "apt"}
+		_, err := InstallApp(context.Background(), []Candidate{cand(p)}, v)
+		if !errors.Is(err, ErrInvalidRef) {
+			t.Errorf("versão %q: err = %v", v, err)
+		}
+		if len(p.calls) != 0 || p.prepared != 0 {
+			t.Errorf("versão %q: o provider foi chamado: %v", v, p.calls)
+		}
+	}
+	// vazia, latest e época do Debian passam
+	for _, v := range []string{"", Latest, "1:2.39.2-1", "3.13"} {
+		p := &fakeProvider{name: "apt"}
+		if _, err := InstallApp(context.Background(), []Candidate{cand(p)}, v); err != nil {
+			t.Errorf("versão %q: %v", v, err)
+		}
+	}
+}
+
+// IMPORTANTE (2): versão não suportada é checada sem mutação e passa ao próximo candidato.
+func TestInstallAppVersaoNaoSuportadaNaoPreparaEPassaAoProximo(t *testing.T) {
+	a := &fakeProvider{name: "brew", noVersion: true}
+	b := &fakeProvider{name: "apt"}
+	out, err := InstallApp(context.Background(), []Candidate{cand(a), cand(b)}, "3.0")
+	if err != nil || out.Provider != "apt" {
+		t.Fatalf("out=%+v err=%v", out, err)
+	}
+	if strings.Join(a.calls, ",") != "is,supports" || a.prepared != 0 {
+		t.Errorf("brew: calls=%v (sem Prepare nem Install)", a.calls)
+	}
+	if len(out.Tried) != 1 || out.Tried[0] != "brew" {
+		t.Errorf("tried = %v", out.Tried)
+	}
+}
+
+func TestInstallAppTodosRecusamAVersao(t *testing.T) {
+	a := &fakeProvider{name: "brew", noVersion: true}
+	b := &fakeProvider{name: "pacman", noVersion: true}
+	_, err := InstallApp(context.Background(), []Candidate{cand(a), cand(b)}, "3.0")
+	if !errors.Is(err, ErrVersionUnsupported) || !strings.Contains(err.Error(), "pacman") {
+		t.Errorf("err = %v", err)
+	}
+	if a.prepared+b.prepared != 0 {
+		t.Error("nenhum Prepare quando todos recusam")
+	}
+}
+
+func TestInstallAppSemVersaoNaoChamaSupportsVersion(t *testing.T) {
+	p := &fakeProvider{name: "brew", noVersion: true}
+	if _, err := InstallApp(context.Background(), []Candidate{cand(p)}, Latest); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range p.calls {
+		if c == "supports" {
+			t.Error("latest não consulta SupportsVersion")
+		}
+	}
+}
+
+// MENOR: a época do Debian não faz a versão instalada parecer diferente.
+func TestInstallAppEpocaDoDebianNaoReinstala(t *testing.T) {
+	for _, want := range []string{"2.45", "2.45-1", "1:2.45-1"} {
+		p := &fakeProvider{name: "apt", installed: true, have: "1:2.45-1"}
+		out, err := InstallApp(context.Background(), []Candidate{cand(p)}, want)
+		if err != nil || !out.Result.AlreadyInstalled {
+			t.Errorf("want %q: out=%+v err=%v", want, out, err)
+		}
+	}
+	p := &fakeProvider{name: "apt", installed: true, have: "1:2.45-1"}
+	out, _ := InstallApp(context.Background(), []Candidate{cand(p)}, "2.4")
+	if out.Result.AlreadyInstalled {
+		t.Error("2.4 não é 2.45")
+	}
+}
+
+func TestSameVersionENormalize(t *testing.T) {
+	if NormalizeVersion("1:2.45-1") != "2.45-1" || NormalizeVersion("2.45") != "2.45" || NormalizeVersion("a:1") != "a:1" {
+		t.Error("NormalizeVersion")
+	}
+	if SameVersion("2.45.1-1", "2.45") {
+		t.Error("2.45.1 não casa com 2.45")
+	}
+	if !SameVersion("2.45-1", "2.45") || SameVersion("2.45", "2.45-1") {
+		t.Error("revisão só casa quando o pedido não a traz")
+	}
+}
+
+// Args do catálogo só existem para url/github-release (fase 5); os providers de gerenciador os recusam.
+func TestOnlyFieldsRecusaArgs(t *testing.T) {
+	if err := OnlyFields(PackageRef{Provider: "apt", Package: "git", Args: []string{"--force"}}, "package"); !errors.Is(err, ErrInvalidRef) {
+		t.Errorf("err = %v", err)
 	}
 }
