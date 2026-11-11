@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -105,6 +106,27 @@ func TestParseErros(t *testing.T) {
 		{"template de versão com versions true", "apps:\n  g:\n    name: G\n    category: dev\n    versions: true\n    any: [{provider: apt, package: \"py{{version}}\"}]", `"versions" precisa ser uma lista`},
 		{"versions inválido", "apps:\n  g:\n    name: G\n    category: dev\n    versions: sim\n    any: [{provider: apt, package: g}]", "versions deve ser true ou uma lista"},
 		{"versions vazio", "apps:\n  g:\n    name: G\n    category: dev\n    versions: []\n    any: [{provider: apt, package: g}]", "não pode ser vazia"},
+		{"chave repetida no topo", "apps: {}\napps: {}", `topo do arquivo: chave "apps" repetida`},
+		{"chave repetida no app", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: winget, id: a}]\n    windows: [{provider: winget, id: b}]", `app "g": chave "windows" repetida`},
+		{"name repetido", "apps:\n  g:\n    name: G\n    category: dev\n    name: H\n    any: [{provider: apt, package: g}]", `chave "name" repetida`},
+		{"chave repetida no instalador", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: winget, id: a, id: b}]", `chave "id" repetida`},
+		{"provider repetido", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: winget, provider: apt, id: a}]", `chave "provider" repetida`},
+		{"alias", "x: &a {}\napps:\n  g: *a", "âncoras e aliases"},
+		{"merge key", "base: &b {name: G}\napps:\n  g:\n    <<: *b", "não são aceitos"},
+		{"url userinfo", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: url, url: \"https://u:p@x.com/a.msi\", sha256: " + hash + "}]", "userinfo"},
+		{"url sem host", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: url, url: \"https:///a.msi\", sha256: " + hash + "}]", "sem host"},
+		{"url localhost", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: url, url: \"https://localhost/a.msi\", sha256: " + hash + "}]", "localhost"},
+		{"url IP literal", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: url, url: \"https://10.0.0.1/a.msi\", sha256: " + hash + "}]", "IP literal"},
+		{"url IPv6 literal", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: url, url: \"https://[::1]/a.msi\", sha256: " + hash + "}]", "IP literal"},
+		{"url porta", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: url, url: \"https://x.com:8443/a.msi\", sha256: " + hash + "}]", "porta 8443"},
+		{"url com espaço", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: url, url: \"https://x.com/a b.msi\", sha256: " + hash + "}]", "espaço"},
+		{"url com controle", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: url, url: \"https://x.com/a\\u0001.msi\", sha256: " + hash + "}]", "controle"},
+		{"url template no host", "apps:\n  g:\n    name: G\n    category: dev\n    versions: [\"1\"]\n    windows: [{provider: url, url: \"https://{{version}}.x.com/a.msi\", sha256: " + hash + "}]", "template no host"},
+		{"url fragmento", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: url, url: \"https://x.com/a.msi#x\", sha256: " + hash + "}]", "fragmento"},
+		{"args com número", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: url, url: \"https://x.com/a.msi\", sha256: " + hash + ", args: [1]}]", "args deve ser um texto"},
+		{"args com mapa", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: url, url: \"https://x.com/a.msi\", sha256: " + hash + ", args: [{a: b}]}]", "args deve ser um texto"},
+		{"args com template desconhecido", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: url, url: \"https://x.com/a.msi\", sha256: " + hash + ", args: [\"{{foo}}\"]}]", `variável desconhecida "foo"`},
+		{"args com versão sem lista", "apps:\n  g:\n    name: G\n    category: dev\n    windows: [{provider: url, url: \"https://x.com/a.msi\", sha256: " + hash + ", args: [\"/v{{version}}\"]}]", `"versions" precisa ser uma lista`},
 		{"lista de SO não é lista", "apps:\n  g:\n    name: G\n    category: dev\n    windows: x", "deve ser uma lista de instaladores"},
 	}
 	for _, c := range cases {
@@ -132,22 +154,105 @@ func TestParseRelataTodosOsErros(t *testing.T) {
 }
 
 func TestMerge(t *testing.T) {
-	base, _ := Parse("b", []byte("apps:\n  a:\n    name: A1\n    category: dev\n    any: [{provider: apt, package: a}]\n  b:\n    name: B\n    category: dev\n    any: [{provider: apt, package: b}]\n"))
-	ext, _ := Parse("e", []byte("apps:\n  a:\n    name: A2\n    category: dev\n    any: [{provider: apt, package: a}]\n  c:\n    name: C\n    category: dev\n    any: [{provider: apt, package: c}]\n"))
+	base := mustParse(t, "b", ("apps:\n  a:\n    name: A1\n    category: dev\n    any: [{provider: github-release, repo: o/a, asset: a.zip, args: [\"-y\"]}]\n  b:\n    name: B\n    category: dev\n    any: [{provider: apt, package: b}]\n"))
+	ext := mustParse(t, "e", ("apps:\n  a:\n    name: A2\n    category: dev\n    any: [{provider: apt, package: a}]\n  c:\n    name: C\n    category: dev\n    any: [{provider: apt, package: c}]\n"))
 
-	m := Merge(base, ext, false)
+	m, replaced := Merge(base, ext, false)
 	if strings.Join(m.Order, ",") != "a,b,c" || m.Apps["a"].Name != "A2" {
 		t.Fatalf("merge: %v %s", m.Order, m.Apps["a"].Name)
 	}
-	r := Merge(base, ext, true)
-	if strings.Join(r.Order, ",") != "a,c" || len(r.Apps) != 2 {
-		t.Fatalf("replace: %v", r.Order)
+	if strings.Join(replaced, ",") != "a" {
+		t.Fatalf("deveria avisar que a foi substituído: %v", replaced)
+	}
+	r, replaced := Merge(base, ext, true)
+	if strings.Join(r.Order, ",") != "a,c" || len(r.Apps) != 2 || len(replaced) != 0 {
+		t.Fatalf("replace: %v %v", r.Order, replaced)
 	}
 	if base.Apps["a"].Name != "A1" {
 		t.Fatal("merge não pode alterar a base")
 	}
 	if got := len(m.List()); got != 3 {
 		t.Fatalf("List: %d", got)
+	}
+}
+
+func TestMergeCopiaProfundaENil(t *testing.T) {
+	base := mustParse(t, "b", ("apps:\n  b:\n    name: B\n    category: dev\n    versions: [\"1\"]\n    any: [{provider: github-release, repo: o/b, asset: b.zip, args: [\"-y\"]}]\n"))
+	m, _ := Merge(base, nil, false)
+	m.Apps["b"].Installers[KeyAny][0].Args[0] = "MUDOU"
+	m.Apps["b"].Installers[KeyAny][0].Repo = "MUDOU"
+	m.Apps["b"].Versions.List[0] = "MUDOU"
+	m.Apps["b"].Installers[KeyAny] = nil
+	got := base.Apps["b"]
+	if got.Installers[KeyAny][0].Args[0] != "-y" || got.Installers[KeyAny][0].Repo != "o/b" || got.Versions.List[0] != "1" {
+		t.Fatalf("a cópia compartilhou estado com a base: %+v", got)
+	}
+	if m, rep := Merge(nil, base, false); len(m.Apps) != 1 || len(rep) != 0 {
+		t.Fatalf("base nil: %+v %v", m, rep)
+	}
+	if m, _ := Merge(nil, nil, true); len(m.Apps) != 0 {
+		t.Fatalf("ambos nil: %+v", m)
+	}
+}
+
+func TestVersionVars(t *testing.T) {
+	c, _ := Parse("c", []byte(valid))
+	py, _ := c.Get("python")
+	vars, err := py.VersionVars("")
+	if err != nil || vars["version"] != "3.13" || vars["major"] != "3" || vars["major_minor"] != "3.13" {
+		t.Fatalf("padrão: %v %v", vars, err)
+	}
+	if vars, err = py.VersionVars("3.12"); err != nil || vars["major_minor"] != "3.12" {
+		t.Fatalf("%v %v", vars, err)
+	}
+	for _, bad := range []string{"3.11", "3.13/../x", "../../etc", "3.13 ", "{{os}}", "3.13;rm"} {
+		if _, err := py.VersionVars(bad); err == nil {
+			t.Errorf("%q deveria ser recusada (fora da lista)", bad)
+		}
+	}
+	git, _ := c.Get("git") // versions: true — só formato
+	if vars, err = git.VersionVars("2.45.1"); err != nil || vars["version"] != "2.45.1" {
+		t.Fatalf("%v %v", vars, err)
+	}
+	if _, err = git.VersionVars("2.45/../x"); err == nil {
+		t.Fatal("versão hostil com versions: true deveria falhar")
+	}
+	tool, _ := c.Get("tool") // sem versions
+	if _, err = tool.VersionVars("1.0"); err == nil {
+		t.Fatal("app sem versions não aceita versão")
+	}
+	if vars, err = tool.VersionVars(""); err != nil || len(vars) != 0 {
+		t.Fatalf("%v %v", vars, err)
+	}
+}
+
+func TestLimites(t *testing.T) {
+	if _, err := Parse("g.yaml", []byte("apps:\n"+strings.Repeat("#"+strings.Repeat("x", 1000)+"\n", 1100))); err == nil || !strings.Contains(err.Error(), "maior que 1 MiB") {
+		t.Fatalf("arquivo grande: %v", err)
+	}
+	var b strings.Builder
+	b.WriteString("apps:\n")
+	for i := range MaxApps + 1 {
+		fmt.Fprintf(&b, "  a%d: {}\n", i)
+	}
+	if _, err := Parse("m.yaml", []byte(b.String())); err == nil || !strings.Contains(err.Error(), "apps demais") {
+		t.Fatalf("muitos apps: %v", err)
+	}
+}
+
+func TestCheckURLAceitaCasosLegitimos(t *testing.T) {
+	for _, u := range []string{
+		"https://exemplo.com/app-1.2.3-x64.msi",
+		"https://dl.exemplo.com:443/a/{{version}}/app-{{os}}-{{arch}}.zip",
+		"https://xn--exemplo-9ta.com/a?v={{version}}",
+	} {
+		if err := CheckURL(u, true); err != nil {
+			t.Errorf("%q: %v", u, err)
+		}
+	}
+	// depois da expansão, sobra de "{{" é erro
+	if err := CheckURL("https://exemplo.com/{{version}}", false); err == nil {
+		t.Error("template não expandido deveria falhar")
 	}
 }
 
@@ -169,4 +274,21 @@ func TestLoadFile(t *testing.T) {
 	if _, err := LoadFile(bad); err == nil || !strings.Contains(err.Error(), "ruim.yaml:") {
 		t.Fatalf("erro deveria citar o arquivo: %v", err)
 	}
+	big := filepath.Join(dir, "grande.yaml")
+	_ = os.WriteFile(big, []byte("apps:\n"+strings.Repeat("#"+strings.Repeat("x", 1000)+"\n", 1100)), 0o600)
+	if _, err := LoadFile(big); err == nil || !strings.Contains(err.Error(), "maior que 1 MiB") {
+		t.Fatalf("teto: %v", err)
+	}
+	if _, err := LoadFile(dir); err == nil || !strings.Contains(err.Error(), "regular") {
+		t.Fatalf("diretório deveria ser recusado: %v", err)
+	}
+}
+
+func mustParse(t *testing.T, name, src string) *Catalog {
+	t.Helper()
+	c, err := Parse(name, []byte(src))
+	if err != nil {
+		t.Fatalf("catálogo de teste inválido: %v", err)
+	}
+	return c
 }

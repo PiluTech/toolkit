@@ -5,7 +5,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 export GOFLAGS="${GOFLAGS:-} -mod=readonly"
-export PATH="$HOME/.local/bin:$PATH"
+# ~/.local/bin no FIM: um binário do usuário nunca sombreia go/gofmt/ferramentas do sistema.
+export PATH="$PATH:$HOME/.local/bin"
 
 step() { printf '\n==> %s\n' "$*"; }
 
@@ -13,13 +14,9 @@ step "go mod verify / tidy"
 go mod verify
 go mod tidy -diff
 
-step "gofmt"
-unformatted="$(gofmt -l cmd internal *.go 2>/dev/null || true)"
-if [ -n "$unformatted" ]; then
-  echo "arquivos sem gofmt:" >&2
-  echo "$unformatted" >&2
-  exit 1
-fi
+step "gofmt (autoteste do verificador + verificação)"
+./scripts/check-gofmt_test.sh
+./scripts/check-gofmt.sh .
 
 step "go vet (linux, windows, darwin)"
 for os in linux windows darwin; do
@@ -28,7 +25,7 @@ done
 
 step "golangci-lint"
 if ! command -v golangci-lint >/dev/null 2>&1; then
-  echo "golangci-lint não encontrado (esperado v2.15.0)" >&2
+  echo "golangci-lint não encontrado (esperado v2.15.0): rode scripts/instalar-ferramentas.sh" >&2
   exit 1
 fi
 golangci-lint run ./...

@@ -53,8 +53,32 @@ func (p *parser) errAt(n *yaml.Node, format string, a ...any) {
 	p.errs = append(p.errs, Error{File: p.file, Line: n.Line, Col: n.Column, Msg: fmt.Sprintf(format, a...)})
 }
 
+// Limites de segurança da carga: tamanho do arquivo e número de apps.
+const (
+	MaxFileSize = 1 << 20
+	MaxApps     = 2000
+)
+
+// rejectAliases recusa âncoras, aliases e chaves de merge (<<): eles permitem que uma chave "apareça"
+// sem estar escrita no arquivo e inflar o documento (billion laughs).
+func (p *parser) rejectAliases(n *yaml.Node) {
+	if n.Kind == yaml.AliasNode || n.Anchor != "" {
+		p.errAt(n, "âncoras e aliases YAML (&x, *x) não são aceitos no catálogo")
+		return
+	}
+	if n.Tag == "!!merge" {
+		p.errAt(n, "a chave de merge (<<) não é aceita no catálogo")
+	}
+	for _, c := range n.Content {
+		p.rejectAliases(c)
+	}
+}
+
 // Parse lê e valida o catálogo. file só aparece nas mensagens de erro.
 func Parse(file string, data []byte) (*Catalog, error) {
+	if len(data) > MaxFileSize {
+		return nil, Errors{{File: file, Msg: fmt.Sprintf("arquivo maior que %d MiB", MaxFileSize>>20)}}
+	}
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	var doc yaml.Node
 	if err := dec.Decode(&doc); err != nil {
@@ -64,6 +88,10 @@ func Parse(file string, data []byte) (*Catalog, error) {
 		return nil, Errors{{File: file, Msg: "YAML inválido: " + err.Error()}}
 	}
 	p := &parser{file: file}
+	p.rejectAliases(&doc)
+	if len(p.errs) > 0 {
+		return nil, p.errs
+	}
 	cat := &Catalog{Apps: map[string]App{}}
 
 	root := &doc
@@ -75,8 +103,12 @@ func Parse(file string, data []byte) (*Catalog, error) {
 		return nil, p.errs
 	}
 	var apps *yaml.Node
+	top := map[string]bool{}
 	for i := 0; i+1 < len(root.Content); i += 2 {
 		k, v := root.Content[i], root.Content[i+1]
+		if p.dup(top, k, "topo do arquivo") {
+			continue
+		}
 		if k.Value == "apps" {
 			apps = v
 		} else {
@@ -91,10 +123,14 @@ func Parse(file string, data []byte) (*Catalog, error) {
 		p.errAt(apps, "\"apps\" deve ser um mapa de id para app")
 		return nil, p.errs
 	}
+	if n := len(apps.Content) / 2; n > MaxApps {
+		p.errAt(apps, "apps demais: %d (o limite é %d)", n, MaxApps)
+		return nil, p.errs
+	}
 	for i := 0; i+1 < len(apps.Content); i += 2 {
 		k, v := apps.Content[i], apps.Content[i+1]
 		if _, dup := cat.Apps[k.Value]; dup {
-			p.errAt(k, "app %q duplicado", k.Value)
+			p.errAt(k, "app %q duplicado (o último venceria em silêncio)", k.Value)
 			continue
 		}
 		app, ok := p.parseApp(k, v)
@@ -110,6 +146,17 @@ func Parse(file string, data []byte) (*Catalog, error) {
 	return cat, nil
 }
 
+// dup marca a chave k como vista em seen; a segunda ocorrência vira erro (senão a última venceria em
+// silêncio e, por exemplo, um catálogo local esconderia um instalador).
+func (p *parser) dup(seen map[string]bool, k *yaml.Node, where string) bool {
+	if seen[k.Value] {
+		p.errAt(k, "%s: chave %q repetida (a última venceria em silêncio)", where, k.Value)
+		return true
+	}
+	seen[k.Value] = true
+	return false
+}
+
 func (p *parser) parseApp(key, node *yaml.Node) (App, bool) {
 	start := len(p.errs)
 	id := key.Value
@@ -122,8 +169,12 @@ func (p *parser) parseApp(key, node *yaml.Node) (App, bool) {
 		return app, false
 	}
 	var versionsNode *yaml.Node
+	seen := map[string]bool{}
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		k, v := node.Content[i], node.Content[i+1]
+		if p.dup(seen, k, fmt.Sprintf("app %q", id)) {
+			continue
+		}
 		switch {
 		case k.Value == "name":
 			app.Name = strings.TrimSpace(v.Value)
@@ -208,7 +259,7 @@ func (p *parser) checkVersionTemplates(app App, versionsNode *yaml.Node) {
 }
 
 func (in Installer) stringFields() []string {
-	return []string{in.ID, in.Package, in.Formula, in.Cask, in.Source, in.Repo, in.Asset, in.URL, in.Type}
+	return append([]string{in.ID, in.Package, in.Formula, in.Cask, in.Source, in.Repo, in.Asset, in.URL, in.Type}, in.Args...)
 }
 
 func (p *parser) parseInstallers(appID, osKey string, v *yaml.Node) []Installer {
@@ -234,8 +285,12 @@ func (p *parser) parseInstaller(appID string, n *yaml.Node) (Installer, bool) {
 	}
 	vals := map[string]*yaml.Node{}
 	var provNode *yaml.Node
+	seen := map[string]bool{}
 	for i := 0; i+1 < len(n.Content); i += 2 {
 		k, v := n.Content[i], n.Content[i+1]
+		if p.dup(seen, k, fmt.Sprintf("app %q (instalador)", appID)) {
+			continue
+		}
 		if k.Value == "provider" {
 			provNode = v
 			in.Provider = v.Value
@@ -244,9 +299,6 @@ func (p *parser) parseInstaller(appID string, n *yaml.Node) (Installer, bool) {
 		if !slices.Contains(allFields, k.Value) {
 			p.errAt(k, "app %q: chave desconhecida %q", appID, k.Value)
 			continue
-		}
-		if _, dup := vals[k.Value]; dup {
-			p.errAt(k, "app %q: chave %q repetida", appID, k.Value)
 		}
 		vals[k.Value] = v
 	}
@@ -316,14 +368,24 @@ func (p *parser) parseInstaller(appID string, n *yaml.Node) (Installer, bool) {
 	if in.Repo != "" && !repoRe.MatchString(in.Repo) {
 		p.errAt(vals["repo"], "app %q: repo deve ser no formato dono/repositório", appID)
 	}
-	if in.URL != "" && !strings.HasPrefix(in.URL, "https://") {
-		p.errAt(vals["url"], "app %q: url deve começar com https://", appID)
+	if in.URL != "" {
+		if err := CheckURL(in.URL, true); err != nil {
+			p.errAt(vals["url"], "app %q: %v", appID, err)
+		}
 	}
 	if a := vals["args"]; a != nil && allowed["args"] {
 		if a.Kind != yaml.SequenceNode {
 			p.errAt(a, "app %q: args deve ser uma lista de textos", appID)
 		} else {
 			for _, it := range a.Content {
+				if it.Kind != yaml.ScalarNode || it.Tag != "!!str" {
+					p.errAt(it, "app %q: cada item de args deve ser um texto (use aspas em números e booleanos)", appID)
+					continue
+				}
+				if err := tmpl.Validate(it.Value); err != nil {
+					p.errAt(it, "app %q: args: %v", appID, err)
+					continue
+				}
 				in.Args = append(in.Args, it.Value)
 			}
 		}

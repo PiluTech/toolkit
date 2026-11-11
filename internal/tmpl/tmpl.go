@@ -4,8 +4,16 @@ package tmpl
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
+
+// valueRe é o único formato aceito para o VALOR de qualquer variável: sem barra, espaço, aspas, "{" nem
+// caractere de controle. Impede que uma versão hostil (ex.: "1/../../x") mude o caminho de uma URL ou um argumento.
+var valueRe = regexp.MustCompile(`^[A-Za-z0-9._+~-]+$`)
+
+// ValidValue diz se v é um valor aceitável para uma variável de template.
+func ValidValue(v string) bool { return valueRe.MatchString(v) && !strings.Contains(v, "..") }
 
 // Variáveis aceitas nos campos de texto do catálogo.
 const (
@@ -64,7 +72,9 @@ func Validate(s string) error {
 	return nil
 }
 
-// Expand troca cada {{nome}} pelo valor em vars. Nome desconhecido ou sem valor é erro.
+// Expand troca cada {{nome}} pelo valor em vars. Nome desconhecido, sem valor ou com valor fora de
+// ValidValue (^[A-Za-z0-9._+~-]+$, sem "..") é erro. Quem chama deve conferir antes que a versão esteja em
+// Versions.List (catalog.App.VersionVars faz isso).
 func Expand(s string, vars map[string]string) (string, error) {
 	if _, err := Names(s); err != nil {
 		return "", err
@@ -85,6 +95,9 @@ func Expand(s string, vars map[string]string) (string, error) {
 		v, ok := vars[name]
 		if !ok {
 			return "", fmt.Errorf("%q: sem valor para %q", s, name)
+		}
+		if !ValidValue(v) {
+			return "", fmt.Errorf("%q: valor %q inválido para %q (só letras, números e . _ + ~ -)", s, v, name)
 		}
 		b.WriteString(rest[:i])
 		b.WriteString(v)

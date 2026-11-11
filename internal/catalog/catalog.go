@@ -4,8 +4,11 @@ package catalog
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
+
+	"github.com/PiluVitu/toolkit/internal/tmpl"
 )
 
 // Categories é a lista fixa de categorias. Categoria desconhecida é erro na carga.
@@ -104,22 +107,85 @@ func (c *Catalog) Get(id string) (App, bool) {
 	return a, ok
 }
 
-// Merge devolve base com ext por cima: o mesmo id substitui. Com replace, devolve só ext.
-func Merge(base, ext *Catalog, replace bool) *Catalog {
-	out := &Catalog{Apps: map[string]App{}}
-	if !replace {
-		for _, id := range base.Order {
-			out.Apps[id] = base.Apps[id]
-			out.Order = append(out.Order, id)
+// clone faz cópia profunda: o catálogo mesclado não compartilha mapas nem fatias com os de origem.
+func (a App) clone() App {
+	out := a
+	out.Versions.List = append([]string(nil), a.Versions.List...)
+	out.Installers = make(map[string][]Installer, len(a.Installers))
+	for k, list := range a.Installers {
+		cp := make([]Installer, len(list))
+		for i, in := range list {
+			in.Args = append([]string(nil), in.Args...)
+			cp[i] = in
 		}
-	}
-	for _, id := range ext.Order {
-		if _, exists := out.Apps[id]; !exists {
-			out.Order = append(out.Order, id)
-		}
-		out.Apps[id] = ext.Apps[id]
+		out.Installers[k] = cp
 	}
 	return out
+}
+
+// Merge devolve base com ext por cima: o mesmo id substitui. Com replace, devolve só ext. base e ext
+// nil valem como vazios. O segundo valor lista, na ordem de ext, os ids de base que foram substituídos
+// (o chamador deve avisar o usuário: um catálogo local pode esconder o app embutido). A cópia é profunda.
+func Merge(base, ext *Catalog, replace bool) (*Catalog, []string) {
+	out := &Catalog{Apps: map[string]App{}}
+	if base == nil {
+		base = &Catalog{}
+	}
+	if ext == nil {
+		ext = &Catalog{}
+	}
+	if !replace {
+		for _, id := range base.Order {
+			out.Apps[id] = base.Apps[id].clone()
+			out.Order = append(out.Order, id)
+		}
+	}
+	var replaced []string
+	for _, id := range ext.Order {
+		if _, exists := out.Apps[id]; exists {
+			replaced = append(replaced, id)
+		} else {
+			out.Order = append(out.Order, id)
+		}
+		out.Apps[id] = ext.Apps[id].clone()
+	}
+	return out, replaced
+}
+
+// VersionVars monta as variáveis de versão ({{version}}, {{major}}, {{major_minor}}) para a versão pedida
+// (vazia = a padrão, a primeira de Versions.List). Com lista, a versão TEM de estar nela; sem lista só a
+// consulta ao gerenciador (versions: true) aceita versão, e então só {{version}} é definida. O valor
+// precisa passar em tmpl.ValidValue.
+func (a App) VersionVars(requested string) (map[string]string, error) {
+	v := requested
+	switch {
+	case len(a.Versions.List) > 0:
+		if v == "" {
+			v = a.Versions.List[0]
+		}
+		if !slices.Contains(a.Versions.List, v) {
+			return nil, fmt.Errorf("app %q: versão %q fora da lista (%s)", a.ID, v, strings.Join(a.Versions.List, ", "))
+		}
+	case a.Versions.Query:
+		if v == "" {
+			return map[string]string{}, nil
+		}
+	default:
+		if v != "" {
+			return nil, fmt.Errorf("app %q não aceita escolha de versão", a.ID)
+		}
+		return map[string]string{}, nil
+	}
+	if !tmpl.ValidValue(v) {
+		return nil, fmt.Errorf("app %q: versão %q com caracteres não permitidos", a.ID, v)
+	}
+	vars := map[string]string{tmpl.Version: v}
+	if len(a.Versions.List) > 0 {
+		parts := strings.Split(v, ".")
+		vars[tmpl.Major] = parts[0]
+		vars[tmpl.MajorMinor] = strings.Join(parts[:min(2, len(parts))], ".")
+	}
+	return vars, nil
 }
 
 // Error é um problema de validação com posição.

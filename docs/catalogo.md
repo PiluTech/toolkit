@@ -65,11 +65,28 @@ aba nova na TUI. Uma categoria nova é uma linha na lista do código.
 | `url` | `url`, `sha256` | `type`, `args` | uma, a da URL |
 
 `type` é um de `msi`, `exe`, `zip`, `tar.gz`, `dmg`, `deb`, `rpm` e `appimage`. Se ficar vazio, vem da
-extensão do arquivo. `args` são os argumentos silenciosos de um `exe` ou `msi`.
+extensão do arquivo. `args` são os argumentos silenciosos de um `exe` ou `msi`; cada item tem de ser um
+texto (use aspas em números e booleanos) e passa pela validação de templates como os outros campos.
+
+### Regras da `url`
+
+- Só `https`, sem usuário/senha (`user:senha@`), sem fragmento (`#`), sem espaço, barra invertida nem caractere de controle.
+- O host é um nome público em minúsculas, com ao menos um ponto (IDN em punycode). **`localhost`, nomes de um
+  só rótulo e IP literal (v4 e v6) são recusados**, para o catálogo não apontar para a rede local. Porta explícita só se for `443`.
+- Variável de template só vale **depois do host** (no caminho ou na query), nunca no host.
+- A URL é validada na carga (com os templates) e de novo depois da expansão (`catalog.CheckURL`).
+- O `sha256` é obrigatório no provider `url`.
+
+### Chaves repetidas e limites
+
+Chave repetida em qualquer nível (topo, app, instalador, `provider`) é erro: a última não vence em silêncio.
+Âncoras, aliases e a chave de merge (`<<`) do YAML não são aceitos. O arquivo tem no máximo 1 MiB e o catálogo
+no máximo 2000 apps. Ao mesclar um catálogo local (`--catalog`) sobre o embutido, os ids substituídos são avisados.
 
 ## Templates
 
-Campos de texto aceitam variáveis entre chaves duplas. Variável desconhecida é erro na carga.
+Campos de texto aceitam variáveis entre chaves duplas. Variável desconhecida é erro na carga. Na expansão, todo valor
+tem de casar com `^[A-Za-z0-9._+~-]+$` (sem `..`), e a versão pedida tem de estar em `versions` (`App.VersionVars`).
 
 | Variável | Exemplo |
 |---|---|

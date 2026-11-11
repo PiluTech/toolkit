@@ -44,3 +44,19 @@ func TestNames(t *testing.T) {
 		t.Fatalf("%v %v", got, err)
 	}
 }
+
+func TestExpandRecusaValorHostil(t *testing.T) {
+	hostile := []string{"1/../../x", "..", "1..2", "a b", "", "a/b", `a\b`, "a\x00b", "a\nb", "{{os}}", "a;b", "a\"b", "%2e%2e", "é"}
+	for _, v := range hostile {
+		for _, name := range []string{Version, Major, MajorMinor, OS, Arch, ToolkitVersion} {
+			if _, err := Expand("x{{"+name+"}}", map[string]string{name: v}); err == nil {
+				t.Errorf("%s=%q deveria falhar", name, v)
+			}
+		}
+	}
+	for _, v := range []string{"3.12", "1.2.3-rc.1+build~5", "v2", "arm64"} {
+		if got, err := Expand("{{version}}", map[string]string{Version: v}); err != nil || got != v {
+			t.Errorf("%q: %q %v", v, got, err)
+		}
+	}
+}
