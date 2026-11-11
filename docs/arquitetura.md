@@ -82,8 +82,8 @@ type Cmd struct {
 	Stdin   io.Reader
 	Stdout  io.Writer     // opcional: tee para o log ao vivo (TUI/--verbose)
 	Timeout time.Duration // 0 = só o ctx
-	Elevate bool          // Unix: prefixa sudo. Windows: exige processo já elevado (erro se não estiver)
-	Mutates bool          // true = altera o sistema; o DryRunRunner não executa, só registra
+	Elevate bool          // Unix: "sudo -n" (nunca pede senha; ErrNotElevated se faltar credencial). Windows: exige processo já elevado. Sempre conta como mutação no dry-run
+	ReadOnly bool         // true = só lê. Default false = pode alterar: o DryRunRunner não executa, só registra
 	Secret  bool          // não loga Args (ex.: comando com token)
 }
 
@@ -104,9 +104,11 @@ type Runner interface {
 }
 ```
 
-`DryRunRunner` envolve o `OSRunner`. Ele **executa** os comandos de leitura (`Mutates=false`, como
-`winget list` e `dpkg-query`), porque o dry-run precisa mostrar o que já está instalado, e só **registra**
-os que alteram o sistema. Nos testes nada chega ao `OSRunner`: o `exectest.FakeRunner` responde a
+`DryRunRunner` envolve o `OSRunner` e **falha fechado**: só **executa** o que é declarado leitura
+(`ReadOnly=true` e sem `Elevate`, como `winget list` e `dpkg-query`), porque o dry-run precisa mostrar o que
+já está instalado; todo o resto, inclusive um `Cmd` sem flag, é só **registrado** (`Plan()`, com
+`ErrNotElevated` no passo quando o Windows não está elevado). O `OSRunner` encerra o grupo de processos no
+timeout (Job Object no Windows), usa `sudo -n` com `env VAR=...` para o `Env`, e limita stdout/stderr em memória. Nos testes nada chega ao `OSRunner`: o `exectest.FakeRunner` responde a
 partir de roteiros e falha o teste se receber um comando inesperado.
 
 ### 2.2 platform
