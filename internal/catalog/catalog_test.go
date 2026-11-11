@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 const valid = `
@@ -338,5 +339,47 @@ func TestParseVersionsRecusaValorHostil(t *testing.T) {
 		if _, err := Parse("catalog.yaml", []byte(src)); err == nil {
 			t.Errorf("versão %q deveria ser recusada na carga", v)
 		}
+	}
+}
+
+// Cf (bidi U+202E, zero width U+200B, BOM U+FEFF), Zl (U+2028) e Zp (U+2029) não são "controle" para o
+// unicode.IsControl, mas inverteriam o texto no terminal (name "Git" que parece outro app) ou quebrariam a
+// linha da tabela. A carga recusa e cita o ponto de código, nunca o caractere.
+func TestParseRecusaFormatoSeparadorDeLinhaEParagrafo(t *testing.T) {
+	const tail = "\n    category: dev\n    any: [{provider: apt, package: g}]"
+	cases := []struct{ name, yaml, cp string }{
+		{"bidi U+202E no name", "apps:\n  g:\n    name: \"Git\\u202eexe.txt\"" + tail, "U+202E"},
+		{"isolate U+2066 no name", "apps:\n  g:\n    name: \"Git\\u2066x\"" + tail, "U+2066"},
+		{"separador de linha U+2028", "apps:\n  g:\n    name: \"Git\\u2028FALSO\"" + tail, "U+2028"},
+		{"separador de parágrafo U+2029", "apps:\n  g:\n    name: \"Git\\u2029FALSO\"" + tail, "U+2029"},
+		{"zero width U+200B", "apps:\n  g:\n    name: \"Gi\\u200bt\"" + tail, "U+200B"},
+		{"BOM U+FEFF no meio", "apps:\n  g:\n    name: \"Gi\\ufeffgt\"" + tail, "U+FEFF"},
+		{"U+202E em item de versions", "apps:\n  g:\n    name: G\n    versions: [\"1\", \"2\\u202e\"]" + tail, "U+202E"},
+		{"U+202E em chave desconhecida", "apps:\n  g:\n    name: G\n    \"x\\u202e\": 1" + tail, "U+202E"},
+		{"U+2028 no id do instalador", "apps:\n  g:\n    name: G\n    category: dev\n    any: [{provider: apt, package: \"g\\u2028x\"}]", "U+2028"},
+		{"U+202E no id do app", "apps:\n  \"g\\u202e\":\n    name: G" + tail, "U+202E"},
+	}
+	for _, c := range cases {
+		_, err := Parse("catalog.yaml", []byte(c.yaml))
+		if err == nil {
+			t.Errorf("%s: esperava erro", c.name)
+			continue
+		}
+		if !strings.Contains(err.Error(), c.cp) {
+			t.Errorf("%s: erro sem o ponto de código %s: %v", c.name, c.cp, err)
+		}
+		for _, r := range err.Error() {
+			if !unicode.IsPrint(r) && r != '\n' {
+				t.Errorf("%s: a mensagem de erro contém o caractere não imprimível %U cru", c.name, r)
+			}
+		}
+	}
+}
+
+// Letras, acentos e emoji simples continuam valendo no catálogo.
+func TestParseAceitaTextoUnicodeComum(t *testing.T) {
+	src := "apps:\n  g:\n    name: \"Gerenciador de Áudio – Ação 🎵\"\n    category: dev\n    any: [{provider: apt, package: g}]"
+	if _, err := Parse("catalog.yaml", []byte(src)); err != nil {
+		t.Fatalf("texto comum recusado: %v", err)
 	}
 }
