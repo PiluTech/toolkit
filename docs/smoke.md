@@ -15,7 +15,7 @@ Cada `testdata/` de provider tem um README dizendo que as fixtures são sintéti
 1. Sem administrador: `toolkit list`, `toolkit install git --dry-run` → o plano mostra `winget install --id Git.Git -e --source winget --silent ...` e nada é instalado (`winget list --id Git.Git -e` antes e depois: igual).
 2. `toolkit install git@2.47.1 --dry-run` (app com `versions: true`) → o plano leva `--version 2.47.1`.
 3. `toolkit install python@3.12 --dry-run` → `--id Python.Python.3.12`, **sem** `--version`.
-4. Execução real numa VM descartável: `toolkit install 7zip`. Rodar de novo: tem de dizer "já instalado" sem reinstalar.
+4. Execução real numa VM descartável: `toolkit install 7zip` mostra o plano e pergunta `[s/N]` (responder `n` não instala nada; sem terminal ou em script, exige `--yes`). Rodar de novo: tem de dizer "já instalado" sem reinstalar.
 5. App que exige reboot (se houver um à mão): conferir `reinicie o sistema para concluir`.
 6. Conferir o UAC: o winget pede sozinho quando o instalador exige; o toolkit não se relança elevado nesta fase.
 
@@ -26,7 +26,7 @@ Cada `testdata/` de provider tem um README dizendo que as fixtures são sintéti
 4. Rodar como root tem de recusar (`o Homebrew não roda como root`).
 
 ## 3. Linux (VM Debian/Ubuntu, Fedora, Arch)
-1. `sudo -v` e depois `toolkit install git --dry-run`; o plano mostra `sudo -n apt-get update` e `sudo -n apt-get install -y --no-remove git`.
+1. `sudo -v` e depois `toolkit install git --dry-run`; o plano mostra `sudo -n -- env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get update` e o `install -y --no-remove git`, com o aviso do `sudo -n`.
 2. Sem `sudo -v` (credencial expirada), a execução real falha com a dica `rode "sudo -v"` (o toolkit nunca pede senha).
 3. `toolkit install git@<versão do apt-cache madison>` (com época, `1:2.43.0-...`) instala `git=<versão>`.
 4. Fedora: dnf5; Rocky/Alma: dnf4. Arch: um espelho com a base velha dá o erro que manda rodar `sudo pacman -Syu` (o toolkit nunca roda `-Sy`).

@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -24,6 +26,7 @@ import (
 type installFlags struct {
 	catalog, sha256 string
 	replace, dryRun bool
+	yes             bool
 }
 
 func newInstallCmd(deps Deps) *cobra.Command {
@@ -42,6 +45,7 @@ func newInstallCmd(deps Deps) *cobra.Command {
 	fl.StringVar(&f.sha256, "catalog-sha256", "", msg.FlagCatalogSHA256)
 	fl.BoolVar(&f.replace, "catalog-replace", false, msg.FlagCatalogReplace)
 	fl.BoolVar(&f.dryRun, "dry-run", false, msg.FlagDryRun)
+	fl.BoolVarP(&f.yes, "yes", "y", false, msg.FlagYes)
 	return cmd
 }
 
@@ -57,6 +61,39 @@ func (d Deps) providerList(r exec.Runner) []providers.Provider {
 		return d.Providers(r)
 	}
 	return []providers.Provider{winget.New(r), brew.New(r), apt.New(r), dnf.New(r), pacman.New(r), flatpak.New(r)}
+}
+
+func (d Deps) stdin() io.Reader {
+	if d.Stdin != nil {
+		return d.Stdin
+	}
+	return os.Stdin
+}
+
+func (d Deps) interactive() bool {
+	if d.Interactive != nil {
+		return d.Interactive()
+	}
+	return stdinIsTerminal()
+}
+
+// stdinIsTerminal: o stdin é um dispositivo de caracteres que NÃO é o descarte (/dev/null e NUL também são
+// dispositivos de caracteres, mas não são alguém para responder). Sem isso "toolkit install x </dev/null"
+// pareceria interativo.
+func stdinIsTerminal() bool {
+	st, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	nul, err := os.Stat(os.DevNull)
+	return isTerminal(st, nul, err == nil)
+}
+
+func isTerminal(stdin, devNull os.FileInfo, haveNull bool) bool {
+	if stdin.Mode()&os.ModeCharDevice == 0 {
+		return false
+	}
+	return !haveNull || !os.SameFile(stdin, devNull)
 }
 
 func (d Deps) checkElevation() func(exec.Cmd) error {
@@ -108,12 +145,7 @@ func runInstall(ctx context.Context, out, errOut io.Writer, deps Deps, f install
 		return err
 	}
 	// Valida tudo antes de executar qualquer coisa.
-	type target struct {
-		app     catalog.App
-		vars    map[string]string
-		version string
-	}
-	var targets []target
+	var targets []installTarget
 	for _, arg := range args {
 		id, requested, err := parseTarget(arg)
 		if err != nil {
@@ -127,36 +159,43 @@ func runInstall(ctx context.Context, out, errOut io.Writer, deps Deps, f install
 		if err != nil {
 			return err
 		}
-		targets = append(targets, target{app, vars, version})
+		targets = append(targets, installTarget{app, vars, version})
 	}
 
-	rn := deps.runner()
-	var dry *exec.DryRunRunner
-	if f.dryRun {
-		dry = exec.NewDryRunRunner(rn)
-		dry.CheckElevation = deps.checkElevation()
-		rn = dry
+	// Pré-passo: o plano. Leituras reais, mutações só registradas (DryRunRunner). No dry-run é a saída final; no
+	// install real é o que o usuário confirma antes de qualquer mutação.
+	failed, plan := installPass(ctx, out, errOut, deps, targets, true)
+	printPlan(out, deps, plan, f.dryRun)
+	if len(failed) > 0 {
+		return fmt.Errorf(msg.ErrInstallFailed, printable(strings.Join(failed, ", ")))
 	}
-	reg := providers.NewRegistry(deps.providerList(rn)...)
-
-	var failed []string
-	for _, t := range targets {
-		_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallHeader, printable(t.app.ID), printable(t.app.Name)))
-		if err := installOne(ctx, out, reg, deps.GOOS, t.app, t.vars, t.version, f.dryRun); err != nil {
-			_, _ = fmt.Fprintln(errOut, "erro: "+printable(err.Error()))
-			if errors.Is(err, providers.ErrNeedsAdmin) {
-				_, _ = fmt.Fprintln(errOut, msg.HintNeedsAdmin)
-			}
-			failed = append(failed, t.app.ID)
+	if f.dryRun || len(plan.Plan()) == 0 {
+		return nil
+	}
+	if !f.yes {
+		if !deps.interactive() {
+			return errors.New(msg.ErrInstallNeedsYes)
+		}
+		_, _ = fmt.Fprint(out, msg.InstallConfirm)
+		answer, _ := bufio.NewReader(deps.stdin()).ReadString('\n')
+		switch strings.ToLower(strings.TrimSpace(answer)) {
+		case "s", "sim", "y", "yes":
+		default:
+			_, _ = fmt.Fprintln(out, msg.InstallCancelled)
+			return nil
 		}
 	}
-	if dry != nil {
-		printPlan(out, dry)
-	}
+	failed, _ = installPass(ctx, out, errOut, deps, targets, false)
 	if len(failed) > 0 {
 		return fmt.Errorf(msg.ErrInstallFailed, printable(strings.Join(failed, ", ")))
 	}
 	return nil
+}
+
+type installTarget struct {
+	app     catalog.App
+	vars    map[string]string
+	version string
 }
 
 func installOne(ctx context.Context, out io.Writer, reg *providers.Registry, goos string, app catalog.App, vars map[string]string, version string, dryRun bool) error {
@@ -189,22 +228,58 @@ func installOne(ctx context.Context, out io.Writer, reg *providers.Registry, goo
 	return nil
 }
 
-func printPlan(out io.Writer, dry *exec.DryRunRunner) {
+// printPlan mostra cada passo COMO SERÁ EXECUTADO (sudo -n -- env VAR=... cmd, ou VAR=... cmd), avisa quando o
+// plano usa sudo -n no Unix e marca o que exige administrador no Windows sem token.
+func printPlan(out io.Writer, deps Deps, dry *exec.DryRunRunner, dryRun bool) {
 	plan := dry.Plan()
 	if len(plan) == 0 {
 		_, _ = fmt.Fprintln(out, msg.InstallNoPlan)
 		return
 	}
-	_, _ = fmt.Fprintln(out, msg.InstallPlanHeader)
-	for _, st := range plan {
-		line := printable(st.Cmd.String())
-		if st.Cmd.Elevate {
-			line = "sudo -n " + line
-			if st.Err != nil {
-				_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallPlanAdmin, line))
-				continue
-			}
+	header := msg.InstallPlanHeader
+	if !dryRun {
+		header = msg.InstallPlanHeaderReal
+	}
+	_, _ = fmt.Fprintln(out, header)
+	display := exec.OSRunner{GOOS: deps.GOOS}
+	usesSudo := false
+	for _, step := range plan {
+		line := printable(display.Display(step.Cmd))
+		if step.Cmd.Elevate && deps.GOOS != "windows" {
+			usesSudo = true
+		}
+		if step.Cmd.Elevate && step.Err != nil {
+			_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallPlanAdmin, line))
+			continue
 		}
 		_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallPlanLine, line))
 	}
+	if usesSudo {
+		_, _ = fmt.Fprintln(out, msg.WarnPlanSudo)
+	}
+}
+
+// installPass instala (ou, com dry, só planeja) cada app e devolve os que falharam e o DryRunRunner (nil no
+// passe real). Uma falha não impede os demais.
+func installPass(ctx context.Context, out, errOut io.Writer, deps Deps, targets []installTarget, dry bool) ([]string, *exec.DryRunRunner) {
+	rn := deps.runner()
+	var dr *exec.DryRunRunner
+	if dry {
+		dr = exec.NewDryRunRunner(rn)
+		dr.CheckElevation = deps.checkElevation()
+		rn = dr
+	}
+	reg := providers.NewRegistry(deps.providerList(rn)...)
+	var failed []string
+	for _, t := range targets {
+		_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallHeader, printable(t.app.ID), printable(t.app.Name)))
+		if err := installOne(ctx, out, reg, deps.GOOS, t.app, t.vars, t.version, dry); err != nil {
+			_, _ = fmt.Fprintln(errOut, "erro: "+printable(err.Error()))
+			if errors.Is(err, providers.ErrNeedsAdmin) {
+				_, _ = fmt.Fprintln(errOut, msg.HintNeedsAdmin)
+			}
+			failed = append(failed, t.app.ID)
+		}
+	}
+	return failed, dr
 }
