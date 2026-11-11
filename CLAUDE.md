@@ -2,7 +2,7 @@
 
 Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (catálogo YAML de apps, providers, receitas multi-etapa que sobrevivem a reboot, TUI Bubble Tea, bootstraps). Nome provisório, centralizado em `internal/buildinfo`.
 
-**Estado atual:** repositório `PiluVitu/toolkit`, **privado por enquanto** (planejado para ser público). Licença MIT. As 22 perguntas da proposta foram respondidas, com todas as recomendações aceitas (`docs/decisoes.md`). Por decisão do Paulo, o projeto fica **só na documentação**: nenhuma fase começa até nova ordem.
+**Estado atual:** repositório `PiluVitu/toolkit`, **privado por enquanto** (planejado para ser público). Licença MIT. As 22 perguntas da proposta foram respondidas, com todas as recomendações aceitas (`docs/decisoes.md`). **Fase 1 (esqueleto) em andamento** desde 2026-11-11, em PRs pequenos: PR1 módulo + Cobra `version` + gate local (feito), PR2 `exec`, PR3 `platform`, PR4 `catalog`, PR5 `toolkit list`.
 
 ## Documentos
 - `README.md`: o que é, comandos planejados, plataformas, o que o toolkit não faz.
@@ -21,6 +21,11 @@ Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (
 
 - `PRODUTO.md`, na raiz, alimenta a seção "Mais sobre" de https://pilutech.com.br/apps/toolkit: o build do repo `pilutech-sites` o puxa da main. O texto foi aprovado pelo Paulo (proposta em `pilutech-sites`, `docs/propostas-produto-md/toolkit.md`).
 - Mudar o `PRODUTO.md` é mudar texto público: nada interno, sem preço, sem promessa, e só o que o produto já faz. Se o produto mudar (primeira versão publicada, fase nova), proponha o texto novo antes, em vez de editar direto.
+
+## Código (fase 1)
+- `cmd/toolkit/main.go`: só chama `cli.Execute`. `internal/cli`: comandos Cobra (hoje só `version`). `internal/buildinfo`: nome, versão, commit e data (via `-ldflags -X`). `internal/msg`: strings de UI em pt-BR.
+- Toolchain: Go 1.27.3 (o `go.mod` baixa sozinho via `GOTOOLCHAIN`) e golangci-lint v2.15.0 em `~/.local/bin`, instalado por `scripts/instalar-ferramentas.sh` (baixa o tarball oficial e confere o SHA-256 versionado em `tools.sha256`; o workflow usa o mesmo script). Config em `.golangci.yml` (sem `misspell`: ele é só inglês e acusa pt-BR).
+- Gate: `scripts/ci.sh` (ou `make ci`; `~/.local/bin` entra no FIM do PATH; o gofmt vai por `scripts/check-gofmt.sh`, que reprova também sintaxe quebrada, com autoteste em `scripts/check-gofmt_test.sh`). Actions do workflow fixadas por SHA de commit (versão em comentário) e checkout com `persist-credentials: false`. Heavy pelo build-slot: `~/.maestri-local/build-slot.sh ./scripts/ci.sh`. `.github/workflows/ci.yml` só em `workflow_dispatch`.
 
 ## Regras do projeto
 - Escrever como repositório público, mesmo enquanto ele está privado: nada de dado de cliente, segredo, IP, e-mail ou referência a projetos privados em código, docs, testes ou mensagens de commit.

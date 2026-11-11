@@ -2,7 +2,7 @@
 
 > As 22 perguntas da [proposta](proposta.md#4-perguntas-para-o-paulo-respondidas), respondidas pelo Paulo em
 > 2026-10-31: todas as recomendações foram aceitas. Cada item aponta onde a decisão está detalhada.
-> A fase 1 ainda aguarda aprovação para começar.
+> A fase 1 foi liberada e está em andamento (ver o índice no `CLAUDE.md`).
 
 | # | Tema | Decisão | Onde |
 |---|---|---|---|

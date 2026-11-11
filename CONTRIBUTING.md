@@ -1,6 +1,6 @@
 # Como contribuir
 
-O projeto ainda não tem código (a fase 1 não começou). Os passos abaixo valem a partir dela.
+O código está na fase 1 (esqueleto). Os passos de catálogo e receitas abaixo valem a partir das fases 1 e 3.
 
 ## Adicionar um app
 

@@ -1,7 +1,7 @@
 # Arquitetura
 
 > Derivada da [proposta](proposta.md), com as decisões de [decisoes.md](decisoes.md) já aplicadas. O
-> código ainda não existe: a fase 1 não começou.
+> código está em construção: a fase 1 começou em 2026-11-11 (PR1: módulo, Cobra e gate local).
 > Fontes oficiais em [Fontes](#fontes), citadas com [n].
 
 Resumo: a lógica de cada SO fica em **funções puras que montam comandos** (`[]exec.Cmd`), sem build

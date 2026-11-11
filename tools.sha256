@@ -1,0 +1,9 @@
+# SHA-256 dos binários oficiais de ferramentas de desenvolvimento (release v2.15.0 do golangci-lint).
+# Conferidos contra o arquivo golangci-lint-2.15.0-checksums.txt da release e recalculados nos arquivos baixados.
+# Formato: "<sha256>  <nome do arquivo>". Quem atualiza a versão atualiza este arquivo junto (scripts/instalar-ferramentas.sh).
+9b7fe6a6bf6334b98decf8d86b11415ea7889afdabdd1959fdce23af2a9ebcea  golangci-lint-2.15.0-linux-amd64.tar.gz
+b4d8f17068b35ee6060cc2f69a16fb48740d706fbba81661c318649c114a6998  golangci-lint-2.15.0-linux-arm64.tar.gz
+767b899a28285e88ded2823d5dcc4bc5ef681173eb2d80f029a7b17ee4ece3b8  golangci-lint-2.15.0-darwin-amd64.tar.gz
+d1e409481a8ca846c4bc97e781eb5cb1bd5c23353a0b3977a1cbda1b1b6447d5  golangci-lint-2.15.0-darwin-arm64.tar.gz
+cd7ea6063c95de245e17e5246e42bdc14bb221792c429dbd239ab3a6ade6ca6a  golangci-lint-2.15.0-windows-amd64.zip
+4fb8988abf186158e30af1b8a0fb3671cf2cb02bc91d7e6ce6996f4c1e922e9a  golangci-lint-2.15.0-windows-arm64.zip
