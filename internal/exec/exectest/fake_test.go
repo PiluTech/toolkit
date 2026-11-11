@@ -56,3 +56,16 @@ func TestFakeComandoInesperadoFalha(t *testing.T) {
 		t.Fatal("o teste deveria ter sido marcado como falho")
 	}
 }
+
+func TestFakeElevateFazParteDaChave(t *testing.T) {
+	s := &spy{TB: t}
+	f := exectest.New(s).OnElevated("apt-get update", exectest.Exit(0, "ok"))
+	if _, err := f.Run(context.Background(), exec.Cmd{Name: "apt-get", Args: []string{"update"}}); err == nil || !s.failed {
+		t.Fatal("sem Elevate não pode casar com o roteiro elevado")
+	}
+	s.failed = false
+	r, err := f.Run(context.Background(), exec.Cmd{Name: "apt-get", Args: []string{"update"}, Elevate: true})
+	if err != nil || string(r.Stdout) != "ok" || s.failed {
+		t.Fatalf("elevado: %v %q", err, r.Stdout)
+	}
+}

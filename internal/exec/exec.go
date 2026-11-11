@@ -15,23 +15,23 @@ import (
 var (
 	// ErrNotElevated: o Cmd exige elevação e o processo no Windows não está elevado.
 	ErrNotElevated = errors.New("o comando exige privilégio de administrador")
-	// ErrTimeout: o Timeout do Cmd estourou.
+	// ErrTimeout: o Timeout do Cmd estourou (não o prazo do ctx do chamador: esse volta como erro do ctx).
 	ErrTimeout = errors.New("tempo limite do comando esgotado")
 )
 
 // Cmd descreve um processo a executar. Nunca passa por shell implícito:
 // quem quiser PowerShell/bash monta Name="powershell.exe" e Args explícitos.
 type Cmd struct {
-	Name    string
-	Args    []string
-	Env     []string      // acrescentado ao ambiente atual (ex.: HOMEBREW_NO_AUTO_UPDATE=1)
-	Dir     string        // diretório de trabalho
-	Stdin   io.Reader     // entrada opcional
-	Stdout  io.Writer     // opcional: tee para o log ao vivo (TUI e --verbose)
-	Timeout time.Duration // 0 = só o ctx
-	Elevate bool          // Unix: prefixa sudo. Windows: exige processo já elevado
-	Mutates bool          // true = altera o sistema; o DryRunRunner só registra
-	Secret  bool          // não mostra Args (ex.: comando com token)
+	Name     string
+	Args     []string
+	Env      []string      // acrescentado ao ambiente atual (ex.: HOMEBREW_NO_AUTO_UPDATE=1)
+	Dir      string        // diretório de trabalho
+	Stdin    io.Reader     // entrada opcional
+	Stdout   io.Writer     // opcional: tee para o log ao vivo (TUI e --verbose)
+	Timeout  time.Duration // 0 = só o ctx
+	Elevate  bool          // Unix: prefixa "sudo -n" (nunca pede senha). Windows: exige processo já elevado. Conta sempre como mutação no dry-run
+	ReadOnly bool          // true = só lê o sistema. Default (false) = pode alterar: o DryRunRunner só registra, não executa
+	Secret   bool          // não mostra Args (ex.: comando com token)
 }
 
 // String devolve a linha de comando legível, sem Args quando Secret.
@@ -64,6 +64,8 @@ type Result struct {
 	Stdout   []byte
 	Stderr   []byte
 	Duration time.Duration
+	// Truncated: stdout ou stderr passou do teto de memória do OSRunner e o excedente foi descartado.
+	Truncated bool
 }
 
 // Runner executa processos.

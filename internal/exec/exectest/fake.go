@@ -33,12 +33,33 @@ func New(t testing.TB) *FakeRunner {
 	return &FakeRunner{t: t, replies: map[string][]Reply{}, paths: map[string]string{}}
 }
 
-// On roteiriza respostas para a linha de comando (Cmd.String sem Secret). Cada chamada consome a
-// próxima resposta; a última se repete.
+// elevatedPrefix distingue, na chave do roteiro, o mesmo comando com e sem Elevate:
+// um teste que esquece o Elevate falha em vez de passar em silêncio. ReadOnly não entra na chave
+// (é semântica do dry-run): assere-se por Calls().
+const elevatedPrefix = "[elevate] "
+
+func key(c toolexec.Cmd) string {
+	if c.Elevate {
+		return elevatedPrefix + c.String()
+	}
+	return c.String()
+}
+
+// On roteiriza respostas para um comando SEM Elevate, pela linha (Cmd.String; com Secret os Args
+// somem da linha). Cada chamada consome a próxima resposta; a última se repete.
 func (f *FakeRunner) On(line string, replies ...Reply) *FakeRunner {
+	return f.script(line, replies)
+}
+
+// OnElevated é como On, para comandos com Elevate=true.
+func (f *FakeRunner) OnElevated(line string, replies ...Reply) *FakeRunner {
+	return f.script(elevatedPrefix+line, replies)
+}
+
+func (f *FakeRunner) script(k string, replies []Reply) *FakeRunner {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.replies[line] = append(f.replies[line], replies...)
+	f.replies[k] = append(f.replies[k], replies...)
 	return f
 }
 
@@ -61,7 +82,7 @@ func (f *FakeRunner) Run(_ context.Context, c toolexec.Cmd) (toolexec.Result, er
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, c)
-	line := c.String()
+	line := key(c)
 	rs := f.replies[line]
 	if len(rs) == 0 {
 		f.t.Errorf("exectest: comando inesperado: %s", line)
