@@ -18,8 +18,8 @@ Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (
 
 ## Código (fase 1)
 - `cmd/toolkit/main.go`: só chama `cli.Execute`. `internal/cli`: comandos Cobra (hoje só `version`). `internal/buildinfo`: nome, versão, commit e data (via `-ldflags -X`). `internal/msg`: strings de UI em pt-BR.
-- Toolchain: Go 1.27.3 (o `go.mod` baixa sozinho via `GOTOOLCHAIN`) e golangci-lint v2.15.0 em `~/.local/bin` (SHA-256 conferido). Config em `.golangci.yml` (sem `misspell`: ele é só inglês e acusa pt-BR).
-- Gate: `scripts/ci.sh` (ou `make ci`). Heavy pelo build-slot: `~/.maestri-local/build-slot.sh ./scripts/ci.sh`. `.github/workflows/ci.yml` só em `workflow_dispatch`.
+- Toolchain: Go 1.27.3 (o `go.mod` baixa sozinho via `GOTOOLCHAIN`) e golangci-lint v2.15.0 em `~/.local/bin`, instalado por `scripts/instalar-ferramentas.sh` (baixa o tarball oficial e confere o SHA-256 versionado em `tools.sha256`; o workflow usa o mesmo script). Config em `.golangci.yml` (sem `misspell`: ele é só inglês e acusa pt-BR).
+- Gate: `scripts/ci.sh` (ou `make ci`; `~/.local/bin` entra no FIM do PATH; o gofmt vai por `scripts/check-gofmt.sh`, que reprova também sintaxe quebrada, com autoteste em `scripts/check-gofmt_test.sh`). Actions do workflow fixadas por SHA de commit (versão em comentário) e checkout com `persist-credentials: false`. Heavy pelo build-slot: `~/.maestri-local/build-slot.sh ./scripts/ci.sh`. `.github/workflows/ci.yml` só em `workflow_dispatch`.
 
 ## Regras do projeto
 - Escrever como repositório público, mesmo enquanto ele está privado: nada de dado de cliente, segredo, IP, e-mail ou referência a projetos privados em código, docs, testes ou mensagens de commit.
