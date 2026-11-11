@@ -162,7 +162,6 @@ func TestInstallErrosPeloStderr(t *testing.T) {
 	}{
 		{"Error: Unable to find a match: git\n", "", providers.ErrNotFound},
 		{"No match for argument: git\n", "", providers.ErrNotFound},
-		{"No match for argument: git-9.9\n", "9.9", providers.ErrVersionUnsupported},
 		{"Error: This command has to be run with superuser privileges (under the root user on most systems).\n", "", providers.ErrNeedsAdmin},
 		{"Error: Could not lock /var/lib/rpm\n", "", providers.ErrRetryable},
 	}
@@ -201,6 +200,31 @@ func TestTodoComandoTemLCALLC(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("%s sem LC_ALL=C", name)
+		}
+	}
+}
+
+// Crivo #13: "No match" com versão distingue versão inexistente de pacote inexistente.
+func TestNoMatchComVersaoDistingueVersaoDePacote(t *testing.T) {
+	// pacote existe, versão não
+	f := exectest.New(t).
+		OnElevated("dnf install -y git-9.9", fail(1, "No match for argument: git-9.9\n")).
+		On(listGit, exectest.Exit(0, fixture(t, "list_dnf5.txt")))
+	_, err := New(f).Install(context.Background(), ref("git"), "9.9")
+	if !errors.Is(err, providers.ErrVersionUnsupported) {
+		t.Errorf("versão inexistente: %v", err)
+	}
+	// pacote não existe
+	f = exectest.New(t).
+		OnElevated("dnf install -y nada-1.0", fail(1, "No match for argument: nada-1.0\n")).
+		On("dnf list --showduplicates nada", fail(1, "Error: No matching Packages to list\n"))
+	_, err = New(f).Install(context.Background(), ref("nada"), "1.0")
+	if !errors.Is(err, providers.ErrNotFound) {
+		t.Errorf("pacote inexistente: %v", err)
+	}
+	for _, c := range f.Calls() {
+		if !c.Elevate && !c.ReadOnly {
+			t.Errorf("a conferência é leitura: %+v", c)
 		}
 	}
 }

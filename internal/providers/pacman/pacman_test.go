@@ -154,3 +154,17 @@ func TestTodoComandoTemLCALLC(t *testing.T) {
 		}
 	}
 }
+
+// Crivo #13: espelho com a base velha (404) manda atualizar o sistema, nunca roda -Sy sozinho.
+func TestInstall404DeEspelhoPedeSyuSemSyAutomatico(t *testing.T) {
+	for _, msg := range []string{"error: failed retrieving file 'git-2.47.1-1-x86_64.pkg.tar.zst' from mirror : The requested URL returned error: 404\n", "error: failed to commit transaction (failed to retrieve some files)\n"} {
+		f := exectest.New(t).OnElevated(installGit, fail(1, msg))
+		_, err := New(f).Install(context.Background(), ref("git"), "")
+		if !errors.Is(err, providers.ErrRetryable) || !strings.Contains(err.Error(), "sudo pacman -Syu") {
+			t.Errorf("%q: err = %v", msg, err)
+		}
+		if len(f.Calls()) != 1 {
+			t.Errorf("nenhum -Sy automático: %d chamadas", len(f.Calls()))
+		}
+	}
+}

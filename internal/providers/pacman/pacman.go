@@ -136,6 +136,9 @@ func classify(res exec.Result) error {
 	switch {
 	case strings.Contains(low, "target not found"):
 		return fmt.Errorf("%w: %s", providers.ErrNotFound, snippet)
+	case strings.Contains(low, "404") || strings.Contains(low, "failed retrieving file") || strings.Contains(low, "failed to retrieve some files"):
+		// espelho com a base velha: o pacote mudou de versão. Nunca -Sy automático (atualização parcial).
+		return fmt.Errorf("%w: a base de pacotes está velha (%s); atualize o sistema (sudo pacman -Syu) e tente de novo", providers.ErrRetryable, snippet)
 	case strings.Contains(low, "unable to lock database") || strings.Contains(low, "db.lck"):
 		return fmt.Errorf("%w: outro pacman em andamento (%s)", providers.ErrRetryable, snippet)
 	case strings.Contains(low, "you cannot perform this operation unless you are root") || strings.Contains(low, "permission denied"):

@@ -14,13 +14,22 @@ import (
 
 	toolkit "github.com/PiluVitu/toolkit"
 	"github.com/PiluVitu/toolkit/internal/catalog"
+	"github.com/PiluVitu/toolkit/internal/exec"
 	"github.com/PiluVitu/toolkit/internal/msg"
+	"github.com/PiluVitu/toolkit/internal/providers"
 )
 
 // Deps são as dependências injetáveis do CLI.
 type Deps struct {
 	GOOS        string // sistema padrão para consultas
 	EmbeddedYML []byte // catálogo embutido
+	// NewRunner devolve o Runner que executa os comandos do install (nil = exec.OSRunner). Os testes injetam o
+	// exectest.FakeRunner: nenhum teste chega a um gerenciador de verdade.
+	NewRunner func() exec.Runner
+	// Providers monta os providers sobre o Runner (nil = os seis: winget, brew, apt, dnf, pacman, flatpak).
+	Providers func(exec.Runner) []providers.Provider
+	// CheckElevation avisa, no dry-run, quando um passo exigiria administrador (nil = OSRunner).
+	CheckElevation func(exec.Cmd) error
 }
 
 // DefaultDeps usa o sistema atual e o catálogo embutido no binário.
