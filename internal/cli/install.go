@@ -126,7 +126,7 @@ func runInstall(ctx context.Context, out, errOut io.Writer, deps Deps, f install
 		targets = append(targets, target{app, vars, version})
 	}
 
-	var rn exec.Runner = deps.runner()
+	rn := deps.runner()
 	var dry *exec.DryRunRunner
 	if f.dryRun {
 		dry = exec.NewDryRunRunner(rn)
@@ -175,6 +175,9 @@ func installOne(ctx context.Context, out io.Writer, reg *providers.Registry, goo
 		_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallDoneSimul, res.Provider))
 	default:
 		_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallDone, res.Provider))
+	}
+	if res.Provider == "flatpak" && !res.Result.AlreadyInstalled {
+		_, _ = fmt.Fprintln(out, msg.InstallFlatpakNote)
 	}
 	if res.Result.RebootRequired {
 		_, _ = fmt.Fprintln(out, msg.InstallReboot)

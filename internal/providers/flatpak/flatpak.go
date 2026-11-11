@@ -1,12 +1,17 @@
 // Package flatpak é o provider do Flatpak. A instalação é de SISTEMA (--system, com sudo -n); o flatpak não
 // lista versões utilizáveis, então só a atual (ListVersions = ["latest"]) e versão fixada é recusada.
 // Não adiciona remotes sozinho: se o remote não existe, a mensagem diz como adicioná-lo.
+//
+// Limites documentados: (1) só instala no SISTEMA (--system); não há --user, então sem sudo a instalação falha com
+// ErrNeedsAdmin. (2) "já instalado" vale também para a instalação --user: "flatpak list" mostra as duas.
+// (3) o -y baixa também os runtimes e as dependências do app (podem ser GB): a CLI avisa disso.
 package flatpak
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -160,13 +165,17 @@ func (p *Provider) Install(ctx context.Context, ref providers.PackageRef, versio
 	return providers.InstallResult{}, nil
 }
 
+// remoteNotFoundRe casa a mensagem do remote ausente ("Remote "flathub" not found"), e não qualquer texto que
+// tenha "remote" e "not found" em pontos diferentes.
+var remoteNotFoundRe = regexp.MustCompile(`(?i)remote\s+["'‘]?[A-Za-z0-9._-]+["'’]?\s+not found`)
+
 func classify(res exec.Result, ref providers.PackageRef) error {
 	snippet := providers.Snippet(res.Stderr)
 	low := strings.ToLower(string(res.Stderr))
 	switch {
 	case strings.Contains(low, "no remote refs found") || strings.Contains(low, "nothing matches"):
 		return fmt.Errorf("%w: %s", providers.ErrNotFound, snippet)
-	case strings.Contains(low, "remote") && strings.Contains(low, "not found"):
+	case remoteNotFoundRe.MatchString(string(res.Stderr)):
 		return fmt.Errorf("%w: o remote %q não existe nesta máquina (adicione com \"flatpak remote-add --if-not-exists %s <url do .flatpakrepo>\"): %s",
 			providers.ErrNotFound, remote(ref), remote(ref), snippet)
 	case strings.Contains(low, "permission denied") || strings.Contains(low, "not allowed") || strings.Contains(low, "insufficient permissions"):
