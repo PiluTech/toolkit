@@ -2,7 +2,7 @@
 
 Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (catálogo YAML de apps, providers, receitas multi-etapa que sobrevivem a reboot, TUI Bubble Tea, bootstraps). Nome provisório, centralizado em `internal/buildinfo`.
 
-**Estado atual:** repositório `PiluVitu/toolkit`, **privado por enquanto** (planejado para ser público). Licença MIT. As 22 perguntas da proposta foram respondidas, com todas as recomendações aceitas (`docs/decisoes.md`). **Fase 1 (esqueleto) em andamento** desde 2026-11-11, em PRs pequenos: PR1 módulo + Cobra `version` + gate local (feito), PR2 `exec` (feito), PR3 `platform`, PR4 `catalog`, PR5 `toolkit list`.
+**Estado atual:** repositório `PiluVitu/toolkit`, **privado por enquanto** (planejado para ser público). Licença MIT. As 22 perguntas da proposta foram respondidas, com todas as recomendações aceitas (`docs/decisoes.md`). **Fase 1 (esqueleto) em andamento** desde 2026-11-11, em PRs pequenos: PR1 módulo + Cobra `version` + gate local (feito), PR2 `exec` (feito), PR3 `platform` (feito), PR4 `catalog`, PR5 `toolkit list`.
 
 ## Documentos
 - `README.md`: o que é, comandos planejados, plataformas, o que o toolkit não faz.
@@ -19,6 +19,7 @@ Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (
 ## Código (fase 1)
 - `cmd/toolkit/main.go`: só chama `cli.Execute`. `internal/cli`: comandos Cobra (hoje só `version`). `internal/buildinfo`: nome, versão, commit e data (via `-ldflags -X`). `internal/msg`: strings de UI em pt-BR.
 - `internal/exec`: `Runner` (Run/LookPath), `OSRunner` (exit code != 0 não é erro; `Timeout` vira `ErrTimeout`; `Elevate` = `sudo --` no Unix, `ErrNotElevated` no Windows sem token), `DryRunRunner` (executa leitura, só registra `Mutates`; `Planned()`). `internal/exec/exectest.FakeRunner`: respostas por linha de comando (`On`, `WithPath`, `Exit`), comando sem roteiro falha o teste. Testes do `OSRunner` só re-executam o binário de teste (helper process), nunca comando do sistema.
+- `internal/platform`: `SystemDetector.Detect` (OS, arch normalizada, distro via `ParseOSRelease`, versão, boot ID, usuário real com `SUDO_USER`, gerenciadores no PATH). Leituras só pelo `exec.Runner` ou funções injetadas; falha de leitura opcional deixa o campo vazio. `IsAdmin` no Windows vem de `IsElevated` injetado (a implementação real, com `x/sys/windows`, chega no pacote `elevate`). `ResolvePaths(Info, Env)`: Windows admin `%ProgramData%\toolkit`, usuário `%LOCALAPPDATA%\toolkit`; Linux root `/var/lib/toolkit`, usuário `$XDG_STATE_HOME/toolkit`; macOS `/Library/Application Support/toolkit` (admin) ou o equivalente em `~/Library`.
 - Toolchain: Go 1.27.3 (o `go.mod` baixa sozinho via `GOTOOLCHAIN`) e golangci-lint v2.15.0 em `~/.local/bin` (SHA-256 conferido). Config em `.golangci.yml` (sem `misspell`: ele é só inglês e acusa pt-BR).
 - Gate: `scripts/ci.sh` (ou `make ci`). Heavy pelo build-slot: `~/.maestri-local/build-slot.sh ./scripts/ci.sh`. `.github/workflows/ci.yml` só em `workflow_dispatch`.
 
