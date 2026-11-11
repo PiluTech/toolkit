@@ -54,7 +54,7 @@ aba nova na TUI. Uma categoria nova é uma linha na lista do código.
 
 ### Texto sem caractere de controle
 
-Qualquer texto do arquivo (chaves e valores: `name`, versões, `args`...) com caractere de controle (ESC, BEL, quebra de linha, tab, DEL, C1) é erro de carga. Esses textos vão para o terminal, e eles reescreveriam a tela.
+Qualquer texto do arquivo (chaves e valores: `name`, versões, `args`...) com caractere de controle (ESC, BEL, quebra de linha, tab, DEL, C1), de formatação (Cf: bidi como U+202E e U+2066, zero width U+200B, BOM U+FEFF, ZWJ U+200D) ou separador de linha e de parágrafo (U+2028, U+2029) é erro de carga. Esses textos vão para o terminal: controle reescreveria a tela, bidi inverteria o nome (um app que parece outro) e U+2028 quebraria a linha da tabela. Efeito colateral aceito: emoji composto com ZWJ no `name` é recusado; acentos e emoji simples valem.
 
 ## Campos por provider
 

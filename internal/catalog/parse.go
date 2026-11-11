@@ -75,15 +75,23 @@ func (p *parser) rejectAliases(n *yaml.Node) {
 	}
 }
 
+// unsafeRune diz se r é controle (Cc: < 0x20, 0x7f, C1), formatação (Cf: bidi U+202E/U+2066, zero width
+// U+200B, BOM U+FEFF, ZWJ U+200D), separador de linha (Zl, U+2028) ou de parágrafo (Zp, U+2029). Cf inverte
+// ou esconde texto no terminal; Zl e Zp quebram a linha da tabela. Efeito colateral aceito: emoji com ZWJ
+// (família, profissões) no name é recusado; emoji simples e acentos valem.
+func unsafeRune(r rune) bool {
+	return unicode.IsControl(r) || unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp)
+}
+
 // rejectControl recusa caractere de controle (< 0x20, 0x7f e C1 0x80-0x9f: ESC, OSC, BEL, CR, quebra de
-// linha, tab...) em qualquer texto do arquivo, chaves e valores. name, versões e demais textos vão para o
+// linha, tab...), de formatação (Cf), U+2028 e U+2029 em qualquer texto do arquivo, chaves e valores. name, versões e demais textos vão para o
 // terminal (list, TUI, logs): sem isso um catálogo local reescreveria a tela do usuário. A mensagem cita o
 // ponto de código, nunca o byte cru.
 func (p *parser) rejectControl(n *yaml.Node) {
 	if n.Kind == yaml.ScalarNode {
 		for _, r := range n.Value {
-			if unicode.IsControl(r) {
-				p.errAt(n, "caractere de controle U+%04X não é aceito no catálogo (texto sem ESC, quebra de linha, tab etc.)", r)
+			if unsafeRune(r) {
+				p.errAt(n, "caractere de controle ou de formatação U+%04X não é aceito no catálogo (texto sem ESC, quebra de linha, tab, bidi, U+2028 etc.)", r)
 				break
 			}
 		}
