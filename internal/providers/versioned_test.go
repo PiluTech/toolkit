@@ -2,6 +2,7 @@ package providers_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/PiluVitu/toolkit/internal/catalog"
@@ -67,10 +68,10 @@ func TestVersaoJaNoIdNaoVaiAoProvider(t *testing.T) {
 				return f.WithPath("apt-get", "/usr/bin/apt-get").WithPath("apt-cache", "/usr/bin/apt-cache").WithPath("dpkg-query", "/usr/bin/dpkg-query").
 					On(`dpkg-query -W "-f=${db:Status-Status}\t${Version}\n" python3.12`, exectest.Reply{Result: notFound}).
 					OnElevated("apt-get update", exectest.Exit(0, "")).
-					OnElevated("apt-get install -y python3.12", exectest.Exit(0, ""))
+					OnElevated("apt-get install -y --no-remove python3.12", exectest.Exit(0, ""))
 			},
 			func(f *exectest.FakeRunner) providers.Provider { return apt.New(f) },
-			"apt-get install -y python3.12",
+			"apt-get install -y --no-remove python3.12",
 		},
 	}
 	for _, tc := range cases {
@@ -123,5 +124,33 @@ func TestVersionInIDSoParaTemplateDeVersaoNoId(t *testing.T) {
 	ref, err := providers.RefFrom(app, app.Installers["linux"][0], nil)
 	if err != nil || ref.VersionInID {
 		t.Errorf("git sem template: ref=%+v err=%v", ref, err)
+	}
+}
+
+// Crivo #12: o id montado para 3.12 não pode instalar a 3.12 quando o usuário pediu 3.11.
+func TestVersaoPedidaDiferenteDaAplicadaNoIdEhRecusada(t *testing.T) {
+	c, err := catalog.Parse("c.yaml", []byte(`apps:
+  python:
+    name: Python
+    category: dev
+    versions: ["3.13", "3.12", "3.11"]
+    linux: [{ provider: apt, package: "python{{major_minor}}" }]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, _ := c.Get("python")
+	f := exectest.New(t).WithPath("apt-get", "/x").WithPath("apt-cache", "/x").WithPath("dpkg-query", "/x") // qualquer comando falha o teste
+	reg := providers.NewRegistry(apt.New(f))
+	vars, _ := app.VersionVars("3.12")
+	cands, _ := reg.Candidates(context.Background(), app, "linux", vars)
+	if len(cands) != 1 || cands[0].Ref.VersionApplied != "3.12" {
+		t.Fatalf("cands = %+v", cands)
+	}
+	if _, err := providers.InstallApp(context.Background(), cands, "3.11"); !errors.Is(err, providers.ErrInvalidRef) {
+		t.Errorf("err = %v", err)
+	}
+	if len(f.Calls()) != 0 {
+		t.Errorf("nada executado: %v", f.Calls())
 	}
 }

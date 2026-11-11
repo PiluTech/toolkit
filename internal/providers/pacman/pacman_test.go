@@ -141,3 +141,16 @@ func TestInstallErrosPeloStderr(t *testing.T) {
 }
 
 var _ providers.Provider = (*Provider)(nil)
+
+func TestTodoComandoTemLCALLC(t *testing.T) {
+	r := ref("git")
+	for name, c := range map[string]exec.Cmd{"-Q": queryCmd(r), "-Si": infoCmd(r), "-S": installCmd(r)} {
+		found := false
+		for _, e := range c.Env {
+			found = found || e == "LC_ALL=C"
+		}
+		if !found {
+			t.Errorf("%s sem LC_ALL=C", name)
+		}
+	}
+}

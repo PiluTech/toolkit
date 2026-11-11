@@ -14,6 +14,9 @@ import (
 	"github.com/PiluVitu/toolkit/internal/providers"
 )
 
+// env: a classificação dos erros lê texto do gerenciador, que não pode depender do idioma do sistema.
+var env = []string{"LC_ALL=C"}
+
 const timeout = 30 * time.Minute
 
 // Provider implementa providers.Provider para o dnf.
@@ -51,11 +54,11 @@ func (*Provider) Validate(ref providers.PackageRef) error {
 }
 
 func rpmCmd(ref providers.PackageRef) exec.Cmd {
-	return exec.Cmd{Name: "rpm", Args: []string{"-q", "--qf", "%{EVR}\\n", ref.Package}, ReadOnly: true, Timeout: time.Minute}
+	return exec.Cmd{Name: "rpm", Args: []string{"-q", "--qf", "%{EVR}\\n", ref.Package}, Env: env, ReadOnly: true, Timeout: time.Minute}
 }
 
 func listCmd(ref providers.PackageRef) exec.Cmd {
-	return exec.Cmd{Name: "dnf", Args: []string{"list", "--showduplicates", ref.Package}, ReadOnly: true, Timeout: 5 * time.Minute}
+	return exec.Cmd{Name: "dnf", Args: []string{"list", "--showduplicates", ref.Package}, Env: env, ReadOnly: true, Timeout: 5 * time.Minute}
 }
 
 func installCmd(ref providers.PackageRef, version string) exec.Cmd {
@@ -63,7 +66,7 @@ func installCmd(ref providers.PackageRef, version string) exec.Cmd {
 	if version != "" && version != providers.Latest {
 		target += "-" + version
 	}
-	return exec.Cmd{Name: "dnf", Args: []string{"install", "-y", target}, Elevate: true, Timeout: timeout}
+	return exec.Cmd{Name: "dnf", Args: []string{"install", "-y", target}, Env: env, Elevate: true, Timeout: timeout}
 }
 
 // IsInstalled roda "rpm -q --qf %{EVR}" (ReadOnly): exit 1 ("is not installed") = não instalado.

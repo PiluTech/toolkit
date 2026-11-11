@@ -55,6 +55,9 @@ type PackageRef struct {
 	// (python@{{major_minor}}, Python.Python.{{major_minor}}). A versão já está no id: InstallApp NÃO a passa de
 	// novo ao provider (sem --version no winget, sem =versão no apt, sem ErrVersionUnsupported no brew).
 	VersionInID bool
+	// VersionApplied: a versão ({{version}}) que o template aplicou ao id. InstallApp recusa (ErrInvalidRef) se o
+	// usuário pediu outra: com o id montado para 3.12, pedir 3.11 instalaria a 3.12 em silêncio.
+	VersionApplied string
 }
 
 // InstallResult substitui o "error" puro: instalar pode dar certo E pedir reboot.
@@ -180,6 +183,9 @@ func RefFrom(app catalog.App, in catalog.Installer, vars map[string]string) (Pac
 			return PackageRef{}, fmt.Errorf("app %q: %w", app.ID, err)
 		}
 		ref.Args = append(ref.Args, v)
+	}
+	if ref.VersionInID {
+		ref.VersionApplied = vars[tmpl.Version]
 	}
 	if ref.URL != "" {
 		if err := catalog.CheckURL(ref.URL, false); err != nil {

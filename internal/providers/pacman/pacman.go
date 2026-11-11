@@ -15,6 +15,9 @@ import (
 	"github.com/PiluVitu/toolkit/internal/providers"
 )
 
+// env: a classificação dos erros lê texto do gerenciador, que não pode depender do idioma do sistema.
+var env = []string{"LC_ALL=C"}
+
 const timeout = 30 * time.Minute
 
 // Provider implementa providers.Provider para o pacman.
@@ -41,15 +44,15 @@ func (*Provider) Validate(ref providers.PackageRef) error {
 }
 
 func queryCmd(ref providers.PackageRef) exec.Cmd {
-	return exec.Cmd{Name: "pacman", Args: []string{"-Q", ref.Package}, ReadOnly: true, Timeout: time.Minute}
+	return exec.Cmd{Name: "pacman", Args: []string{"-Q", ref.Package}, Env: env, ReadOnly: true, Timeout: time.Minute}
 }
 
 func infoCmd(ref providers.PackageRef) exec.Cmd {
-	return exec.Cmd{Name: "pacman", Args: []string{"-Si", ref.Package}, ReadOnly: true, Timeout: time.Minute}
+	return exec.Cmd{Name: "pacman", Args: []string{"-Si", ref.Package}, Env: env, ReadOnly: true, Timeout: time.Minute}
 }
 
 func installCmd(ref providers.PackageRef) exec.Cmd {
-	return exec.Cmd{Name: "pacman", Args: []string{"-S", "--needed", "--noconfirm", ref.Package}, Elevate: true, Timeout: timeout}
+	return exec.Cmd{Name: "pacman", Args: []string{"-S", "--needed", "--noconfirm", ref.Package}, Env: env, Elevate: true, Timeout: timeout}
 }
 
 // IsInstalled roda "pacman -Q pkg" (ReadOnly): "nome versão"; exit 1 "was not found" = não instalado.

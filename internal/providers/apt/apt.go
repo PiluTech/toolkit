@@ -16,7 +16,10 @@ import (
 )
 
 // env: sem perguntas do debconf. Com Elevate vira "sudo -n -- env DEBIAN_FRONTEND=noninteractive apt-get ...".
-var env = []string{"DEBIAN_FRONTEND=noninteractive"}
+var env = []string{"DEBIAN_FRONTEND=noninteractive", "LC_ALL=C"}
+
+// readEnv: a classificação dos erros lê texto do apt, que não pode depender do idioma do sistema.
+var readEnv = []string{"LC_ALL=C"}
 
 const timeout = 30 * time.Minute
 
@@ -65,11 +68,11 @@ func base(ref providers.PackageRef) string {
 }
 
 func statusCmd(ref providers.PackageRef) exec.Cmd {
-	return exec.Cmd{Name: "dpkg-query", Args: []string{"-W", "-f=${db:Status-Status}\\t${Version}\\n", base(ref)}, ReadOnly: true, Timeout: time.Minute}
+	return exec.Cmd{Name: "dpkg-query", Args: []string{"-W", "-f=${db:Status-Status}\\t${Version}\\n", base(ref)}, Env: readEnv, ReadOnly: true, Timeout: time.Minute}
 }
 
 func madisonCmd(ref providers.PackageRef) exec.Cmd {
-	return exec.Cmd{Name: "apt-cache", Args: []string{"madison", base(ref)}, ReadOnly: true, Timeout: time.Minute}
+	return exec.Cmd{Name: "apt-cache", Args: []string{"madison", base(ref)}, Env: readEnv, ReadOnly: true, Timeout: time.Minute}
 }
 
 func updateCmd() exec.Cmd {
@@ -81,7 +84,7 @@ func installCmd(ref providers.PackageRef, version string) exec.Cmd {
 	if version != "" && version != providers.Latest {
 		target = base(ref) + "=" + version
 	}
-	return exec.Cmd{Name: "apt-get", Args: []string{"install", "-y", target}, Env: env, Elevate: true, Timeout: timeout}
+	return exec.Cmd{Name: "apt-get", Args: []string{"install", "-y", "--no-remove", target}, Env: env, Elevate: true, Timeout: timeout}
 }
 
 // IsInstalled roda "dpkg-query -W" (ReadOnly). Pacote desconhecido (exit 1) ou só com configs = não instalado.
