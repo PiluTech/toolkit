@@ -344,3 +344,24 @@ func TestSnippetLimpaControleELimita(t *testing.T) {
 		t.Error("vazio")
 	}
 }
+
+// Menor do Crivo no #9: época no PEDIDO é comparada.
+func TestSameVersionComparaEpocaDoPedido(t *testing.T) {
+	cases := []struct {
+		have, want string
+		same       bool
+	}{
+		{"1:2.45-1", "3:2.45", false},
+		{"1:2.45-1", "1:2.45", true},
+		{"1:2.45-1", "1:2.45-1", true},
+		{"2.45-1", "0:2.45", true},
+		{"2.45-1", "1:2.45", false},
+		{"1:2.45-1", "2.45", true},
+		{"1:2.45-1", "0:2.45", false},
+	}
+	for _, c := range cases {
+		if got := SameVersion(c.have, c.want); got != c.same {
+			t.Errorf("SameVersion(%q, %q) = %v, queria %v", c.have, c.want, got, c.same)
+		}
+	}
+}

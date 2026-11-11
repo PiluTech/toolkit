@@ -51,6 +51,10 @@ type PackageRef struct {
 	Type     string
 	Args     []string
 	Line     int // linha no YAML, para mensagens de erro
+	// VersionInID: um template de versão ({{version}}, {{major}}, {{major_minor}}) já foi aplicado ao id/nome
+	// (python@{{major_minor}}, Python.Python.{{major_minor}}). A versão já está no id: InstallApp NÃO a passa de
+	// novo ao provider (sem --version no winget, sem =versão no apt, sem ErrVersionUnsupported no brew).
+	VersionInID bool
 }
 
 // InstallResult substitui o "error" puro: instalar pode dar certo E pedir reboot.
@@ -162,6 +166,13 @@ func RefFrom(app catalog.App, in catalog.Installer, vars map[string]string) (Pac
 			return PackageRef{}, fmt.Errorf("app %q: %w", app.ID, err)
 		}
 		*f.dst = v
+		if names, err := tmpl.Names(f.src); err == nil {
+			for _, n := range names {
+				if tmpl.VersionVars[n] && (f.dst == &ref.ID || f.dst == &ref.Package || f.dst == &ref.Formula || f.dst == &ref.Cask) {
+					ref.VersionInID = true
+				}
+			}
+		}
 	}
 	for _, a := range in.Args {
 		v, err := tmpl.Expand(a, vars)
@@ -201,15 +212,33 @@ var epochRe = regexp.MustCompile(`^[0-9]+:`)
 // NormalizeVersion tira a época do Debian ("1:2.45-1" → "2.45-1").
 func NormalizeVersion(v string) string { return epochRe.ReplaceAllString(v, "") }
 
-// SameVersion compara a versão instalada (have) com a pedida (want) ignorando a época: "1:2.45-1" casa com
-// "2.45-1" e, quando want não traz revisão do pacote, com "2.45" (o apt mostra a revisão, o usuário pede a
-// versão do upstream).
+// SameVersion compara a versão instalada (have) com a pedida (want). Sem época no pedido, a época é ignorada:
+// "1:2.45-1" casa com "2.45-1" e, quando want não traz revisão do pacote, com "2.45" (o apt mostra a revisão, o
+// usuário pede a versão do upstream). Com época no pedido ela TEM de ser a mesma (ausente = 0): "3:2.45" não é
+// "1:2.45-1", porque o apt ordena pela época primeiro.
 func SameVersion(have, want string) bool {
+	if we := epochOf(want); we != "" {
+		he := epochOf(have)
+		if he == "" {
+			he = "0"
+		}
+		if he != we {
+			return false
+		}
+	}
 	h, w := NormalizeVersion(have), NormalizeVersion(want)
 	if h == w {
 		return true
 	}
 	return !strings.Contains(w, "-") && strings.HasPrefix(h, w+"-")
+}
+
+// epochOf devolve a época ("1" em "1:2.45-1", sem os dois pontos) ou "" quando a versão não tem.
+func epochOf(v string) string {
+	if loc := epochRe.FindString(v); loc != "" {
+		return strings.TrimSuffix(loc, ":")
+	}
+	return ""
 }
 
 // Snippet devolve a primeira linha não vazia de uma saída de comando, só com caracteres imprimíveis e no

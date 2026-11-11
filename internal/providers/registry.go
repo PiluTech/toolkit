@@ -96,6 +96,9 @@ type Outcome struct {
 // passando por App.VersionVars quando o id tem template: esta checagem é a segunda camada, e a única para
 // apps com versions: true, cuja versão (com época do Debian, por exemplo) não passa por tmpl.ValidValue.
 //
+// Quando o template de versão já foi aplicado ao id (PackageRef.VersionInID), a versão NÃO é passada ao
+// provider desse candidato.
+//
 // Para cada candidato: IsInstalled (leitura) primeiro, de modo que rodar duas vezes não reinstala (com versão,
 // "já instalado" usa SameVersion: época do Debian ignorada); depois SupportsVersion (sem mutação); depois
 // Prepare (se o provider tiver); depois Install. ErrNoApplicableInstaller, ErrNotFound e ErrVersionUnsupported
@@ -108,24 +111,29 @@ func InstallApp(ctx context.Context, cands []Candidate, version string) (Outcome
 	if len(cands) == 0 {
 		return Outcome{}, ErrNoApplicableInstaller
 	}
-	pinned := version != "" && version != Latest
 	var out Outcome
 	var lastErr error
 	for _, c := range cands {
 		if err := ctx.Err(); err != nil {
 			return out, err
 		}
+		// Versão já aplicada ao id pelo template (python@{{major_minor}}): não vai de novo ao provider.
+		ver := version
+		if c.Ref.VersionInID {
+			ver = ""
+		}
+		pinned := ver != "" && ver != Latest
 		installed, have, err := c.Provider.IsInstalled(ctx, c.Ref)
 		if err != nil && !skippable(err) {
 			return out, fmt.Errorf("%s: %w", c.Provider.Name(), err)
 		}
-		if err == nil && installed && (!pinned || SameVersion(have, version)) {
+		if err == nil && installed && (!pinned || SameVersion(have, ver)) {
 			out.Provider, out.Ref = c.Provider.Name(), c.Ref
 			out.Result = InstallResult{AlreadyInstalled: true, Version: have}
 			return out, nil
 		}
 		if pinned {
-			if err := c.Provider.SupportsVersion(c.Ref, version); err != nil {
+			if err := c.Provider.SupportsVersion(c.Ref, ver); err != nil {
 				if skippable(err) {
 					out.Tried = append(out.Tried, c.Provider.Name())
 					lastErr = fmt.Errorf("%s: %w", c.Provider.Name(), err)
@@ -139,7 +147,7 @@ func InstallApp(ctx context.Context, cands []Candidate, version string) (Outcome
 				return out, fmt.Errorf("%s: %w", c.Provider.Name(), err)
 			}
 		}
-		res, err := c.Provider.Install(ctx, c.Ref, version)
+		res, err := c.Provider.Install(ctx, c.Ref, ver)
 		if err != nil {
 			if skippable(err) {
 				out.Tried = append(out.Tried, c.Provider.Name())

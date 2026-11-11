@@ -263,3 +263,17 @@ func TestInstallCaskQuePedeSenhaViraErrNeedsAdmin(t *testing.T) {
 		}
 	}
 }
+
+func TestOutroSudoNaoViraErrNeedsAdmin(t *testing.T) {
+	for _, msg := range []string{"sudo: command not found\n", "Error: o pacote falhou (veja sudo: a password is required na doc)\n"} {
+		f := exectest.New(t).On("brew install --cask zoom", exectest.Reply{Result: exec.Result{ExitCode: 1, Stderr: []byte(msg)}})
+		_, err := newP(f).Install(context.Background(), cask("zoom"), "")
+		if err == nil || errors.Is(err, providers.ErrNeedsAdmin) {
+			t.Errorf("%q: err = %v (não é pedido de senha)", msg, err)
+		}
+	}
+	f := exectest.New(t).On("brew install --cask zoom", exectest.Reply{Result: exec.Result{ExitCode: 1, Stderr: []byte("==> Installing Cask zoom\nsudo: a terminal is required to read the password\n")}})
+	if _, err := newP(f).Install(context.Background(), cask("zoom"), ""); !errors.Is(err, providers.ErrNeedsAdmin) {
+		t.Errorf("linha própria: %v", err)
+	}
+}
