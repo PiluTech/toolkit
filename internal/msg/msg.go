@@ -38,3 +38,28 @@ const (
 	ListVersionsAny   = "sim"
 	ListVersionsNone  = "-"
 )
+
+// Textos do comando install.
+const (
+	InstallShort = "Instala apps do catálogo"
+	InstallLong  = "Instala um ou mais apps do catálogo pelo gerenciador do sistema (winget, brew, apt, dnf, pacman, flatpak).\n\nUse app@versão para escolher a versão (a lista do catálogo, ou a versão do gerenciador nos apps com versions: true). Rodar de novo não reinstala o que já está instalado.\n\nCom --dry-run nada é instalado: o toolkit só lê o que já está instalado e mostra o plano. Em Linux e macOS o sudo é chamado sem pedir senha (sudo -n): rode \"sudo -v\" antes."
+
+	FlagDryRun = "não instala nada: lê o estado e mostra o plano"
+
+	ErrInstallBadTarget  = "argumento %q inválido: use app ou app@versão"
+	ErrInstallUnknownApp = "app %q não está no catálogo (veja: toolkit list)"
+	ErrInstallNoVersions = "o app %q não aceita escolha de versão"
+	ErrInstallFailed     = "falhou: %s"
+	HintNeedsAdmin       = "dica: rode \"sudo -v\" e tente de novo (o toolkit usa sudo -n e nunca pede senha)"
+
+	InstallHeader      = "==> %s (%s)"
+	InstallAlready     = "já instalado (%s%s)"
+	InstallDone        = "instalado com %s"
+	InstallDoneSimul   = "seria instalado com %s (simulado)"
+	InstallReboot      = "reinicie o sistema para concluir a instalação"
+	InstallPlanHeader  = "Plano (dry-run: nada foi executado; as leituras do estado foram reais):"
+	InstallPlanAdmin   = "  [exige administrador] %s"
+	InstallPlanLine    = "  %s"
+	InstallNoPlan      = "Nada a fazer."
+	InstallFlatpakNote = "aviso: o flatpak baixa também os runtimes e as dependências do app (podem ser GB) e só instala no sistema (--system); \"já instalado\" vale também para a instalação --user"
+)

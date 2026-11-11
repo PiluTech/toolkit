@@ -1,7 +1,7 @@
 # Arquitetura
 
 > Derivada da [proposta](proposta.md), com as decisões de [decisoes.md](decisoes.md) já aplicadas. O
-> código está em construção: a fase 1 começou em 2026-11-11 (PR1: módulo, Cobra e gate local).
+> código está em construção: a fase 1 (esqueleto) está completa e a fase 2 (providers winget, brew, apt, dnf, pacman, flatpak e `toolkit install`) foi implementada em 2026-11-11, aguardando o smoke manual (`smoke.md`).
 > Fontes oficiais em [Fontes](#fontes), citadas com [n].
 
 Resumo: a lógica de cada SO fica em **funções puras que montam comandos** (`[]exec.Cmd`), sem build
@@ -431,8 +431,8 @@ nenhum teste pode executar winget, dism ou reboot de verdade, e o gate de qualid
 - **flatpak** [12]: instalo com `flatpak install -y --noninteractive <remote> <id>` e leio o estado
   com `flatpak list --app --columns=application,version`. Existe `remote-info --log` com os commits
   antigos e `update --commit` para voltar a um commit [12], mas isso não é "escolher versão" de forma
-  utilizável. `ListVersions` → `["latest"]`. O padrão é instalação de sistema, e `--user` pode ser
-  pedido por app.
+  utilizável. `ListVersions` → `["latest"]`. Na fase 2 só existe a instalação de **sistema**
+  (`--system`, com `sudo -n`); `--user` não foi implementado e não há campo no catálogo (decisão aberta para o Paulo). "Já instalado" vale também para a instalação `--user`, porque o `flatpak list` mostra as duas.
 - **github-release** (fase 5) [13][14]:
   - Uso `GET /repos/{repo}/releases` com `GITHUB_TOKEN` opcional (redigido no log) e
     `X-GitHub-Api-Version`.
@@ -506,8 +506,7 @@ nenhum teste pode executar winget, dism ou reboot de verdade, e o gate de qualid
   o toolkit se relança **uma vez**, elevado, via `ShellExecuteW` com verbo `runas`, repassando os
   argumentos e um `--plan <arquivo>` com o que foi escolhido na TUI. É só um prompt do UAC.
 - **Unix**: a TUI roda como usuário e o `sudo` vai só nos `Cmd` com `Elevate=true` (apt, dnf, pacman,
-  flatpak de sistema, escrita em `/etc/systemd`). Antes de executar, um `sudo -v` pede a senha uma vez
-  e mantém o cache. Se o toolkit for chamado com sudo, uso `SUDO_USER` para brew e para os caminhos
+  flatpak de sistema, escrita em `/etc/systemd`). **Como ficou na fase 2 (desvio da proposta, decisão aberta para o Paulo):** o toolkit usa só `sudo -n` e nunca pede senha; sem credencial em cache o `install` falha com `ErrNeedsAdmin` e a dica `rode "sudo -v" e tente de novo`. Um `sudo -v` feito pelo próprio toolkit (com terminal) fica para a TUI, na fase 4. Se o toolkit for chamado com sudo, uso `SUDO_USER` para brew e para os caminhos
   de usuário.
 
 ### 3.7 Bootstraps

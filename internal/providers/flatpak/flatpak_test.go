@@ -167,3 +167,18 @@ func TestInstallErros(t *testing.T) {
 }
 
 var _ providers.Provider = (*Provider)(nil)
+
+// Crivo #14: "remote ... not found" só no contexto certo.
+func TestRemoteNaoEncontradoSoNoContextoCerto(t *testing.T) {
+	f := exectest.New(t).OnElevated(installLine, fail(1, "error: Remote \"flathub\" not found\n"))
+	_, err := New(f).Install(context.Background(), ref("org.mozilla.firefox"), "")
+	if !errors.Is(err, providers.ErrNotFound) || !strings.Contains(err.Error(), "remote-add") {
+		t.Errorf("remote ausente: %v", err)
+	}
+	// "remote" e "not found" em pontos diferentes (ex.: arquivo de runtime) não é remote ausente
+	f = exectest.New(t).OnElevated(installLine, fail(1, "error: Failed to fetch from remote: file not found in cache\n"))
+	_, err = New(f).Install(context.Background(), ref("org.mozilla.firefox"), "")
+	if err == nil || errors.Is(err, providers.ErrNotFound) || strings.Contains(err.Error(), "remote-add") {
+		t.Errorf("fora de contexto: %v", err)
+	}
+}

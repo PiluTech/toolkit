@@ -1,5 +1,8 @@
 // Package dnf é o provider do dnf (Fedora, RHEL e derivadas; dnf4 e dnf5). Leituras por rpm e dnf list
 // (ReadOnly); install por sudo -n (Elevate).
+//
+// Atenção: "dnf install -y" aceita importar a chave GPG de um repositório novo (o -y responde sim à pergunta de
+// importação). O toolkit não adiciona repositórios, então só pacotes dos repositórios já configurados entram.
 package dnf
 
 import (
@@ -166,12 +169,27 @@ func (p *Provider) Install(ctx context.Context, ref providers.PackageRef, versio
 		return providers.InstallResult{}, err
 	}
 	if res.ExitCode != 0 {
-		return providers.InstallResult{}, fmt.Errorf("dnf install saiu com código %d: %w", res.ExitCode, classify(res, version != "" && version != providers.Latest))
+		pinned := version != "" && version != providers.Latest
+		err := classify(res, pinned)
+		if pinned && errors.Is(err, providers.ErrVersionUnsupported) && !p.packageExists(ctx, ref) {
+			// "No match" com versão é ambíguo: confere (leitura) se o PACOTE existe antes de culpar a versão.
+			err = fmt.Errorf("%w: %s", providers.ErrNotFound, providers.Snippet(res.Stderr))
+		}
+		return providers.InstallResult{}, fmt.Errorf("dnf install saiu com código %d: %w", res.ExitCode, err)
 	}
 	if version == providers.Latest {
 		version = ""
 	}
 	return providers.InstallResult{Version: version}, nil
+}
+
+// packageExists lê (ReadOnly) se o dnf conhece o pacote; erro de leitura conta como "existe" (não culpa o pacote).
+func (p *Provider) packageExists(ctx context.Context, ref providers.PackageRef) bool {
+	res, err := p.rn.Read.Run(ctx, listCmd(ref))
+	if err != nil {
+		return true
+	}
+	return res.ExitCode == 0 && len(ParseList(res.Stdout, ref.Package)) > 0
 }
 
 func classify(res exec.Result, pinned bool) error {
