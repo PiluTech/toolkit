@@ -1,4 +1,6 @@
-// Package brew é o provider do Homebrew (macOS e Linux). Nunca usa sudo: o Homebrew roda como a conta dona
+// Package brew é o provider do Homebrew (macOS e Linux). Casks de instalador .pkg podem pedir a senha do sudo
+// ao PRÓPRIO brew; o toolkit não repassa terminal, então isso falha com ErrNeedsAdmin (instale uma vez à mão).
+// Nunca usa sudo: o Homebrew roda como a conta dona
 // da instalação e recusa root. Só instala a versão atual (fórmulas versionadas como python@3.12 são escolhidas
 // pelo id, via template do catálogo).
 package brew
@@ -100,9 +102,13 @@ func installCmd(ref providers.PackageRef) exec.Cmd {
 	return exec.Cmd{Name: "brew", Args: []string{"install", flag, name}, Env: env, Timeout: timeout}
 }
 
-// IsInstalled roda "brew list --versions" (ReadOnly). Saída "nome v1 v2": a última é a mais nova. Falha do
-// comando (brew sai com 1 para o que não está instalado) = não instalado.
+// IsInstalled roda "brew list --versions" (ReadOnly). Saída "nome v1 v2": a última é a mais nova. O brew sai
+// com 1 para o que não está instalado ("No such keg", "is not installed", "No available formula"): isso e a
+// saída vazia são "não instalado"; qualquer outra falha é erro (não vira "não instalado" em silêncio).
 func (p *Provider) IsInstalled(ctx context.Context, ref providers.PackageRef) (bool, string, error) {
+	if err := p.Validate(ref); err != nil { // o brew não tem "--": "-rf" viraria opção
+		return false, "", err
+	}
 	if err := p.notRoot(); err != nil {
 		return false, "", err
 	}
@@ -111,7 +117,10 @@ func (p *Provider) IsInstalled(ctx context.Context, ref providers.PackageRef) (b
 		return false, "", err
 	}
 	if res.ExitCode != 0 {
-		return false, "", nil
+		if notInstalledMsg(res.Stderr) {
+			return false, "", nil
+		}
+		return false, "", fmt.Errorf("brew list saiu com código %d: %s", res.ExitCode, providers.Snippet(res.Stderr))
 	}
 	fields := strings.Fields(string(res.Stdout))
 	if len(fields) < 2 {
@@ -124,9 +133,25 @@ func (p *Provider) IsInstalled(ctx context.Context, ref providers.PackageRef) (b
 	return true, v, nil
 }
 
+func notInstalledMsg(stderr []byte) bool {
+	low := strings.ToLower(strings.TrimSpace(string(stderr)))
+	if low == "" {
+		return true
+	}
+	for _, m := range []string{"no such keg", "is not installed", "no available formula", "no cask with this name", "no installed keg"} {
+		if strings.Contains(low, m) {
+			return true
+		}
+	}
+	return false
+}
+
 // ListVersions confere que o pacote existe (brew info --json=v2) e devolve ["latest"]: fórmula e cask
 // oficiais expõem uma versão estável só.
 func (p *Provider) ListVersions(ctx context.Context, ref providers.PackageRef) ([]string, error) {
+	if err := p.Validate(ref); err != nil {
+		return nil, err
+	}
 	if err := p.notRoot(); err != nil {
 		return nil, err
 	}
@@ -193,6 +218,9 @@ func (p *Provider) Install(ctx context.Context, ref providers.PackageRef, versio
 	if res.ExitCode != 0 {
 		stderr := providers.Snippet(res.Stderr)
 		low := strings.ToLower(stderr)
+		if strings.Contains(low, "a password is required") || strings.Contains(low, "a terminal is required") || strings.Contains(low, "sudo:") {
+			return providers.InstallResult{}, fmt.Errorf("brew install: %w: um cask de pkg pede a senha do sudo ao próprio brew e o toolkit não tem terminal para ela (%s); instale-o à mão uma vez no terminal", providers.ErrNeedsAdmin, stderr)
+		}
 		if strings.Contains(low, "no available formula") || strings.Contains(low, "no cask with this name") {
 			return providers.InstallResult{}, fmt.Errorf("brew install: %w (%s)", providers.ErrNotFound, stderr)
 		}

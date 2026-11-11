@@ -71,7 +71,7 @@ func TestValidate(t *testing.T) {
 func TestIsInstalled(t *testing.T) {
 	f := exectest.New(t).
 		On("brew list --versions --formula git", exectest.Exit(0, "git 2.46.0 2.47.1\n")).
-		On("brew list --versions --cask vlc", exectest.Exit(1, "")).
+		On("brew list --versions --cask vlc", exectest.Reply{Result: exec.Result{ExitCode: 1, Stderr: []byte("Error: Cask 'vlc' is not installed.\n")}}).
 		On("brew list --versions --formula wget", exectest.Exit(0, ""))
 	p := newP(f)
 	ok, v, err := p.IsInstalled(context.Background(), formula("git"))
@@ -222,3 +222,44 @@ var (
 	_ providers.Provider = (*Provider)(nil)
 	_ providers.Preparer = (*Provider)(nil)
 )
+
+// IMPORTANTE do Crivo: sem Validate, "brew list --versions --formula -rf" rodaria (o brew não tem "--").
+func TestIsInstalledEListVersionsValidam(t *testing.T) {
+	f := exectest.New(t)
+	p := newP(f)
+	if _, _, err := p.IsInstalled(context.Background(), formula("-rf")); !errors.Is(err, providers.ErrInvalidRef) {
+		t.Errorf("IsInstalled: %v", err)
+	}
+	if _, err := p.ListVersions(context.Background(), cask("--force")); !errors.Is(err, providers.ErrInvalidRef) {
+		t.Errorf("ListVersions: %v", err)
+	}
+	if _, _, err := p.IsInstalled(context.Background(), providers.PackageRef{Provider: "brew"}); !errors.Is(err, providers.ErrInvalidRef) {
+		t.Errorf("sem formula nem cask: %v", err)
+	}
+	if len(f.Calls()) != 0 {
+		t.Errorf("nada executado: %v", f.Calls())
+	}
+}
+
+func TestIsInstalledDiferenciaNaoInstaladoDeFalha(t *testing.T) {
+	for _, msg := range []string{"Error: No such keg: /opt/homebrew/Cellar/git\n", "Error: No available formula with the name \"git\"\n", ""} {
+		f := exectest.New(t).On("brew list --versions --formula git", exectest.Reply{Result: exec.Result{ExitCode: 1, Stderr: []byte(msg)}})
+		if ok, _, err := newP(f).IsInstalled(context.Background(), formula("git")); ok || err != nil {
+			t.Errorf("%q: ok=%v err=%v", msg, ok, err)
+		}
+	}
+	f := exectest.New(t).On("brew list --versions --formula git", exectest.Reply{Result: exec.Result{ExitCode: 1, Stderr: []byte("Error: Cellar corrompido\n")}})
+	if _, _, err := newP(f).IsInstalled(context.Background(), formula("git")); err == nil || !strings.Contains(err.Error(), "Cellar corrompido") {
+		t.Errorf("falha do brew devia ser erro: %v", err)
+	}
+}
+
+func TestInstallCaskQuePedeSenhaViraErrNeedsAdmin(t *testing.T) {
+	for _, msg := range []string{"sudo: a terminal is required to read the password\n", "sudo: a password is required\n"} {
+		f := exectest.New(t).On("brew install --cask zoom", exectest.Reply{Result: exec.Result{ExitCode: 1, Stderr: []byte(msg)}})
+		_, err := newP(f).Install(context.Background(), cask("zoom"), "")
+		if !errors.Is(err, providers.ErrNeedsAdmin) {
+			t.Errorf("%q: err = %v", msg, err)
+		}
+	}
+}
