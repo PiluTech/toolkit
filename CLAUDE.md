@@ -15,6 +15,12 @@ Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (
 - `docs/briefing.md`: pedido original do Paulo (fases 1–6, requisitos). Não editar.
 - `docs/proposta.md`: proposta original com as perguntas (todas respondidas). Histórico; não editar além da marcação de respondidas.
 - `LICENSE`: MIT, Copyright (c) 2026 PiluTech.
+- `PRODUTO.md`: texto público da página do catálogo (ver a seção abaixo).
+
+## Página do catálogo (PRODUTO.md)
+
+- `PRODUTO.md`, na raiz, alimenta a seção "Mais sobre" de https://pilutech.com.br/apps/toolkit: o build do repo `pilutech-sites` o puxa da main. O texto foi aprovado pelo Paulo (proposta em `pilutech-sites`, `docs/propostas-produto-md/toolkit.md`).
+- Mudar o `PRODUTO.md` é mudar texto público: nada interno, sem preço, sem promessa, e só o que o produto já faz. Se o produto mudar (primeira versão publicada, fase nova), proponha o texto novo antes, em vez de editar direto.
 
 ## Código (fase 1)
 - `cmd/toolkit/main.go`: só chama `cli.Execute`. `internal/cli`: comandos Cobra (hoje só `version`). `internal/buildinfo`: nome, versão, commit e data (via `-ldflags -X`). `internal/msg`: strings de UI em pt-BR.
