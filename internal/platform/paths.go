@@ -109,5 +109,5 @@ func isWindowsAbs(p string) bool {
 	if len(p) >= 3 && p[1] == ':' && p[2] == '\\' && (p[0]|0x20 >= 'a' && p[0]|0x20 <= 'z') {
 		return true
 	}
-	return strings.HasPrefix(p, `\\\\`)
+	return strings.HasPrefix(p, `\\`)
 }

@@ -6,6 +6,7 @@ package exec
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -15,6 +16,8 @@ import (
 var (
 	// ErrNotElevated: o Cmd exige elevação e o processo no Windows não está elevado.
 	ErrNotElevated = errors.New("o comando exige privilégio de administrador")
+	// ErrInvalidEnv: uma entrada de Cmd.Env não é NOME=valor.
+	ErrInvalidEnv = errors.New("Cmd.Env só aceita entradas NOME=valor")
 	// ErrTimeout: o Timeout do Cmd estourou (não o prazo do ctx do chamador: esse volta como erro do ctx).
 	ErrTimeout = errors.New("tempo limite do comando esgotado")
 )
@@ -24,7 +27,7 @@ var (
 type Cmd struct {
 	Name     string
 	Args     []string
-	Env      []string      // acrescentado ao ambiente atual (ex.: HOMEBREW_NO_AUTO_UPDATE=1)
+	Env      []string      // acrescentado ao ambiente atual (ex.: HOMEBREW_NO_AUTO_UPDATE=1); só NOME=valor (validateEnv)
 	Dir      string        // diretório de trabalho
 	Stdin    io.Reader     // entrada opcional
 	Stdout   io.Writer     // opcional: tee para o log ao vivo (TUI e --verbose)
@@ -74,4 +77,23 @@ type Runner interface {
 	Run(ctx context.Context, c Cmd) (Result, error)
 	// LookPath existe no Runner para que Available() também seja mockável.
 	LookPath(name string) (string, error)
+}
+
+// validateEnv exige NOME=valor em cada entrada (NOME = [A-Za-z_][A-Za-z0-9_]*, valor sem NUL). Com Elevate o Env
+// vira argumentos de "sudo -n -- env ...": "-i", "--version" ou "ls" seriam lidos pelo env como opção ou como o
+// comando a executar.
+func validateEnv(env []string) error {
+	for _, e := range env {
+		name, val, ok := strings.Cut(e, "=")
+		if !ok || name == "" || strings.ContainsRune(val, 0) {
+			return fmt.Errorf("%w: %q", ErrInvalidEnv, e)
+		}
+		for i, r := range name {
+			letter := r == '_' || (r|0x20 >= 'a' && r|0x20 <= 'z')
+			if !letter && (i == 0 || r < '0' || r > '9') {
+				return fmt.Errorf("%w: %q", ErrInvalidEnv, e)
+			}
+		}
+	}
+	return nil
 }

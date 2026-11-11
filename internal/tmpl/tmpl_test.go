@@ -46,7 +46,7 @@ func TestNames(t *testing.T) {
 }
 
 func TestExpandRecusaValorHostil(t *testing.T) {
-	hostile := []string{"1/../../x", "..", "1..2", "a b", "", "a/b", `a\b`, "a\x00b", "a\nb", "{{os}}", "a;b", "a\"b", "%2e%2e", "é"}
+	hostile := []string{"1/../../x", "..", "1..2", "a b", "", "a/b", `a\b`, "a\x00b", "a\nb", "{{os}}", "-rf", "--force", "-1", ".x", "+x", "~x", "_x", "a;b", "a\"b", "%2e%2e", "é"}
 	for _, v := range hostile {
 		for _, name := range []string{Version, Major, MajorMinor, OS, Arch, ToolkitVersion} {
 			if _, err := Expand("x{{"+name+"}}", map[string]string{name: v}); err == nil {

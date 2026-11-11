@@ -14,6 +14,9 @@ step "go mod verify / tidy"
 go mod verify
 go mod tidy -diff
 
+step "tools.sha256 consistente com a versão do instalador"
+./scripts/instalar-ferramentas_test.sh
+
 step "gofmt (autoteste do verificador + verificação)"
 ./scripts/check-gofmt_test.sh
 ./scripts/check-gofmt.sh .

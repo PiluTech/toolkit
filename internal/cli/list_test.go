@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 const embedded = `
@@ -180,5 +181,25 @@ func TestListAvisaQuandoCatalogoLocalSubstituiAppEmbutido(t *testing.T) {
 	var rows []map[string]any
 	if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
 		t.Fatalf("stdout deve continuar JSON puro: %v\n%s", err, out.String())
+	}
+}
+
+// Defesa em profundidade: mesmo que um texto com controle chegue à tabela, ele sai escapado.
+func TestWriteTableEscapaNaoImprimivel(t *testing.T) {
+	var out bytes.Buffer
+	items := []listItem{{ID: "g", Name: "Git\x1b[2J\x1b]0;pwned\x07\nFALSO", Category: "dev\r", Providers: []string{"apt\x7f"}, Versions: []string{"1\u009b2J", "2\u2028x"}}}
+	if err := writeTable(&out, items); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range out.String() {
+		if r != '\n' && r != '\t' && !unicode.IsPrint(r) {
+			t.Fatalf("a tabela contém o caractere não imprimível %U:\n%q", r, out.String())
+		}
+	}
+	if got := strings.Count(out.String(), "\n"); got != 2 {
+		t.Errorf("a quebra de linha do nome virou linha nova (%d linhas):\n%q", got, out.String())
+	}
+	if !strings.Contains(out.String(), `\x1b`) {
+		t.Errorf("o ESC deveria aparecer escapado (\\x1b):\n%q", out.String())
 	}
 }

@@ -211,3 +211,23 @@ func TestOSRunnerLookPath(t *testing.T) {
 		t.Fatal("esperava erro")
 	}
 }
+
+// Cmd.Env só aceita NOME=valor: com Elevate o Env vira argumentos de "sudo -n -- env ...", e uma entrada
+// como "-i", "--version" ou "ls" seria lida pelo env como opção ou como o comando a executar.
+func TestEnvInvalidoEhRecusado(t *testing.T) {
+	bad := [][]string{{"-i"}, {"--version"}, {"ls"}, {"=x"}, {"A B=1"}, {"1A=x"}, {"A=b\x00c"}, {""}, {"-C=/"}, {"A-B=1"}}
+	for _, env := range bad {
+		for _, elevate := range []bool{false, true} {
+			r := OSRunner{GOOS: "linux"}
+			_, err := r.Run(context.Background(), Cmd{Name: "echo-que-nunca-roda", Env: env, Elevate: elevate})
+			if !errors.Is(err, ErrInvalidEnv) {
+				t.Errorf("env %q (elevate=%v): esperava ErrInvalidEnv, veio %v", env, elevate, err)
+			}
+		}
+	}
+	for _, env := range [][]string{{"A=1"}, {"HOMEBREW_NO_AUTO_UPDATE=1"}, {"_X=", "Y9=a=b c"}} {
+		if err := validateEnv(env); err != nil {
+			t.Errorf("env %q deveria valer: %v", env, err)
+		}
+	}
+}

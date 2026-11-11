@@ -6,6 +6,27 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 VERSION="2.15.0"
+SUMS="${TOOLS_SHA256_FILE:-tools.sha256}"
+
+# Confere que todo hash de tools.sha256 é da VERSION deste script (um arquivo de outra versão, ou misturado,
+# aprovaria o binário errado). Uso: scripts/instalar-ferramentas.sh --verificar
+check_sums() {
+  local n=0 line file
+  while IFS= read -r line; do
+    case "$line" in '' | '#'*) continue ;; esac
+    file="$(printf '%s\n' "$line" | awk '{ print $2 }')"
+    case "$file" in
+      golangci-lint-"${VERSION}"-*) n=$((n + 1)) ;;
+      *) echo "$SUMS: a entrada \"$file\" não é da versão $VERSION (VERSION em instalar-ferramentas.sh)" >&2; return 1 ;;
+    esac
+  done <"$SUMS"
+  if [ "$n" -eq 0 ]; then echo "$SUMS: sem nenhuma entrada da versão $VERSION" >&2; return 1; fi
+  if ! grep -q "release v${VERSION} " "$SUMS"; then
+    echo "$SUMS: o comentário de cabeçalho não cita a release v$VERSION" >&2; return 1
+  fi
+}
+check_sums
+if [ "${1:-}" = "--verificar" ]; then echo "tools.sha256 consistente com a versão $VERSION"; exit 0; fi
 DEST="${1:-$HOME/.local/bin}"
 
 case "$(uname -s)" in
@@ -25,9 +46,9 @@ bin=golangci-lint
 if [ "$os" = windows ]; then ext=zip; bin=golangci-lint.exe; fi
 name="golangci-lint-${VERSION}-${os}-${arch}.${ext}"
 
-expected="$(awk -v n="$name" '$2 == n { print $1 }' tools.sha256)"
+expected="$(awk -v n="$name" '$2 == n { print $1 }' "$SUMS")"
 if [ -z "$expected" ]; then
-  echo "sem SHA-256 versionado para $name em tools.sha256" >&2
+  echo "sem SHA-256 versionado para $name em $SUMS" >&2
   exit 1
 fi
 

@@ -134,6 +134,9 @@ func sudoRefused(code int, stderr []byte) bool {
 
 // Run executa o comando e devolve o exit code bruto.
 func (r OSRunner) Run(ctx context.Context, c Cmd) (Result, error) {
+	if err := validateEnv(c.Env); err != nil {
+		return Result{}, err
+	}
 	name, args, viaSudo, err := r.argv(c)
 	if err != nil {
 		return Result{}, err

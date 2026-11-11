@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"go.yaml.in/yaml/v3"
 
@@ -74,6 +75,24 @@ func (p *parser) rejectAliases(n *yaml.Node) {
 	}
 }
 
+// rejectControl recusa caractere de controle (< 0x20, 0x7f e C1 0x80-0x9f: ESC, OSC, BEL, CR, quebra de
+// linha, tab...) em qualquer texto do arquivo, chaves e valores. name, versões e demais textos vão para o
+// terminal (list, TUI, logs): sem isso um catálogo local reescreveria a tela do usuário. A mensagem cita o
+// ponto de código, nunca o byte cru.
+func (p *parser) rejectControl(n *yaml.Node) {
+	if n.Kind == yaml.ScalarNode {
+		for _, r := range n.Value {
+			if unicode.IsControl(r) {
+				p.errAt(n, "caractere de controle U+%04X não é aceito no catálogo (texto sem ESC, quebra de linha, tab etc.)", r)
+				break
+			}
+		}
+	}
+	for _, c := range n.Content {
+		p.rejectControl(c)
+	}
+}
+
 // Parse lê e valida o catálogo. file só aparece nas mensagens de erro.
 func Parse(file string, data []byte) (*Catalog, error) {
 	if len(data) > MaxFileSize {
@@ -89,6 +108,7 @@ func Parse(file string, data []byte) (*Catalog, error) {
 	}
 	p := &parser{file: file}
 	p.rejectAliases(&doc)
+	p.rejectControl(&doc)
 	if len(p.errs) > 0 {
 		return nil, p.errs
 	}
@@ -220,6 +240,10 @@ func (p *parser) parseVersions(id string, v *yaml.Node) Versions {
 		for _, it := range v.Content {
 			if it.Kind != yaml.ScalarNode || it.Value == "" {
 				p.errAt(it, "app %q: cada versão deve ser um texto (use aspas: \"3.13\")", id)
+				continue
+			}
+			if !tmpl.ValidValue(it.Value) {
+				p.errAt(it, "app %q: versão %q inválida (só letras, números e . _ + ~ -, começando por letra ou número)", id, it.Value)
 				continue
 			}
 			list = append(list, it.Value)
