@@ -1,0 +1,3 @@
+       git | 1:2.43.0-1ubuntu7.1 | http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages
+       git | 1:2.43.0-1ubuntu7 | http://archive.ubuntu.com/ubuntu noble/main amd64 Packages
+       git | 1:2.43.0-1ubuntu7 | http://archive.ubuntu.com/ubuntu noble/main Sources
