@@ -35,8 +35,8 @@ func newP(f *exectest.FakeRunner) *Provider {
 }
 
 const (
-	listLine    = "winget list --id Git.Git -e --accept-source-agreements --disable-interactivity"
-	showLine    = "winget show --id Git.Git -e --versions --source winget --accept-source-agreements --disable-interactivity"
+	listLine    = "winget list --id Git.Git -e --disable-interactivity"
+	showLine    = "winget show --id Git.Git -e --versions --source winget --disable-interactivity"
 	installBase = "winget install --id Git.Git -e --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity"
 )
 
@@ -313,5 +313,56 @@ func TestCmdsTemAMarcaCertaParaOsRunners(t *testing.T) {
 	}
 	if c := installCmd(r, ""); c.ReadOnly || c.Elevate {
 		t.Error("install não é ReadOnly nem Elevate")
+	}
+}
+
+func TestListEShowNaoAceitamTermos(t *testing.T) {
+	r := ref("Git.Git")
+	for name, c := range map[string]exec.Cmd{"list": listCmd(r), "show": showVersionsCmd(r)} {
+		for _, a := range c.Args {
+			if strings.HasPrefix(a, "--accept") {
+				t.Errorf("%s não aceita termos: %s", name, a)
+			}
+		}
+	}
+}
+
+func TestIsInstalledEListVersionsValidam(t *testing.T) {
+	f := exectest.New(t)
+	p := newP(f)
+	if _, _, err := p.IsInstalled(context.Background(), ref("-e")); !errors.Is(err, providers.ErrInvalidRef) {
+		t.Errorf("IsInstalled: %v", err)
+	}
+	if _, err := p.ListVersions(context.Background(), ref("Git.Git --x")); !errors.Is(err, providers.ErrInvalidRef) {
+		t.Errorf("ListVersions: %v", err)
+	}
+	if len(f.Calls()) != 0 {
+		t.Error("nada executado")
+	}
+}
+
+// 0x8A15002B/0x8A150061 com --version: confere a versão instalada.
+func TestInstallJaInstaladoComVersaoConfereAVersao(t *testing.T) {
+	for _, code := range []uint32{codeUpdateNotApplicable, codePackageAlreadyInst} {
+		// versão instalada = pedida
+		f := exectest.New(t).
+			On(installBase+" --version 2.47.1", exitReply(code, false)).
+			On(listLine, exectest.Exit(0, fixture(t, "list_en.txt")))
+		res, err := newP(f).Install(context.Background(), ref("Git.Git"), "2.47.1")
+		if err != nil || !res.AlreadyInstalled || res.Version != "2.47.1" {
+			t.Errorf("0x%08X igual: res=%+v err=%v", code, res, err)
+		}
+		// instalada é outra
+		f = exectest.New(t).
+			On(installBase+" --version 2.0.0", exitReply(code, false)).
+			On(listLine, exectest.Exit(0, fixture(t, "list_en.txt")))
+		if _, err := newP(f).Install(context.Background(), ref("Git.Git"), "2.0.0"); err == nil || !strings.Contains(err.Error(), "2.47.1") {
+			t.Errorf("0x%08X diferente: err=%v", code, err)
+		}
+		// sem versão pedida: AlreadyInstalled direto, sem ler
+		f = exectest.New(t).On(installBase, exitReply(code, false))
+		if res, err := newP(f).Install(context.Background(), ref("Git.Git"), ""); err != nil || !res.AlreadyInstalled || len(f.Calls()) != 1 {
+			t.Errorf("0x%08X sem versão: res=%+v err=%v", code, res, err)
+		}
 	}
 }

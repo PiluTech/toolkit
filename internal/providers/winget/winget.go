@@ -93,8 +93,8 @@ func source(ref providers.PackageRef) string {
 	return defaultSource
 }
 
-// common: não interativo e sem perguntas de acordo de fonte.
-var common = []string{"--accept-source-agreements", "--disable-interactivity"}
+// common: não interativo. Só o install aceita termos (--accept-*-agreements); list e show são leitura pura.
+var common = []string{"--disable-interactivity"}
 
 func listCmd(ref providers.PackageRef) exec.Cmd {
 	args := append([]string{"list", "--id", ref.ID, "-e"}, common...)
@@ -119,6 +119,9 @@ func installCmd(ref providers.PackageRef, version string) exec.Cmd {
 
 // IsInstalled roda "winget list --id X -e" (ReadOnly). 0x8A150014 = não instalado.
 func (p *Provider) IsInstalled(ctx context.Context, ref providers.PackageRef) (bool, string, error) {
+	if err := p.Validate(ref); err != nil {
+		return false, "", err
+	}
 	res, err := p.rn.Read.Run(ctx, listCmd(ref))
 	if err != nil {
 		return false, "", err
@@ -141,6 +144,9 @@ func (p *Provider) IsInstalled(ctx context.Context, ref providers.PackageRef) (b
 
 // ListVersions roda "winget show --id X -e --versions" (ReadOnly).
 func (p *Provider) ListVersions(ctx context.Context, ref providers.PackageRef) ([]string, error) {
+	if err := p.Validate(ref); err != nil {
+		return nil, err
+	}
 	res, err := p.rn.Read.Run(ctx, showVersionsCmd(ref))
 	if err != nil {
 		return nil, err
@@ -179,6 +185,10 @@ func (p *Provider) Install(ctx context.Context, ref providers.PackageRef, versio
 		}
 		code := uint32(res.ExitCode)
 		out, err := interpretInstall(code, version, res)
+		if err == nil && out.AlreadyInstalled && pinned(version) && code != codeInstallAlreadyInst {
+			// 0x8A15002B/0x8A150061 com --version: só vale "já instalado" se a versão instalada for a pedida.
+			return p.confirmPinned(ctx, ref, version, out)
+		}
 		if code != codeInstallInProgress || err == nil {
 			return out, err
 		}
@@ -190,6 +200,21 @@ func (p *Provider) Install(ctx context.Context, ref providers.PackageRef, versio
 		}
 	}
 	return providers.InstallResult{}, last
+}
+
+func pinned(v string) bool { return v != "" && v != providers.Latest }
+
+// confirmPinned lê a versão instalada e só devolve AlreadyInstalled se ela for a pedida (SameVersion).
+func (p *Provider) confirmPinned(ctx context.Context, ref providers.PackageRef, version string, out providers.InstallResult) (providers.InstallResult, error) {
+	ok, have, err := p.IsInstalled(ctx, ref)
+	if err != nil {
+		return providers.InstallResult{}, err
+	}
+	if ok && have != "" && providers.SameVersion(have, version) {
+		out.Version = have
+		return out, nil
+	}
+	return providers.InstallResult{}, fmt.Errorf("a versão instalada (%q) difere da pedida (%s): desinstale antes", have, version)
 }
 
 func interpretInstall(code uint32, version string, res exec.Result) (providers.InstallResult, error) {
