@@ -1,0 +1,8 @@
+{
+  "name": "toolkit-icone",
+  "private": true,
+  "description": "Rasterizador do ícone (só ferramenta de desenvolvimento; nada disto entra no binário)",
+  "dependencies": {
+    "@resvg/resvg-js": "2.6.2"
+  }
+}

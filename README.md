@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon/toolkit-256.png" width="128" height="128" alt="Ícone do toolkit">
+</p>
+
 # toolkit
 
 Prepara uma máquina Windows, Linux ou macOS com um comando colado no terminal: instala apps a partir
