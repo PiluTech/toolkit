@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	neturl "net/url"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -72,7 +75,7 @@ func newListCmd(deps Deps) *cobra.Command {
 		Long:  msg.ListLong,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runList(cmd.OutOrStdout(), cmd.ErrOrStderr(), deps, f)
+			return runList(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), deps, f)
 		},
 	}
 	fl := cmd.Flags()
@@ -90,15 +93,37 @@ func isURL(s string) bool {
 	return strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://")
 }
 
-func loadCatalog(deps Deps, f listFlags, errOut io.Writer) (*catalog.Catalog, error) {
+var catalogSHARe = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
+
+// loadRemoteCatalog baixa um catálogo por URL: --catalog-sha256 é OBRIGATÓRIO (64 hex, validado antes de qualquer
+// requisição), o arquivo é lido em memória até catalog.MaxFileSize, o hash é conferido ANTES de o YAML ser lido
+// e só então o conteúdo passa pelo Parse (que cita a URL nas mensagens de erro). A URL segue a política do
+// pacote download (https, host público, redirects revalidados). O catálogo NÃO importa o download: a carga
+// remota mora aqui no CLI.
+func loadRemoteCatalog(ctx context.Context, deps Deps, rawURL, sha string) (*catalog.Catalog, error) {
+	if sha == "" {
+		return nil, fmt.Errorf("%s", msg.ErrCatalogURLNeedsSHA)
+	}
+	if !catalogSHARe.MatchString(sha) {
+		return nil, fmt.Errorf("%s", msg.ErrCatalogSHAInvalid)
+	}
+	data, err := deps.downloader().Bytes(ctx, download.Request{URL: rawURL, SHA256: sha, MaxSize: catalog.MaxFileSize})
+	if err != nil {
+		return nil, fmt.Errorf("catálogo %s: %w", printable(rawURL), err)
+	}
+	name := rawURL
+	if u, err := neturl.Parse(rawURL); err == nil {
+		name = u.Host + u.Path
+	}
+	return catalog.Parse(printable(name), data)
+}
+
+func loadCatalog(ctx context.Context, deps Deps, f listFlags, errOut io.Writer) (*catalog.Catalog, error) {
 	if f.replace && f.catalog == "" {
 		return nil, fmt.Errorf("%s", msg.ErrReplaceNoCat)
 	}
 	if f.sha256 != "" && !isURL(f.catalog) {
 		return nil, fmt.Errorf("%s", msg.ErrSHAWithoutURL)
-	}
-	if isURL(f.catalog) {
-		return nil, fmt.Errorf("%s", msg.ErrCatalogURL)
 	}
 	base, err := catalog.Parse("catalog.yaml (embutido)", deps.EmbeddedYML)
 	if err != nil {
@@ -107,7 +132,12 @@ func loadCatalog(deps Deps, f listFlags, errOut io.Writer) (*catalog.Catalog, er
 	if f.catalog == "" {
 		return base, nil
 	}
-	ext, err := catalog.LoadFile(f.catalog)
+	var ext *catalog.Catalog
+	if isURL(f.catalog) {
+		ext, err = loadRemoteCatalog(ctx, deps, f.catalog, f.sha256)
+	} else {
+		ext, err = catalog.LoadFile(f.catalog)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +148,7 @@ func loadCatalog(deps Deps, f listFlags, errOut io.Writer) (*catalog.Catalog, er
 	return merged, nil
 }
 
-func runList(out, errOut io.Writer, deps Deps, f listFlags) error {
+func runList(ctx context.Context, out, errOut io.Writer, deps Deps, f listFlags) error {
 	goos := f.os
 	if goos == "" {
 		goos = deps.GOOS
@@ -129,7 +159,7 @@ func runList(out, errOut io.Writer, deps Deps, f listFlags) error {
 	if f.category != "" && !slices.Contains(catalog.Categories, f.category) {
 		return fmt.Errorf(msg.ErrUnknownCat, f.category, strings.Join(catalog.Categories, ", "))
 	}
-	cat, err := loadCatalog(deps, f, errOut)
+	cat, err := loadCatalog(ctx, deps, f, errOut)
 	if err != nil {
 		return err
 	}
