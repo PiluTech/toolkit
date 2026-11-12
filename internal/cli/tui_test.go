@@ -323,3 +323,59 @@ func TestAppsBackendVersionsQueriesProviderOnlyForVersionsTrue(t *testing.T) {
 		t.Fatal("app desconhecido é erro")
 	}
 }
+
+// Lupa no #40 (3): o fluxo COMPLETO de `toolkit` sem argumentos, com o stdin real trocado: /dev/zero (dispositivo
+// de caracteres que não é terminal), pipe, arquivo comum e /dev/null => ajuda, nunca a TUI.
+func TestRootFullFlowWithRealStdinNeverOpensTUIWithoutTerminal(t *testing.T) {
+	zero, err := os.Open("/dev/zero")
+	if err != nil {
+		t.Skip("sem /dev/zero")
+	}
+	defer func() { _ = zero.Close() }()
+	devnull, _ := os.Open(os.DevNull)
+	defer func() { _ = devnull.Close() }()
+	pr, pw, _ := os.Pipe()
+	defer func() { _ = pr.Close(); _ = pw.Close() }()
+	regular, _ := os.CreateTemp(t.TempDir(), "entrada")
+	defer func() { _ = regular.Close() }()
+
+	for name, f := range map[string]*os.File{"/dev/zero": zero, "/dev/null": devnull, "pipe": pr, "arquivo": regular} {
+		old := os.Stdin
+		os.Stdin = f
+		var o, e bytes.Buffer
+		opened := false
+		deps := Deps{ // Interactive NÃO é injetado: vale a detecção real do stdin
+			GOOS: "linux", EmbeddedYML: []byte(embedded),
+			TUI: TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return "xterm-256color" },
+				Run: func(context.Context, tui.Options, ...tui.Tab) error { opened = true; return nil }},
+		}
+		cmd := NewRootCmdWith(&o, &e, deps)
+		cmd.SetArgs(nil)
+		err := cmd.ExecuteContext(context.Background())
+		os.Stdin = old
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if opened {
+			t.Errorf("stdin=%s: a TUI abriu sem terminal na entrada", name)
+		}
+		if !strings.Contains(o.String(), "install") {
+			t.Errorf("stdin=%s: sem ajuda:\n%s", name, o.String())
+		}
+	}
+}
+
+// Uma função só decide "isto é um terminal" para a entrada e para a saída.
+func TestStdinAndStdoutShareTheSameTerminalDetection(t *testing.T) {
+	zero, err := os.Open("/dev/zero")
+	if err != nil {
+		t.Skip("sem /dev/zero")
+	}
+	defer func() { _ = zero.Close() }()
+	old := os.Stdin
+	os.Stdin = zero
+	defer func() { os.Stdin = old }()
+	if stdinIsTerminal() != fileIsTerminal(zero) || stdinIsTerminal() {
+		t.Fatal("stdin=/dev/zero não é terminal, e stdin e saída usam a mesma detecção (fileIsTerminal)")
+	}
+}
