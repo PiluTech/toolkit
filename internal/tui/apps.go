@@ -137,6 +137,9 @@ func (t *AppsTab) Marked() []Mark {
 	return out
 }
 
+// SetContext troca o contexto das chamadas ao backend (o Run entrega o que ele cancela ao sair).
+func (t *AppsTab) SetContext(ctx context.Context) { t.ctx = ctx }
+
 // Init carrega o catálogo e liga o spinner.
 func (t *AppsTab) Init() tea.Cmd {
 	return tea.Batch(t.loadCmd(), tick())
@@ -207,12 +210,18 @@ func (t *AppsTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 			t.ver.err = fmt.Errorf("%s", textsafe.Line(msg.err.Error()))
 			return t, nil
 		}
-		t.ver.versions = []string{"latest"}
+		// o destaque segue o MESMO item (por valor) quando a lista nova chega: a lista de antes tinha só
+		// latest e a versão já marcada, então o índice não vale na nova. Sumiu da lista = volta a latest.
+		sel := t.ver.highlighted()
+		list := []string{"latest"}
 		for _, v := range msg.versions {
 			if v = textsafe.Line(v); v != "" && v != "latest" {
-				t.ver.versions = append(t.ver.versions, v)
+				list = append(list, v)
 			}
 		}
+		t.ver.versions = list
+		t.ver.cur = max(slices.Index(list, sel), 0)
+		t.ver.top = 0
 		return t, nil
 	case tickMsg:
 		t.frame++
@@ -488,7 +497,24 @@ func (t *AppsTab) openVersions(explicit bool) tea.Cmd {
 	}, tick())
 }
 
+// highlighted devolve a versão destacada ("" se a lista estiver vazia ou o cursor fora dela).
+func (v versionsView) highlighted() string {
+	if v.cur < 0 || v.cur >= len(v.versions) {
+		return ""
+	}
+	return v.versions[v.cur]
+}
+
+// clamp prende o cursor a [0, len): a lista pode encolher e nunca pode ficar vazia para o Enter.
+func (v *versionsView) clamp() {
+	if len(v.versions) == 0 {
+		v.versions = []string{"latest"}
+	}
+	v.cur = max(min(v.cur, len(v.versions)-1), 0)
+}
+
 func (t *AppsTab) keyVersions(msg tea.KeyPressMsg) tea.Cmd {
+	t.ver.clamp()
 	n := len(t.ver.versions)
 	page := max(t.lastH-4, 1)
 	switch msg.String() {
@@ -507,7 +533,7 @@ func (t *AppsTab) keyVersions(msg tea.KeyPressMsg) tea.Cmd {
 	case "G", "end":
 		t.ver.cur = n - 1
 	case "enter", "space":
-		v := t.ver.versions[t.ver.cur]
+		v := t.ver.highlighted()
 		if v == "latest" {
 			v = ""
 		}
@@ -518,6 +544,7 @@ func (t *AppsTab) keyVersions(msg tea.KeyPressMsg) tea.Cmd {
 		t.marks[id] = v
 		t.mode = modeList
 	}
+	t.ver.clamp()
 	return nil
 }
 
@@ -780,6 +807,7 @@ func cell(s string, w int) string {
 
 // versionsBody é o modal da lista de versões (troca o corpo; cabeçalho e teclas continuam).
 func (t *AppsTab) versionsBody(w, h int) string {
+	t.ver.clamp()
 	a := t.appByID(t.ver.id)
 	var b strings.Builder
 	b.WriteString(" " + t.theme.Title().Render(titleCase(t.theme, "Versões de "+a.Name)) + "\n")

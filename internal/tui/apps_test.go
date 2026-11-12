@@ -565,3 +565,116 @@ func TestAppsKeysAndStatusByMode(t *testing.T) {
 		t.Fatalf("status: %q", tab.Status())
 	}
 }
+
+// --- Crivo no #35: cursor da lista de versões sempre preso ao tamanho da lista ---
+
+// reabre a lista de python com a versão `marked` já marcada, sem a lista de versões ter chegado ainda.
+func openMarkedVersions(t *testing.T, marked string, be *fakeBackend) (*AppsTab, tea.Cmd) {
+	t.Helper()
+	tab := loaded(t, be)
+	send(tab, "down") // python
+	tab.marks["python"] = marked
+	tab.order = append(tab.order, "python")
+	return tab, tab.openVersionsKey()
+}
+
+// BLOQUEANTE: marcado com 3.11 + lista que chega vazia deixava o cursor em 1 e derrubava o Enter.
+func TestAppsVersionsMarkedThenEmptyListDoesNotPanic(t *testing.T) {
+	be := &fakeBackend{apps: sampleApps(), status: defaultStatus(), versions: map[string][]string{"python": nil}}
+	tab, cmd := openMarkedVersions(t, "3.11", be)
+	tab.Update(cmdMsg(cmd, "versions"))
+	if tab.ver.cur < 0 || tab.ver.cur >= len(tab.ver.versions) {
+		t.Fatalf("cursor %d fora da lista de %d", tab.ver.cur, len(tab.ver.versions))
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			t.Fatalf("panic: %v", p)
+		}
+	}()
+	tab.View(80, 19)
+	send(tab, "enter")
+	if tab.marks["python"] != "" {
+		t.Fatalf("a lista só tem latest: o Enter confirma o que está destacado (latest), não %q", tab.marks["python"])
+	}
+}
+
+// Se a versão marcada não está na lista, o Enter confirma o item DESTACADO (nunca outro por deslocamento).
+func TestAppsVersionsMarkedMissingFromListConfirmsHighlighted(t *testing.T) {
+	be := &fakeBackend{apps: sampleApps(), status: defaultStatus(), versions: map[string][]string{"python": {"3.12", "3.10"}}}
+	tab, cmd := openMarkedVersions(t, "3.11", be)
+	tab.Update(cmdMsg(cmd, "versions"))
+	v := plain(tab.View(80, 19))
+	hi := tab.ver.versions[tab.ver.cur]
+	if !strings.Contains(v, "(•) "+hi) {
+		t.Fatalf("o destaque da tela é %q:\n%s", hi, v)
+	}
+	send(tab, "enter")
+	want := hi
+	if want == "latest" {
+		want = ""
+	}
+	if tab.marks["python"] != want {
+		t.Fatalf("confirmou %q mas o destaque era %q", tab.marks["python"], hi)
+	}
+}
+
+// Marcada e presente na lista: o cursor cai nela.
+func TestAppsVersionsMarkedPresentIsHighlighted(t *testing.T) {
+	be := &fakeBackend{apps: sampleApps(), status: defaultStatus(), versions: map[string][]string{"python": {"3.12", "3.11", "3.10"}}}
+	tab, cmd := openMarkedVersions(t, "3.11", be)
+	tab.Update(cmdMsg(cmd, "versions"))
+	if hi := tab.ver.versions[tab.ver.cur]; hi != "3.11" {
+		t.Fatalf("destaque = %q, quero 3.11", hi)
+	}
+	send(tab, "enter")
+	if tab.marks["python"] != "3.11" {
+		t.Fatalf("manteve %q", tab.marks["python"])
+	}
+}
+
+// Quem mexeu no cursor enquanto a lista carregava continua no MESMO item quando ela chega.
+func TestAppsVersionsCursorFollowsItemAcrossLoad(t *testing.T) {
+	be := &fakeBackend{apps: sampleApps(), status: defaultStatus(), versions: map[string][]string{"python": {"3.12", "3.11"}}}
+	tab, cmd := openMarkedVersions(t, "3.11", be)
+	send(tab, "up") // enquanto carrega: [latest, 3.11] -> latest
+	tab.Update(cmdMsg(cmd, "versions"))
+	if hi := tab.ver.versions[tab.ver.cur]; hi != "latest" {
+		t.Fatalf("destaque = %q, quero latest", hi)
+	}
+}
+
+// Em qualquer sequência de teclas, o cursor nunca sai de [0, len).
+func TestAppsVersionsCursorAlwaysInRange(t *testing.T) {
+	for _, list := range [][]string{nil, {"1"}, {"1", "2", "3"}} {
+		be := &fakeBackend{apps: sampleApps(), status: defaultStatus(), versions: map[string][]string{"python": list}}
+		tab, cmd := openMarkedVersions(t, "9.9", be)
+		for _, k := range []string{"G", "down", "down", "pgdown", "up", "pgup", "g", "up"} {
+			send(tab, k)
+			if tab.ver.cur < 0 || tab.ver.cur >= len(tab.ver.versions) {
+				t.Fatalf("antes da lista, tecla %q: cursor %d de %d", k, tab.ver.cur, len(tab.ver.versions))
+			}
+		}
+		tab.Update(cmdMsg(cmd, "versions"))
+		for _, k := range []string{"G", "down", "down", "pgdown", "up", "pgup", "g", "up", "G"} {
+			send(tab, k)
+			if tab.ver.cur < 0 || tab.ver.cur >= len(tab.ver.versions) {
+				t.Fatalf("lista %v, tecla %q: cursor %d de %d", list, k, tab.ver.cur, len(tab.ver.versions))
+			}
+		}
+	}
+}
+
+// Resposta de versões de outro app (ou depois de fechar o modal) é ignorada e nunca mexe no cursor.
+func TestAppsVersionsStaleResponseIgnored(t *testing.T) {
+	be := &fakeBackend{apps: sampleApps(), status: defaultStatus(), versions: map[string][]string{"python": {"3.12"}}}
+	tab, cmd := openMarkedVersions(t, "", be)
+	tab.Update(versionsLoadedMsg{id: "git", versions: []string{"x", "y"}})
+	if len(tab.ver.versions) != 1 {
+		t.Fatalf("resposta de outro app alterou a lista: %v", tab.ver.versions)
+	}
+	send(tab, "esc")
+	tab.Update(cmdMsg(cmd, "versions"))
+	if len(tab.ver.versions) != 1 {
+		t.Fatalf("resposta com o modal fechado alterou a lista: %v", tab.ver.versions)
+	}
+}
