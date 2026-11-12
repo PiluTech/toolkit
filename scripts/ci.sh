@@ -21,6 +21,16 @@ step "gofmt (autoteste do verificador + verificação)"
 ./scripts/check-gofmt_test.sh
 ./scripts/check-gofmt.sh .
 
+step "bootstraps (shellcheck quando existe + testes com release falsa)"
+if command -v shellcheck >/dev/null 2>&1; then
+  shellcheck scripts/bootstrap/*.sh scripts/release.sh scripts/release_test.sh
+else
+  echo "shellcheck não encontrado: pulando a análise estática dos bootstraps" >&2
+fi
+./scripts/bootstrap/unix_test.sh
+./scripts/bootstrap/win_static_test.sh
+./scripts/release_test.sh
+
 step "go vet (linux, windows, darwin)"
 for os in linux windows darwin; do
   GOOS=$os go vet ./...
