@@ -6,7 +6,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/PiluVitu/toolkit/internal/platform"
+	"github.com/PiluTech/toolkit/internal/platform"
 )
 
 const tiny = "id: %s\nname: N\nos: %s\nsteps:\n  - id: a\n    run: { sh: t }\n"

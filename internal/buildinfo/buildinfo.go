@@ -9,7 +9,7 @@ import "fmt"
 // Name é o nome do produto e do binário.
 const Name = "toolkit"
 
-// Preenchidos em build com -ldflags "-X github.com/PiluVitu/toolkit/internal/buildinfo.Version=..." etc.
+// Preenchidos em build com -ldflags "-X github.com/PiluTech/toolkit/internal/buildinfo.Version=..." etc.
 var (
 	Version = "dev"
 	Commit  = "none"

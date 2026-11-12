@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	toolexec "github.com/PiluVitu/toolkit/internal/exec"
+	toolexec "github.com/PiluTech/toolkit/internal/exec"
 )
 
 // Reply é a resposta roteirizada para uma linha de comando.

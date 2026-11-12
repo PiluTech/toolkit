@@ -5,13 +5,13 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/PiluVitu/toolkit/internal/catalog"
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/exec/exectest"
-	"github.com/PiluVitu/toolkit/internal/providers"
-	"github.com/PiluVitu/toolkit/internal/providers/apt"
-	"github.com/PiluVitu/toolkit/internal/providers/brew"
-	"github.com/PiluVitu/toolkit/internal/providers/winget"
+	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/exec/exectest"
+	"github.com/PiluTech/toolkit/internal/providers"
+	"github.com/PiluTech/toolkit/internal/providers/apt"
+	"github.com/PiluTech/toolkit/internal/providers/brew"
+	"github.com/PiluTech/toolkit/internal/providers/winget"
 )
 
 // IMPORTANTE do Crivo: "toolkit install python@3.12" — a versão já está no id pelo template, então não vai de

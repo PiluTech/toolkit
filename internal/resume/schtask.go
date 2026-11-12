@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	"github.com/PiluVitu/toolkit/internal/buildinfo"
-	"github.com/PiluVitu/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/buildinfo"
+	"github.com/PiluTech/toolkit/internal/exec"
 )
 
 const windowsPowerShell = `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`

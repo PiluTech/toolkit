@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/platform"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/platform"
 )
 
 // SystemRebooter reinicia a máquina pelo exec.Runner (nunca chama o SO direto, então --dry-run e os

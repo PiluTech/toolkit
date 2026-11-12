@@ -9,8 +9,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/PiluVitu/toolkit/internal/buildinfo"
-	"github.com/PiluVitu/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/buildinfo"
+	"github.com/PiluTech/toolkit/internal/exec"
 )
 
 // Systemd registra a retomada como unit systemd de SISTEMA, oneshot, no boot e depois de

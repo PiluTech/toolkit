@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/PiluVitu/toolkit/internal/buildinfo"
-	"github.com/PiluVitu/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/buildinfo"
+	"github.com/PiluTech/toolkit/internal/exec"
 )
 
 // Launchd registra a retomada como LaunchAgent do usuário (não LaunchDaemon: o brew não roda como root e

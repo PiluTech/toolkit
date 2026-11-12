@@ -7,10 +7,10 @@ import (
 	"testing"
 	"unicode/utf16"
 
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/exec/exectest"
-	"github.com/PiluVitu/toolkit/internal/resume"
-	"github.com/PiluVitu/toolkit/internal/resume/resumetest"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/exec/exectest"
+	"github.com/PiluTech/toolkit/internal/resume"
+	"github.com/PiluTech/toolkit/internal/resume/resumetest"
 )
 
 const winPS = `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`

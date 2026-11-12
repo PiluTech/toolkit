@@ -3,8 +3,8 @@ package resume
 import (
 	"fmt"
 
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/platform"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/platform"
 )
 
 // Config reúne o que cada registrador precisa.

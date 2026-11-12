@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PiluVitu/toolkit/internal/catalog"
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/providers"
+	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/providers"
 )
 
 // env: sem perguntas do debconf. Com Elevate vira "sudo -n -- env DEBIAN_FRONTEND=noninteractive apt-get ...".

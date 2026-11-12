@@ -5,7 +5,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/PiluVitu/toolkit/internal/resume"
+	"github.com/PiluTech/toolkit/internal/resume"
 )
 
 // Fake registra as chamadas e guarda se há retomada registrada.

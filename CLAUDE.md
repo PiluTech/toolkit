@@ -46,7 +46,7 @@ Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (
 - Gate: `scripts/ci.sh` (ou `make ci`; `~/.local/bin` entra no FIM do PATH; o gofmt vai por `scripts/check-gofmt.sh`, que reprova também sintaxe quebrada, com autoteste em `scripts/check-gofmt_test.sh`). Actions do workflow fixadas por SHA de commit (versão em comentário) e checkout com `persist-credentials: false`. Heavy pelo build-slot: `~/.maestri-local/build-slot.sh ./scripts/ci.sh`. `.github/workflows/ci.yml` só em `workflow_dispatch`.
 
 ## Regras do projeto
-- Escrever como repositório público, mesmo enquanto ele está privado: nada de dado de cliente, segredo, IP, e-mail ou referência a projetos privados em código, docs, testes ou mensagens de commit.
+- Escrever como repositório público, o repositório é público: nada de dado de cliente, segredo, IP, e-mail ou referência a projetos privados em código, docs, testes ou mensagens de commit.
 - Trabalhar por fases do briefing e parar ao fim de cada uma para revisão.
 - Nunca executar instaladores, winget, dism, apt ou reboot de verdade na máquina de desenvolvimento: usar o `exec.Runner` mockado (`internal/exec/exectest`) ou `--dry-run`.
 - Nada de download sem SHA-256 e nenhum `curl | bash` de terceiros. Nada que contorne licenciamento.

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/PiluVitu/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/catalog"
 )
 
 type fakeProvider struct {

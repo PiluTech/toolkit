@@ -4,7 +4,7 @@ import (
 	"io/fs"
 	"sync"
 
-	"github.com/PiluVitu/toolkit/internal/resume"
+	"github.com/PiluTech/toolkit/internal/resume"
 )
 
 // MemFS é um resume.FS em memória: os testes dos registradores nunca tocam o disco real.

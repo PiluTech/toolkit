@@ -5,8 +5,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/exec/exectest"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/exec/exectest"
 )
 
 func TestFakeRespostasEmSequenciaERepeteUltima(t *testing.T) {

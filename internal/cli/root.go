@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/PiluVitu/toolkit/internal/buildinfo"
-	"github.com/PiluVitu/toolkit/internal/msg"
+	"github.com/PiluTech/toolkit/internal/buildinfo"
+	"github.com/PiluTech/toolkit/internal/msg"
 )
 
 // NewRootCmd cria o comando raiz com saída e erro injetáveis (testes usam buffers).

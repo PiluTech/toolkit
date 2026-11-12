@@ -6,7 +6,7 @@ package recipes
 import (
 	"time"
 
-	"github.com/PiluVitu/toolkit/internal/platform"
+	"github.com/PiluTech/toolkit/internal/platform"
 )
 
 // Kind é o tipo da receita.
