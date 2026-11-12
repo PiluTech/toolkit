@@ -182,14 +182,14 @@ caracteres: primeira frase na lista, texto inteiro no log do item.
 3. A execução reaproveita `providers.InstallApp` e `recipes.Engine`; a TUI injeta o próprio `Prompter`.
    Nenhum teste roda comando real.
 
-## Decisões (padrões adotados; as marcadas esperam o OK do Paulo)
+## Decisões (variante A confirmada pelo Paulo; as decisões 1 a 5 abaixo foram mantidas por ele)
 
 1. **App com versões**: seguir o briefing (Espaço/Enter abre a lista já em `latest`, um Enter confirma).
-   *Proposta do designer, a validar:* Espaço marca com `latest` e `v` abre a lista.
+   *Proposta do designer, não adotada:* Espaço marca com `latest` e `v` abre a lista.
 2. Revisão: foco inicial em Voltar, `s` executa (igual ao `[s/N]` do CLI).
 3. Ordem do lote: apps, depois receitas, a que reinicia por último.
-4. Diagnóstico só leitura direto exigiria um campo novo no schema da receita (fase 3 já aprovada): **por
-   ora todo diagnóstico passa pela Revisão**. Campo novo só com OK do Paulo.
+4. Diagnóstico só leitura direto exigiria um campo novo no schema da receita (fase 3 já aprovada): **todo
+   diagnóstico passa pela Revisão** (confirmado). Campo novo só com OK do Paulo.
 5. `q` durante a execução pergunta e encerra o item atual, descartando a fila.
 6. Conjunto ASCII atrás de `--ascii`, depois.
 
