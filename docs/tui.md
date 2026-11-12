@@ -193,13 +193,70 @@ caracteres: primeira frase na lista, texto inteiro no log do item.
 5. `q` durante a execução pergunta e encerra o item atual, descartando a fila.
 6. Conjunto ASCII atrás de `--ascii`, depois.
 
+## O que falta para fechar a fase 4 (PR 5c: Planner e Runner reais)
+
+Estado: as abas, a Revisão, a execução, o Log e o `toolkit` sem argumentos existem (PR1 a PR5b); os backends de
+Apps e Receitas são reais e só leem. Faltam as implementações reais das interfaces `tui.Planner` e `tui.Runner`
+(em `internal/cli`, ligadas por `Model.SetExec` dentro de `runRoot`). Até lá, Enter na TUI avisa "use toolkit
+install ou toolkit recipe run".
+
+**Planner real** (`internal/cli/tui_exec.go`), sem segundo planejador:
+- Apps: para cada `Mark` montar o alvo como o `install` (`resolveVersion(app, mark.Version)`; erro vira
+  `Plan.Problems`) e rodar `installPass(ctx, buf, errBuf, deps, targets, true)` (passe com `DryRunRunner`:
+  leituras reais, mutações só registradas). `Commands` saem de `dry.Plan()` exibidos por
+  `exec.OSRunner{GOOS, Euid}.Display` (mesmo GOOS/euid do runner real); `Warnings` do `OSRunner.UsesSudo`
+  (aviso de `sudo -n`, inclusive para passo com `Secret`), do flatpak (runtimes em GB, instalação só de sistema) e
+  de reinício; `Changes` do texto do passe ("seria instalado com apt", "já instalado, versão X"); apps que
+  falham no plano entram em `Problems` e nada é instalado (mesma regra do `install`).
+- Receitas e diagnósticos: `setupRecipes` + `rt.set.Get`; `Changes` com "receita <id>: N etapas"; `Warnings` de
+  `RequiresAdmin` e de etapas com reinício; `Commands` por etapa com `recipes.BuildCmd`. Script PowerShell vai
+  LEGÍVEL com a nota "(enviado como -EncodedCommand)", e o teste confere que o texto mostrado é exatamente o
+  script que foi codificado. Opcional: `Engine.Run` com `DryRun` (os `check` leem de verdade) para dizer quais
+  etapas seriam puladas.
+- Pré-checagens de `runRecipeRun` entram como `Problems`: receita com reinício no Linux sem sudo
+  (`ErrRecipeNeedsSudo`), `requires_admin` no Windows sem terminal elevado, SO errado.
+- `Summary` ("Vai instalar N apps e rodar M receitas. Nada foi executado ainda."), `Env` ("Linux amd64 · usuário
+  ana", de `platform.Info`) e `NothingToDo` (tudo instalado e nenhuma receita).
+
+**Runner real** (`internal/cli/tui_run.go`), sem comando real nos testes (`FakeRunner`):
+- Ordem do lote (decisão 3): apps, depois receitas, a que reinicia por último (`hasReboot`). Emite `EventItems`
+  com os nomes antes de começar e fecha o canal ao terminar.
+- App: `installOne(ctx, w, reg, goos, app, vars, version, false)` com `w` que quebra a saída em linhas e emite
+  `EventLog`; `ErrNeedsAdmin` imprime a dica `sudo -v` no log.
+- Receita: `buildEngine(rt, deps, rd, flags, id, out, errOut)` hoje monta o `Prompter` só com terminal
+  (`ttyPrompter`): extrair a escolha do Prompter para um parâmetro e injetar um `eventPrompter` cujo `Confirm`
+  envia `EventRebootPrompt` com `Reply` **bufferizado (cap 1)** e espera a resposta OU `ctx.Done()`. O
+  `RunOptions.Yes` fica falso (a pergunta de reinício existe). Mapear `recipes.Report` para `EventItemDone`
+  (`ItemOK`, `ItemFailed`, `ItemReboot`, `ItemSkipped`).
+- Cancelamento (`q` + `s`): o `ctx` é cancelado, o item atual encerra e o resto vira `ItemNotRun`; um pedido de
+  reinício pendente recebe "não" (já tratado na raiz).
+- Log em arquivo: `openRunLog` ao lado do estado; se não gravar, `LogTab.Warn("Não deu para gravar o log em
+  arquivo; a execução continua e o log fica só na tela.")`.
+- Depois da execução a aba Apps deve reler os estados (`runDoneMsg` -> recarregar `Status`).
+- Lotes de log a cada 50 ms (spec): hoje cada linha é um evento; agrupar no Runner se o volume pesar.
+- `Selection` carrega só `Mark`/`RecipeMark`: se a ordenação por reinício ficar no Runner, falta o dado de
+  reinício por receita (`RecipeMark.Reboots bool`) ou o Runner consulta o conjunto de receitas.
+
+Segurança do 5c: todo texto que o Planner/Runner devolver passa por `textsafe` na raiz (já é assim em `Plan`,
+`Event` e `LogTab`); nenhum teste executa instalador, `dism`, `winget`, `apt` ou reboot de verdade.
+
 ## Pendências fora da TUI (registradas aqui para a próxima sessão)
 
-- `toolkit update` (baixa a última release, confere o SHA-256 pelo `checksums.txt` com o mesmo código do
-  download/bootstrap, troca o binário de forma atômica) e aviso de versão nova na TUI e no fim dos comandos
-  (no máximo 1 consulta por dia, cache em `~/.cache`, desligável por flag/variável, nunca bloqueia nem
-  atrasa o comando, mostra as notas da release do GitHub). Entra antes da v0.1.0 se couber.
+- **`toolkit update`** (depois da fase 4; entra antes da v0.1.0 se couber): baixa a última release do GitHub
+  (`PiluTech/toolkit`), confere o SHA-256 pelo `checksums.txt` com o MESMO código do `internal/download` e do
+  bootstrap (nunca instala sem hash), e troca o binário de forma atômica (escreve `<exe>.new` na mesma pasta com
+  0755, confere de novo, renomeia por cima; no Windows renomeia o `.exe` em uso para `.old` e o apaga no
+  próximo start). Flags: `--version vX.Y.Z`, `--dry-run`, `--check` (só diz se há versão nova). Recusa
+  rodar de um binário que não é o instalado pelo bootstrap quando o destino não é gravável (sem `sudo`).
+  Notas da release vêm da API do GitHub e passam por `textsafe`.
+- **Aviso de versão nova** na TUI (`Options.Latest`, faixa `↑ v0.2.0 disponível (u)`, tecla `u` abre as notas e
+  oferece `toolkit update`) e no fim dos comandos: no máximo 1 consulta por dia, cache em `~/.cache/toolkit/`
+  (`XDG_CACHE_HOME`; só versão, data e notas, 0600), desligável por `--no-update-check` e pela variável
+  `TOOLKIT_NO_UPDATE_CHECK=1`, NUNCA bloqueia nem atrasa o comando (consulta em goroutine com timeout curto,
+  resultado só aparece na próxima execução ou quando chegar a tempo), nunca roda sem terminal (não polui
+  `--json`, scripts nem CI) e usa o mesmo `download` (https, host público, sem proxy de ambiente, limite de
+  tamanho).
 - Menores da fase 5 (PR à parte): lista completa de IPs reservados no `download`; dmg não aceitar EULA
   sozinho; conferir assinatura de pkg/dmg; nomes reservados e ADS no Windows.
-- `printPlan` com o mesmo GOOS/euid do runner real (como root o plano não mostra `sudo`) e cabeçalhos do
-  plano sem repetir no `install` real: corrigir antes ou dentro do PR da Revisão, com teste.
+- Release v0.1.0: `scripts/release.sh` pronto; assinatura/notarização macOS e `gh release` só no dia, com o
+  Touch ID do Paulo. Smoke manual das fases 2 e 3 (e da TUI) em Windows 11, macOS e Linux ainda por fazer.

@@ -96,24 +96,10 @@ func (d Deps) interactive() bool {
 	return stdinIsTerminal()
 }
 
-// stdinIsTerminal: o stdin é um dispositivo de caracteres que NÃO é o descarte (/dev/null e NUL também são
-// dispositivos de caracteres, mas não são alguém para responder). Sem isso "toolkit install x </dev/null"
-// pareceria interativo.
-func stdinIsTerminal() bool {
-	st, err := os.Stdin.Stat()
-	if err != nil {
-		return false
-	}
-	nul, err := os.Stat(os.DevNull)
-	return isTerminal(st, nul, err == nil)
-}
-
-func isTerminal(stdin, devNull os.FileInfo, haveNull bool) bool {
-	if stdin.Mode()&os.ModeCharDevice == 0 {
-		return false
-	}
-	return !haveNull || !os.SameFile(stdin, devNull)
-}
+// stdinIsTerminal diz se o stdin é um terminal de verdade: a MESMA detecção da saída (fileIsTerminal, por
+// fd). Dispositivo de caracteres NÃO basta: /dev/null, /dev/zero e NUL também são, e não são alguém para
+// responder ("toolkit install x </dev/null" não pode parecer interativo, nem `toolkit </dev/zero` abrir a TUI).
+func stdinIsTerminal() bool { return fileIsTerminal(os.Stdin) }
 
 func (d Deps) checkElevation() func(exec.Cmd) error {
 	if d.CheckElevation != nil {

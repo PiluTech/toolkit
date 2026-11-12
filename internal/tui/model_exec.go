@@ -57,7 +57,12 @@ func (m *Model) execKey(k string) (tea.Model, tea.Cmd, bool) {
 		m.notice = ""
 		return m, nil, false
 	}
-	if k == "enter" && !m.tabs[m.active].Capturing() && m.modal == modalNone && m.planner != nil {
+	if k == "enter" && !m.tabs[m.active].Capturing() && m.modal == modalNone {
+		if m.planner == nil || m.runner == nil {
+			// transição: a execução pela TUI chega no PR seguinte; os comandos do CLI já fazem tudo
+			m.notice = "executar pela TUI ainda não está ligado: use toolkit install ou toolkit recipe run"
+			return m, nil, true
+		}
 		return m, m.startReview(), true
 	}
 	return m, nil, false

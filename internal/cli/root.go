@@ -26,6 +26,10 @@ func NewRootCmdWith(out, errOut io.Writer, deps Deps) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	var noTUI bool
+	root.Flags().BoolVar(&noTUI, "no-tui", false, msg.RootNoTUI)
+	root.Args = cobra.NoArgs
+	root.RunE = func(cmd *cobra.Command, _ []string) error { return runRoot(cmd, deps, RecipeDeps{}, noTUI) }
 	root.SetOut(out)
 	root.SetErr(errOut)
 	root.AddCommand(newVersionCmd(), newListCmd(deps), newInstallCmd(deps))

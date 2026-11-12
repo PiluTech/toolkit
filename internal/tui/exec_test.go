@@ -732,3 +732,16 @@ func firstCluster(s string) string {
 	c, _, _, _ := uniseg.FirstGraphemeClusterInString(s, -1)
 	return c
 }
+
+// Sem Planner/Runner ligados (transição), Enter só avisa e não abre a Revisão.
+func TestEnterWithoutExecWiringOnlyWarns(t *testing.T) {
+	m, _, _ := rootWithExec(t, &fakePlanner{plan: okPlan()}, &fakeRunner{script: scriptOK})
+	m.SetExec(context.Background(), nil, nil)
+	mkey(m, "space")
+	if cmd := mkey(m, "enter"); cmd != nil || m.mode != modeNav {
+		t.Fatal("sem execução ligada não abre a Revisão")
+	}
+	if !strings.Contains(m.render(), "executar pela TUI ainda não está ligado") {
+		t.Fatalf("aviso:\n%s", m.render())
+	}
+}
