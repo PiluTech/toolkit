@@ -10,6 +10,7 @@ import (
 
 	"github.com/PiluTech/toolkit/internal/buildinfo"
 	"github.com/PiluTech/toolkit/internal/msg"
+	"github.com/PiluTech/toolkit/internal/update"
 )
 
 // NewRootCmd cria o comando raiz com saída e erro injetáveis (testes usam buffers).
@@ -32,7 +33,7 @@ func NewRootCmdWith(out, errOut io.Writer, deps Deps) *cobra.Command {
 	root.RunE = func(cmd *cobra.Command, _ []string) error { return runRoot(cmd, deps, RecipeDeps{}, noTUI) }
 	root.SetOut(out)
 	root.SetErr(errOut)
-	root.AddCommand(newVersionCmd(), newListCmd(deps), newInstallCmd(deps))
+	root.AddCommand(newVersionCmd(), newListCmd(deps), newInstallCmd(deps), newUpdateCmd(deps))
 	root.AddCommand(newRecipeCmds(deps)...)
 	return root
 }
@@ -51,6 +52,9 @@ func newVersionCmd() *cobra.Command {
 
 // Execute roda o CLI e devolve o código de saída do processo.
 func Execute(ctx context.Context) int {
+	if exe, err := os.Executable(); err == nil {
+		update.CleanupOld(exe) // sobra ".old" de uma atualização no Windows (melhor esforço)
+	}
 	root := NewRootCmd(os.Stdout, os.Stderr)
 	if err := root.ExecuteContext(ctx); err != nil {
 		_, _ = io.WriteString(os.Stderr, "erro: "+err.Error()+"\n")
