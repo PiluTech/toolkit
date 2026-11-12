@@ -25,10 +25,9 @@ func (f *fakePlanner) Plan(_ context.Context, s Selection) (Plan, error) {
 
 // fakeRunner roda um roteiro de eventos; observa o cancelamento do ctx.
 type fakeRunner struct {
-	mu        sync.Mutex
-	script    func(ctx context.Context, sel Selection, ch chan<- Event)
-	gotSel    Selection
-	cancelled bool
+	mu     sync.Mutex
+	script func(ctx context.Context, sel Selection, ch chan<- Event)
+	gotSel Selection
 }
 
 func (f *fakeRunner) Run(ctx context.Context, sel Selection, ch chan<- Event) {
@@ -260,7 +259,7 @@ func TestReviewScrollsAndHasMoreHint(t *testing.T) {
 
 func TestDuringRunSpaceIsBlockedAndTabsStayReadable(t *testing.T) {
 	release := make(chan struct{})
-	r := &fakeRunner{script: func(ctx context.Context, _ Selection, ch chan<- Event) {
+	r := &fakeRunner{script: func(_ context.Context, _ Selection, ch chan<- Event) {
 		ch <- Event{Kind: EventItems, Items: []string{"Git"}}
 		ch <- Event{Kind: EventItemStarted, Index: 0}
 		<-release
@@ -351,7 +350,7 @@ func (m *Model) ctxDone() <-chan struct{} {
 func TestRebootPromptRepliesToExecutor(t *testing.T) {
 	for _, answer := range []string{"s", "n"} {
 		got := make(chan bool, 1)
-		r := &fakeRunner{script: func(ctx context.Context, _ Selection, ch chan<- Event) {
+		r := &fakeRunner{script: func(_ context.Context, _ Selection, ch chan<- Event) {
 			reply := make(chan bool, 1)
 			ch <- Event{Kind: EventItems, Items: []string{"Receita wsl-dev"}}
 			ch <- Event{Kind: EventRebootPrompt, Prompt: "Reiniciar agora para continuar a receita wsl-dev?", Reply: reply}
