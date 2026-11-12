@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/PiluVitu/toolkit/internal/buildinfo"
+	"github.com/PiluTech/toolkit/internal/buildinfo"
 )
 
 func run(t *testing.T, args ...string) (string, string, error) {

@@ -1,4 +1,4 @@
-module github.com/PiluVitu/toolkit
+module github.com/PiluTech/toolkit
 
 go 1.27.3
 
