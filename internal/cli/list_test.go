@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"unicode"
+
+	"github.com/PiluTech/toolkit/internal/download/downloadtest"
 )
 
 const embedded = `
@@ -36,7 +38,7 @@ apps:
 func listCmd(t *testing.T, goos string, args ...string) (string, error) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	cmd := NewRootCmdWith(&out, &errOut, Deps{GOOS: goos, EmbeddedYML: []byte(embedded)})
+	cmd := NewRootCmdWith(&out, &errOut, Deps{GOOS: goos, EmbeddedYML: []byte(embedded), Downloader: downloadtest.Forbidden(t)})
 	cmd.SetArgs(append([]string{"list"}, args...))
 	err := cmd.Execute()
 	return out.String(), err
@@ -139,7 +141,7 @@ func TestListCatalogoLocalInvalidoCitaArquivoELinha(t *testing.T) {
 func TestListErrosDeFlags(t *testing.T) {
 	cases := [][]string{
 		{"--catalog", "https://exemplo.com/c.yaml"},
-		{"--catalog", "https://exemplo.com/c.yaml", "--catalog-sha256", strings.Repeat("a", 64)},
+		{"--catalog", "https://exemplo.com/c.yaml", "--catalog-sha256", "xyz"},
 		{"--catalog-sha256", strings.Repeat("a", 64)},
 		{"--catalog-replace"},
 		{"--os", "beos"},

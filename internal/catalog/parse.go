@@ -21,7 +21,7 @@ var (
 	repoRe   = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
 )
 
-var validTypes = []string{"msi", "exe", "zip", "tar.gz", "dmg", "deb", "rpm", "appimage"}
+var validTypes = []string{"msi", "exe", "zip", "tar.gz", "pkg", "dmg", "deb", "rpm", "appimage"}
 
 // fields: campos permitidos por provider (obrigatórios em required).
 type spec struct {
