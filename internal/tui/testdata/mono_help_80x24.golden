@@ -1,0 +1,24 @@
+ toolkit  [1 Apps]  2 Receitas   3 Diagnóstico   4 Log                   v0.1.0 
+────────────────────────────────────────────────────────────────────────────────
+ TECLAS
+
+ Tab / Shift+Tab      próxima aba / anterior
+ 1 a 4                Apps, Receitas, Diagnóstico, Log
+ ↑ ↓  j k             mover o cursor ou rolar
+ g / G  PgUp / PgDn   início, fim, página
+ → l  ← h             foco nas etapas / volta à lista (Receitas, Diagnóstico)
+ espaço               marcar ou desmarcar
+ v                    lista de versões (app com versões)
+ /                    buscar (Esc limpa)
+ Enter                revisar o que está marcado
+ s                    executar na Revisão / responder sim
+ f                    seguir o fim do log
+ u                    notas da versão nova (quando há)
+ Esc                  volta um nível: modal, busca, Revisão
+ q  Ctrl+C            sair (durante a execução pergunta antes)
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+ Ajuda                                                                          
+ Esc fechar  q sair
