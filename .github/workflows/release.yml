@@ -1,0 +1,138 @@
+name: release
+
+# Release do toolkit. Dispara SÓ por push de tag vX.Y.Z (nunca por pull_request, push comum nem manual): o
+# repositório é público e PR de fork não pode ver segredo. O release sai como RASCUNHO; quem publica é o Paulo,
+# depois de conferir (docs/release.md). Os segredos vivem só no environment "release" (restrito a tags v*, com
+# revisor obrigatório) e só o job sign-macos o usa.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+# Nenhuma permissão por padrão; cada job pede o mínimo.
+permissions: {}
+
+# Uma release por tag; uma em andamento NUNCA é cancelada por outra.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: a tag é vX.Y.Z e o commit dela está na main
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "tag inválida: $TAG" >&2; exit 1; }
+          git merge-base --is-ancestor HEAD origin/main || { echo "o commit da tag $TAG não está na main" >&2; exit 1; }
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: golangci-lint v2.15.0 (binário oficial, SHA-256 de tools.sha256)
+        run: |
+          ./scripts/instalar-ferramentas.sh "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: gate (scripts/ci.sh)
+        run: ./scripts/ci.sh
+      - name: 6 binários, bootstraps e checksums.txt (scripts/release.sh, sem assinatura)
+        env:
+          TAG: ${{ github.ref_name }}
+        run: ./scripts/release.sh --version "$TAG" --out dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist-build
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  sign-macos:
+    name: codesign e notarização (macos)
+    needs: build
+    runs-on: macos-latest
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist-build
+          path: dist/
+      - name: assina e notariza os 2 binários macOS, recalcula checksums.txt
+        env:
+          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
+          NOTARY_P8_BASE64: ${{ secrets.NOTARY_P8_BASE64 }}
+        run: |
+          chmod +x dist/toolkit_darwin_amd64 dist/toolkit_darwin_arm64
+          ./scripts/release-sign-macos.sh --dir dist
+      - name: o binário darwin assinado roda e traz a versão da tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          codesign --verify --strict dist/toolkit_darwin_arm64
+          dist/toolkit_darwin_arm64 version | grep -F "$TAG"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist-signed
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  draft:
+    name: rascunho do release (ubuntu)
+    needs: [build, sign-macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # só aqui: cria o release (rascunho)
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist-signed
+          path: dist/
+      - name: confere checksums e a versão do binário linux
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum -c checksums.txt
+          for f in toolkit_windows_amd64.exe toolkit_windows_arm64.exe toolkit_linux_amd64 toolkit_linux_arm64 toolkit_darwin_amd64 toolkit_darwin_arm64 unix.sh win.ps1; do
+            grep -q " ${f}$" checksums.txt || { echo "checksums.txt não lista $f" >&2; exit 1; }
+          done
+          [ "$(wc -l < checksums.txt)" -eq 8 ] || { echo "checksums.txt deveria ter 8 linhas" >&2; exit 1; }
+          [ "$(find . -maxdepth 1 -type f | wc -l)" -eq 9 ] || { echo "dist deveria ter 9 arquivos" >&2; find . -maxdepth 1 >&2; exit 1; }
+          chmod +x toolkit_linux_amd64
+          ./toolkit_linux_amd64 version | grep -F "$TAG"
+      - name: cria o release como RASCUNHO (quem publica é o Paulo)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          sed "s/{{VERSION}}/${TAG}/g" .github/release-notes.md.tmpl > "$RUNNER_TEMP/notes.md"
+          pre=()
+          case "$TAG" in *-*) pre=(--prerelease) ;; esac
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
+            --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" "${pre[@]}"
