@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"slices"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -131,6 +132,7 @@ func (m *Model) reviewKey(k string) (tea.Model, tea.Cmd, bool) {
 func (m *Model) execute() tea.Cmd {
 	// Executar vale só para o plano EXIBIDO: a seleção é a que foi planejada, não a das abas agora
 	sel := m.review.sel
+	sel.Approved = slices.Clone(m.review.plan.Approved)
 	parent := m.ctx
 	if parent == nil {
 		parent = context.Background()

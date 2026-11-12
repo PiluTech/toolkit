@@ -155,6 +155,19 @@ func (t *AppsTab) loadCmd() tea.Cmd {
 	}
 }
 
+// Reload relê o estado de todos os apps (depois de uma execução): zera o que já foi lido e refaz a fila.
+func (t *AppsTab) Reload() tea.Cmd {
+	t.status = map[string]AppStatus{}
+	t.queue = t.queue[:0]
+	for _, a := range t.apps {
+		if !a.NoInstaller {
+			t.queue = append(t.queue, a.ID)
+		}
+	}
+	t.prioritizeVisible()
+	return tea.Batch(t.pump(), tick())
+}
+
 // Title implementa Tab.
 func (t *AppsTab) Title() string { return "Apps" }
 

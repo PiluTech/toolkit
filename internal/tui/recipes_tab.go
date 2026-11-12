@@ -96,6 +96,12 @@ func NewRecipesTab(ctx context.Context, be RecipesBackend, th Theme, diagnostic 
 // SetContext troca o contexto das chamadas ao backend (o Run cancela o dele ao sair).
 func (t *RecipesTab) SetContext(ctx context.Context) { t.ctx = ctx }
 
+// Reload relê as receitas e o andamento (depois de uma execução).
+func (t *RecipesTab) Reload() tea.Cmd {
+	t.loading = true
+	return t.Init()
+}
+
 // Title implementa Tab.
 func (t *RecipesTab) Title() string {
 	if t.diagnostic {

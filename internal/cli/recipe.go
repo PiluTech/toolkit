@@ -292,7 +292,7 @@ func runRecipeRun(ctx context.Context, out, errOut io.Writer, deps Deps, rd Reci
 			return fmt.Errorf(msg.ErrRecipeNeedsAdminWin, r.ID)
 		}
 	}
-	eng, closeLog, err := buildEngine(rt, deps, rd, f, r.ID, out, errOut)
+	eng, closeLog, err := buildEngine(rt, deps, rd, f, r.ID, nil, nil, out, errOut)
 	if err != nil {
 		return err
 	}
@@ -311,7 +311,7 @@ func runResume(ctx context.Context, out, errOut io.Writer, deps Deps, rd RecipeD
 	if err != nil {
 		return err
 	}
-	eng, closeLog, err := buildEngine(rt, deps, rd, f, "resume", out, errOut)
+	eng, closeLog, err := buildEngine(rt, deps, rd, f, "resume", nil, nil, out, errOut)
 	if err != nil {
 		return err
 	}
@@ -329,7 +329,7 @@ func runRecipeReset(ctx context.Context, out, errOut io.Writer, deps Deps, rd Re
 	if err != nil {
 		return err
 	}
-	eng, closeLog, err := buildEngine(rt, deps, rd, recipeFlags{}, "reset", out, errOut)
+	eng, closeLog, err := buildEngine(rt, deps, rd, recipeFlags{}, "reset", nil, nil, out, errOut)
 	if err != nil {
 		return err
 	}
@@ -425,7 +425,10 @@ func finishReport(out io.Writer, rep recipes.Report, err error) error {
 
 // buildEngine monta a Engine sobre o runtime. Em --dry-run o Runner é o DryRunRunner (só leituras
 // executam), nenhum log é criado e nada toca state, retomada ou reboot.
-func buildEngine(rt *recipeRuntime, deps Deps, rd RecipeDeps, f recipeFlags, logName string, out, errOut io.Writer) (*recipes.Engine, func(), error) {
+// prompter nil = o do terminal (ttyPrompter, só com terminal); a TUI injeta o dela (pergunta por evento). wrap
+// (nil = nenhum) envolve SÓ o Runner dos passos e do `install:` (a TUI põe a lista de permissão do plano aprovado);
+// o registro da retomada e o reinício seguem no Runner puro.
+func buildEngine(rt *recipeRuntime, deps Deps, rd RecipeDeps, f recipeFlags, logName string, prompter recipes.Prompter, wrap func(exec.Runner) exec.Runner, out, errOut io.Writer) (*recipes.Engine, func(), error) {
 	runner := rt.runner
 	if f.dryRun {
 		dr := exec.NewDryRunRunner(rt.runner)
@@ -444,10 +447,14 @@ func buildEngine(rt *recipeRuntime, deps Deps, rd RecipeDeps, f recipeFlags, log
 	}
 	logger, logPath, closeLog := openRunLog(rt, rd, f, logName, errOut)
 
+	stepRunner := runner
+	if wrap != nil {
+		stepRunner = wrap(runner)
+	}
 	idepsRunner := deps
-	idepsRunner.NewRunner = func() exec.Runner { return runner }
+	idepsRunner.NewRunner = func() exec.Runner { return stepRunner }
 	eng := &recipes.Engine{
-		Runner:     runner,
+		Runner:     stepRunner,
 		Store:      rt.store,
 		Resume:     reg,
 		Installer:  catalogInstaller{deps: idepsRunner, out: out, errOut: errOut, goos: string(rt.info.OS)},
@@ -459,7 +466,10 @@ func buildEngine(rt *recipeRuntime, deps Deps, rd RecipeDeps, f recipeFlags, log
 		Clock:      rd.now,
 		Log:        logger,
 	}
-	if deps.interactive() {
+	switch {
+	case prompter != nil:
+		eng.Prompter = prompter
+	case deps.interactive():
 		eng.Prompter = ttyPrompter{in: bufio.NewReader(deps.stdin()), out: out}
 	}
 	return eng, closeLog, nil

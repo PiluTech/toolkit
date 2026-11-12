@@ -193,52 +193,48 @@ caracteres: primeira frase na lista, texto inteiro no log do item.
 5. `q` durante a execução pergunta e encerra o item atual, descartando a fila.
 6. Conjunto ASCII atrás de `--ascii`, depois.
 
-## O que falta para fechar a fase 4 (PR 5c: Planner e Runner reais)
+## Planner e Runner reais (PR 5c, feito)
 
-Estado: as abas, a Revisão, a execução, o Log e o `toolkit` sem argumentos existem (PR1 a PR5b); os backends de
-Apps e Receitas são reais e só leem. Faltam as implementações reais das interfaces `tui.Planner` e `tui.Runner`
-(em `internal/cli`, ligadas por `Model.SetExec` dentro de `runRoot`). Até lá, Enter na TUI avisa "use toolkit
-install ou toolkit recipe run".
+`internal/cli/tui_exec.go`, ligados em `runRoot` por `tui.Options.Planner/Runner` (o `tui.run` chama `SetExec` com o
+ctx que ele cancela ao sair).
 
-**Planner real** (`internal/cli/tui_exec.go`), sem segundo planejador:
-- Apps: para cada `Mark` montar o alvo como o `install` (`resolveVersion(app, mark.Version)`; erro vira
-  `Plan.Problems`) e rodar `installPass(ctx, buf, errBuf, deps, targets, true)` (passe com `DryRunRunner`:
-  leituras reais, mutações só registradas). `Commands` saem de `dry.Plan()` exibidos por
-  `exec.OSRunner{GOOS, Euid}.Display` (mesmo GOOS/euid do runner real); `Warnings` do `OSRunner.UsesSudo`
-  (aviso de `sudo -n`, inclusive para passo com `Secret`), do flatpak (runtimes em GB, instalação só de sistema) e
-  de reinício; `Changes` do texto do passe ("seria instalado com apt", "já instalado, versão X"); apps que
-  falham no plano entram em `Problems` e nada é instalado (mesma regra do `install`).
-- Receitas e diagnósticos: `setupRecipes` + `rt.set.Get`; `Changes` com "receita <id>: N etapas"; `Warnings` de
-  `RequiresAdmin` e de etapas com reinício; `Commands` por etapa com `recipes.BuildCmd`. Script PowerShell vai
-  LEGÍVEL com a nota "(enviado como -EncodedCommand)", e o teste confere que o texto mostrado é exatamente o
-  script que foi codificado. Opcional: `Engine.Run` com `DryRun` (os `check` leem de verdade) para dizer quais
-  etapas seriam puladas.
-- Pré-checagens de `runRecipeRun` entram como `Problems`: receita com reinício no Linux sem sudo
-  (`ErrRecipeNeedsSudo`), `requires_admin` no Windows sem terminal elevado, SO errado.
-- `Summary` ("Vai instalar N apps e rodar M receitas. Nada foi executado ainda."), `Env` ("Linux amd64 · usuário
-  ana", de `platform.Info`) e `NothingToDo` (tudo instalado e nenhuma receita).
-
-**Runner real** (`internal/cli/tui_run.go`), sem comando real nos testes (`FakeRunner`):
-- Ordem do lote (decisão 3): apps, depois receitas, a que reinicia por último (`hasReboot`). Emite `EventItems`
-  com os nomes antes de começar e fecha o canal ao terminar.
-- App: `installOne(ctx, w, reg, goos, app, vars, version, false)` com `w` que quebra a saída em linhas e emite
-  `EventLog`; `ErrNeedsAdmin` imprime a dica `sudo -v` no log.
-- Receita: `buildEngine(rt, deps, rd, flags, id, out, errOut)` hoje monta o `Prompter` só com terminal
-  (`ttyPrompter`): extrair a escolha do Prompter para um parâmetro e injetar um `eventPrompter` cujo `Confirm`
-  envia `EventRebootPrompt` com `Reply` **bufferizado (cap 1)** e espera a resposta OU `ctx.Done()`. O
-  `RunOptions.Yes` fica falso (a pergunta de reinício existe). Mapear `recipes.Report` para `EventItemDone`
-  (`ItemOK`, `ItemFailed`, `ItemReboot`, `ItemSkipped`).
-- Cancelamento (`q` + `s`): o `ctx` é cancelado, o item atual encerra e o resto vira `ItemNotRun`; um pedido de
-  reinício pendente recebe "não" (já tratado na raiz).
-- Log em arquivo: `openRunLog` ao lado do estado; se não gravar, `LogTab.Warn("Não deu para gravar o log em
-  arquivo; a execução continua e o log fica só na tela.")`.
-- Depois da execução a aba Apps deve reler os estados (`runDoneMsg` -> recarregar `Status`).
-- Lotes de log a cada 50 ms (spec): hoje cada linha é um evento; agrupar no Runner se o volume pesar.
-- `Selection` carrega só `Mark`/`RecipeMark`: se a ordenação por reinício ficar no Runner, falta o dado de
-  reinício por receita (`RecipeMark.Reboots bool`) ou o Runner consulta o conjunto de receitas.
-
-Segurança do 5c: todo texto que o Planner/Runner devolver passa por `textsafe` na raiz (já é assim em `Plan`,
-`Event` e `LogTab`); nenhum teste executa instalador, `dism`, `winget`, `apt` ou reboot de verdade.
+- **`tuiPlanner`**: o MESMO passe do `toolkit install --dry-run` (`installPass` com `DryRunRunner`, leituras reais,
+  mutações só registradas), sem segundo planejador. `Commands` por `exec.OSRunner{GOOS, Euid}.Display` (como root
+  não mostra `sudo`); aviso de `sudo -n` por `OSRunner.UsesSudo`; flatpak/reinício em `Warnings`; app que falha no
+  plano, versão fora da lista e app fora do catálogo viram `Problems` (nada é instalado, o resto continua
+  planejado). Receitas e diagnósticos: `Changes` ("receita x (Nome): N etapas"), `Warnings` (administrador,
+  reinício), pré-checagens do `recipe run` como `Problems` (reinício no Linux sem sudo, `requires_admin` no Windows
+  sem terminal elevado) e `Commands` por etapa; script PowerShell LEGÍVEL com "(enviado como -EncodedCommand)"
+  (teste: o texto exibido é exatamente o que `BuildCmd` codifica). `Env` e `Summary` ("Vai instalar N apps e rodar M
+  receitas. Nada foi executado ainda."); `NothingToDo` quando tudo já está instalado.
+- **`tuiRunner`**: fila apps -> receitas sem reinício -> receitas com reinício (`buildQueue`); app por `installOne`
+  (dica `sudo -v` no log), receita por `buildEngine` com o `eventPrompter` no lugar do `ttyPrompter` (`prompter`
+  nil = o do terminal); o `Confirm` do reinício vira `EventRebootPrompt` com `Reply` bufferizado (cap 1) e espera
+  a resposta OU o ctx. Reinício pedido (ou recusado) para a fila (`ItemReboot`, o resto `ItemNotRun`). Cancelar o
+  ctx encerra o item atual e marca o resto `ItemNotRun`. A saída dos comandos vai em `EventLog` por linha
+  (`lineWriter`, `\r` preservado). Log em arquivo `<LogDir>/tui-<data>.log` (0600) só com o ciclo de vida (item,
+  estado, erro), NUNCA a saída dos comandos; se não der para gravar, `EventWarn` e a execução continua.
+- **Plano = execução (Crivo no #41)**: a elevação das receitas segue a MESMA regra da engine (`runAction`): só com
+  `requires_admin`, fora do Windows e sem ser administrador, e vale para o `check` E para o `run` (o plano mostra
+  `verificar: ...` e o comando; o aviso de `sudo -n` acende por `OSRunner.UsesSudo` de cada comando, inclusive de
+  receita). Passo `install:` passa pelo MESMO passe do plano do install (`planTargets`) e mostra os comandos
+  reais, com sudo.
+- **Lista de permissão**: `Plan.Approved` (cada comando que muda o sistema, como o runner real o executa) viaja em
+  `Selection.Approved` e o `approvedRunner` só deixa mutação passar se a linha exibida estiver nela (leituras
+  passam); fora do plano = erro "comando fora do plano aprovado (mudou desde a Revisão)", sem executar. Falha
+  fechado (sem plano, nenhuma mutação). O filtro envolve só o Runner dos passos e do `install:`
+  (`buildEngine(..., wrap)`); o registro da retomada e o reinício seguem no Runner puro.
+- **Log em arquivo**: só status + CLASSE do erro (`needs-admin`, `not-found`, `hash-mismatch`, `not-approved`,
+  `cancelled`, `timeout`, `recipe-failed`, `error`...). A mensagem completa do erro (que os providers montam com a
+  1ª linha do stderr, `providers.Snippet`, podendo ter URL ou token) só vai à tela. Teste com stderr de URL/token.
+- **Limites documentados**: (a) o cancelamento (`q`+`s`) manda SIGTERM/SIGKILL ao grupo de processos do filho, mas
+  um filho que roda como ROOT via `sudo` não é alcançado por um SIGKILL do usuário: o item pode terminar sozinho
+  depois do cancelamento (o toolkit não o abandona, a engine registra o estado); (b) no Windows sem terminal
+  elevado, receita `requires_admin` já é `Problem` no plano (Executar fica bloqueado na Revisão), e um passo
+  elevado de app falha seguro por item (`ErrNotElevated`), sem afetar os demais.
+- **Depois da execução** (`runClosedMsg`) as abas `Reloader` (Apps, Receitas e Diagnóstico) releem o estado.
+- Pendente deste item: lotes de log a cada 50 ms (hoje cada linha é um evento) e o `RecipeMark.Reboots` (a ordem
+  por reinício consulta o conjunto de receitas no Runner).
 
 ## Pendências fora da TUI (registradas aqui para a próxima sessão)
 

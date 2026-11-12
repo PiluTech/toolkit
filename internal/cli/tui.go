@@ -72,7 +72,11 @@ func runRoot(cmd *cobra.Command, deps Deps, rd RecipeDeps, noTUI bool) error {
 		ctx = context.Background()
 	}
 	th := tui.Theme{Mono: os.Getenv("NO_COLOR") != "", Dark: true}
-	opts := tui.Options{Version: buildinfo.Version, Mono: th.Mono}
+	opts := tui.Options{
+		Version: buildinfo.Version, Mono: th.Mono,
+		Planner: &tuiPlanner{deps: deps, rd: rd},
+		Runner:  &tuiRunner{deps: deps, rd: rd, logDir: func() string { return runLogDir(deps, rd) }},
+	}
 	tabs := []tui.Tab{
 		tui.NewAppsTab(ctx, &appsBackend{deps: deps}, th, deps.GOOS),
 		tui.NewRecipesTab(ctx, &recipesBackend{deps: deps, rd: rd}, th, false),
@@ -212,4 +216,13 @@ func recipeInfo(r *recipes.Recipe) tui.RecipeInfo {
 		info.Steps = append(info.Steps, tui.StepInfo{ID: s.ID, Name: s.Name, Reboot: string(s.Reboot)})
 	}
 	return info
+}
+
+// runLogDir é a pasta dos logs de execução (ao lado do estado); vazio se não der para resolver.
+func runLogDir(deps Deps, rd RecipeDeps) string {
+	rt, err := setupRecipes(context.Background(), deps, rd)
+	if err != nil {
+		return ""
+	}
+	return rt.paths.LogDir
 }
