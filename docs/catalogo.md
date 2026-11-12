@@ -1,13 +1,16 @@
 # Catálogo de apps
 
-> Formato decidido ([decisoes.md](decisoes.md)), implementado na fase 1 (`internal/catalog`; a carga por URL com `--catalog-sha256` ainda não). Detalhes de cada
+> Formato decidido ([decisoes.md](decisoes.md)), implementado na fase 1 (`internal/catalog`) e, para a carga por URL, na fase 5 (`internal/cli` + `internal/download`). Detalhes de cada
 > provider em [arquitetura.md](arquitetura.md#33-providers).
 
 O catálogo padrão fica em `catalog/catalog.yaml` e vai embutido no binário. Um catálogo externo entra com
 `--catalog`:
 
 - `--catalog <arquivo>`: caminho local, aceito sem hash.
-- `--catalog <url> --catalog-sha256 <hash>`: URL só com o SHA-256 do arquivo. Sem o hash, é recusada.
+- `--catalog <url> --catalog-sha256 <hash>`: URL só com o SHA-256 do arquivo (64 hex). Sem o hash, ou com hash malformado, é recusada **antes** de qualquer
+  requisição. Vale para `toolkit list` e `toolkit install`. A URL segue a mesma política do provider `url` (https, host público, redirects revalidados, sem proxy
+  de ambiente), o arquivo é lido em memória até 1 MiB e o hash é conferido **antes** de o YAML ser lido; hash divergente = nada é carregado. Erros de YAML citam
+  `host/caminho:linha:coluna`. `--catalog-sha256` com arquivo local continua sendo erro.
 - Por padrão o externo é **mesclado** sobre o embutido, e um app com o mesmo id substitui o original.
   Com `--catalog-replace`, o externo substitui o embutido inteiro.
 
@@ -69,7 +72,7 @@ Qualquer texto do arquivo (chaves e valores: `name`, versões, `args`...) com ca
 | `github-release` | `repo`, `asset` | `sha256`, `type`, `args` | releases do repositório |
 | `url` | `url`, `sha256` | `type`, `args` | uma, a da URL |
 
-`type` é um de `msi`, `exe`, `zip`, `tar.gz`, `dmg`, `deb`, `rpm` e `appimage`. Se ficar vazio, vem da
+`type` é um de `msi`, `exe`, `zip`, `tar.gz`, `pkg`, `dmg`, `deb`, `rpm` e `appimage`. Se ficar vazio, vem da
 extensão do arquivo. `args` são os argumentos silenciosos de um `exe` ou `msi`; cada item tem de ser um
 texto (use aspas em números e booleanos) e passa pela validação de templates como os outros campos.
 
@@ -81,6 +84,48 @@ texto (use aspas em números e booleanos) e passa pela validação de templates 
 - Variável de template só vale **depois do host** (no caminho ou na query), nunca no host.
 - A URL é validada na carga (com os templates) e de novo depois da expansão (`catalog.CheckURL`).
 - O `sha256` é obrigatório no provider `url`.
+
+### Como o provider `url` instala
+
+O arquivo é baixado (`internal/download`: https, até 5 redirects revalidados, só IP público, limite de tamanho),
+o `sha256` é conferido **antes** de qualquer uso (divergência = `ErrHashMismatch`, sem retry) e só então roda o instalador do `type`:
+
+| `type` | SO | O que roda |
+|---|---|---|
+| `msi` | Windows | `msiexec.exe /i <arquivo> /qn /norestart <args>` (3010 e 1641 = reiniciar; exige administrador) |
+| `exe` | Windows | `<arquivo> <args>`; `args` é **obrigatório** (sem eles o instalador abriria a tela interativa) |
+| `pkg` | macOS | `installer -pkg <arquivo> -target /` (`sudo -n`) |
+| `dmg` | macOS | monta, instala o `.pkg` ou copia o `.app` (exatamente um dos dois na raiz) para `/Applications`, desmonta |
+| `deb` | Linux | `apt-get install -y --no-remove <arquivo>` (`sudo -n`) |
+| `rpm` | Linux | `dnf install -y <arquivo>` (ou `rpm -U` sem dnf; `sudo -n`) |
+| `zip`, `tar.gz` | todos | extrai em `<pasta de apps do usuário>/<id do app>` (Windows `%LOCALAPPDATA%\toolkit\apps`, Linux `$XDG_DATA_HOME/toolkit/apps` ou `~/.local/share/toolkit/apps`, macOS `~/Library/Application Support/toolkit/apps`). Recusa caminho absoluto, `..`, link simbólico, dispositivo e entrada repetida; a extração é feita num diretório de staging e só então substitui a versão anterior. **Não** põe nada no PATH |
+
+`args` só valem para `msi` e `exe` e vão sempre **depois** do arquivo. `appimage` ainda não é suportado. O `--dry-run` mostra o
+download (`baixar <url> (sha256 ..., até N MiB)`) e os comandos como serão executados, sem baixar nem executar nada.
+
+Limites: o provider `url` não sabe se o app já está instalado (`IsInstalled` é sempre "não": rodar de novo reinstala);
+só existe a versão da URL (para `app@versão`, use `{{version}}` na URL; o `sha256` fixado cobre UMA versão, as outras falham no hash);
+o proxy do ambiente não é usado.
+
+### Como o provider `github-release` instala
+
+`repo` (`dono/repositório`) e `asset` (glob de um nome de arquivo, ex.: `tool_*_{{os}}_{{arch}}.tar.gz`; sem barras) escolhem o arquivo da release
+mais recente (rascunho e pré-release não valem). `toolkit install app@1.2.3` escolhe a tag `v1.2.3` (ou `1.2.3`). O glob tem de casar com **exatamente um**
+asset (zero = não encontrado, vários = erro de ambiguidade). O tipo vem de `type` ou da extensão do glob; depois a instalação é a da tabela acima.
+
+O hash do asset vem, nesta ordem (decisão 18):
+
+1. `sha256` fixado no catálogo: é a autoridade (a API e os checksums nem são consultados);
+2. o arquivo de checksums da própria release (`checksums.txt`, `SHA256SUMS`, `sha256sums.txt`, `*_checksums.txt`, `<asset>.sha256`);
+3. o campo `digest` do asset na API (`sha256:...`).
+
+Se (2) e (3) existem e divergem, a instalação é recusada. Sem nenhum dos três, recusa **antes de baixar o asset**. Só o pin do catálogo é independente do GitHub (checksums e
+`digest` vêm do mesmo canal da release): para quem precisa de mais que integridade de transporte, fixe o `sha256`. A assinatura dos checksums (cosign, minisign, gpg) **não** é verificada ainda.
+
+A URL do asset vem da API mas só vale se for `https://github.com/<repo>/releases/download/...`; os redirects para a CDN do GitHub passam pela mesma checagem de
+URL do `url`. A API aceita `GITHUB_TOKEN` (opcional, contra o limite de requisições): ele é enviado **só** ao `api.github.com`, nunca aos downloads, e fora do formato de token
+(letras, números, `_ . -`) a execução é recusada. O `--dry-run` consulta a API e o arquivo de checksums (leituras) e mostra o asset e o hash que seriam usados, sem baixá-lo.
+`IsInstalled` é sempre "não" (como no `url`).
 
 ### Chaves repetidas e limites
 
