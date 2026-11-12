@@ -1,0 +1,24 @@
+ toolkit  [1 Apps]  2 Receitas   3 Diagnóstico   4 Log                   v0.1.0 
+────────────────────────────────────────────────────────────────────────────────
+ REVISÃO DO PLANO
+ Vai instalar 1 app e rodar 1 receita. Nada foi executado ainda.
+ Linux amd64 · usuário ana
+
+ AVISOS (1)
+ ! O apt roda com `sudo -n`: se o sudo pedir senha, rode `sudo -v` antes.
+
+ O QUE MUDA
+   instalar Git (apt)
+   receita linux-dev: 1 etapa
+
+ EXATAMENTE COMO SERÁ EXECUTADO
+sudo -n -- env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-remove git
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+ > [ Voltar ]       [ Executar ]                                                
+ Tab botão  s executar  Enter acionar  Esc voltar  ↑↓ rolar  q sair
