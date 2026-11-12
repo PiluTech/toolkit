@@ -7,6 +7,10 @@ de um catálogo, escolhe versões e roda receitas de várias etapas que continua
 > **Estado: em desenvolvimento, sem release ainda.** Os comandos abaixo mostram como a ferramenta vai
 > funcionar. Nada disso está publicado. "toolkit" é um nome provisório.
 
+## Atualizar
+
+`toolkit update` baixa a última release, confere o SHA-256 pelo `checksums.txt` e troca o binário (`--check` só diz se há versão nova, `--dry-run` mostra o que faria, `--version vX.Y.Z` escolhe a versão). Nunca usa `sudo`: se o binário está num diretório do sistema, rode o instalador de novo.
+
 ## Comandos de uma linha (planejados)
 
 Windows (PowerShell 5.1 ou 7, sem administrador):

@@ -47,6 +47,8 @@ type Deps struct {
 	Downloader *download.Downloader
 	// AppsDir é onde os arquivos compactados (zip, tar.gz) do provider url são extraídos (nil = pasta do usuário).
 	AppsDir func() (string, error)
+	// Update são os pontos injetáveis do `toolkit update` (zero = a release do GitHub e o binário em execução).
+	Update UpdateDeps
 	// GitHubToken devolve o token da API de releases do GitHub (nil = variável GITHUB_TOKEN). Só vai ao api.github.com.
 	GitHubToken func() string
 	// Detector monta o detector de apps instalados FORA do gerenciador (.dmg no macOS, instalador no Windows,
