@@ -48,7 +48,7 @@ Qualquer caso em que uma destas regras não se cumpra é uma vulnerabilidade:
 A release é feita localmente (`scripts/release.sh`): binários estáticos dos 6 alvos, `checksums.txt` calculado
 depois da assinatura e, no macOS, binários assinados com Developer ID e notarizados. As credenciais de
 notarização (key id, issuer e a chave .p8, lida do 1Password na hora para um arquivo temporário 600
-apagado ao final) nunca ficam no repositório. A criação da release no GitHub é um passo manual.
+apagado ao final) nunca ficam no repositório, nem o nome da identidade de assinatura. O script só compila com a árvore limpa e a tag da versão em HEAD, e só apaga o `--out` se ele for um subdiretório do repositório. A criação da release no GitHub é um passo manual.
 
 ## Fora do escopo
 

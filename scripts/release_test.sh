@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 # Testa o release.sh sem assinar, notarizar, ler o 1Password nem publicar nada: op, codesign, xcrun e
-# ditto são FALSOS (num PATH temporário) e só registram o que receberam. Saída em diretório temporário.
+# ditto são FALSOS (num PATH temporário) e só registram o que receberam. O script roda numa CÓPIA do
+# repositório em diretório temporário (git init + commit + tag), porque exige árvore limpa e tag = HEAD.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-script="$PWD/scripts/release.sh"
+src="$PWD"
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 fail() { echo "FALHOU (release): $*" >&2; exit 1; }
+
+# cópia do working tree (com as mudanças ainda não commitadas) num repositório limpo, com a tag v0.0.1 em HEAD
+repo="$tmp/repo"; mkdir "$repo"
+( cd "$src" && git ls-files -z --cached --others --exclude-standard | while IFS= read -r -d '' f; do [ -e "$f" ] && printf '%s\0' "$f"; done | xargs -0 tar cf - ) | tar xf - -C "$repo"
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.invalid GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.invalid
+( cd "$repo" && git init -q && git add -A && git commit -q -m copia && git tag v0.0.1 )
+script="$repo/scripts/release.sh"
 
 fake="$tmp/fakebin"; log="$tmp/calls.log"
 mkdir "$fake"; : >"$log"
@@ -44,8 +52,9 @@ chmod +x "$fake"/*
 
 export TOOLKIT_RELEASE_ENV="$tmp/nao-existe.env"   # nunca lê o arquivo real do usuário
 unset NOTARY_KEY_ID NOTARY_ISSUER NOTARY_P8_OP_REF TOOLKIT_SIGN_IDENTITY
-out="$tmp/dist"
-rel() { PATH="$fake:$PATH" "$script" "$@"; }
+out="$repo/dist"
+IDENT="Developer ID Application: Teste da Silva (ABCDE12345)"
+rel() { ( cd "$repo" && PATH="$fake:$PATH" "$script" "$@" ); }
 calls() { wc -l <"$log" | tr -d ' '; }
 
 # 1. versão inválida
@@ -53,7 +62,7 @@ rel --version 0.1 --out "$out" >"$tmp/o" 2>&1 && fail "versão inválida aceita"
 rel >"$tmp/o" 2>&1 && fail "sem --version aceito"
 
 # 2. dry-run (inclusive com --sign-macos): nada executa e nada é criado
-NOTARY_KEY_ID=KID NOTARY_ISSUER=ISS NOTARY_P8_OP_REF=op://x/y rel --version v0.0.1 --out "$out" --dry-run --sign-macos >"$tmp/o" 2>&1 || fail "dry-run falhou: $(cat "$tmp/o")"
+TOOLKIT_SIGN_IDENTITY="$IDENT" NOTARY_KEY_ID=KID NOTARY_ISSUER=ISS NOTARY_P8_OP_REF=op://x/y rel --version v0.0.1 --out "$out" --dry-run --sign-macos >"$tmp/o" 2>&1 || fail "dry-run falhou: $(cat "$tmp/o")"
 [ "$(grep -c 'go build' "$tmp/o")" = 6 ] || fail "dry-run deveria listar 6 builds"
 grep -q 'codesign --force --options runtime' "$tmp/o" || fail "dry-run sem passo de codesign"
 grep -q 'notarytool submit' "$tmp/o" || fail "dry-run sem passo de notarytool"
@@ -78,15 +87,15 @@ fi
 
 # 4. --sign-macos sem configuração: falha antes de compilar e sem chamar ferramenta
 rm -rf "$out"
-rel --version v0.0.1 --out "$out" --sign-macos >"$tmp/o" 2>&1 && fail "--sign-macos sem env foi aceito"
+TOOLKIT_SIGN_IDENTITY="$IDENT" rel --version v0.0.1 --out "$out" --sign-macos >"$tmp/o" 2>&1 && fail "--sign-macos sem env foi aceito"
 grep -q NOTARY "$tmp/o" || fail "mensagem não cita a variável faltante"
 [ -e "$out" ] && fail "criou dist antes de validar a configuração"
 [ "$(calls)" = 0 ] || fail "chamou ferramenta sem configuração"
 
 # 5. --sign-macos com ferramentas falsas
-NOTARY_KEY_ID=KID-TESTE NOTARY_ISSUER=ISSUER-TESTE NOTARY_P8_OP_REF=op://cofre/item rel --version v0.0.1 --out "$out" --sign-macos >"$tmp/o" 2>&1 || fail "assinatura (falsa) falhou: $(cat "$tmp/o")"
+TOOLKIT_SIGN_IDENTITY="$IDENT" NOTARY_KEY_ID=KID-TESTE NOTARY_ISSUER=ISSUER-TESTE NOTARY_P8_OP_REF=op://cofre/item rel --version v0.0.1 --out "$out" --sign-macos >"$tmp/o" 2>&1 || fail "assinatura (falsa) falhou: $(cat "$tmp/o")"
 [ "$(grep -c '^codesign .*--sign' "$log")" = 2 ] || fail "esperava 2 codesign --sign (só macOS): $(cat "$log")"
-grep '^codesign' "$log" | grep -q 'Developer ID Application: Paulo Victor Torres Silva (WU7Z54BRYQ)' || fail "identidade do codesign"
+grep '^codesign' "$log" | grep -qF "$IDENT" || fail "identidade do codesign"
 grep '^codesign' "$log" | grep -q -- '--options runtime' || fail "codesign sem hardened runtime"
 grep '^codesign' "$log" | grep -qE 'windows|linux' && fail "assinou binário que não é de macOS"
 [ "$(grep -c '^xcrun notarytool submit' "$log")" = 2 ] || fail "esperava 2 submissões de notarização"
@@ -102,8 +111,44 @@ grep -q 'conteudo-secreto' "$tmp/o" && fail "segredo apareceu na saída"
 grep -q ASSINADO "$out/toolkit_darwin_arm64" || fail "binário darwin não foi assinado"
 grep -q ASSINADO "$out/toolkit_linux_amd64" && fail "binário linux foi 'assinado'"
 
+# 5b. a identidade é obrigatória e não tem valor padrão no repositório; release.env com permissão aberta é recusado
+rm -rf "$out"
+NOTARY_KEY_ID=K NOTARY_ISSUER=I NOTARY_P8_OP_REF=op://x/y rel --version v0.0.1 --out "$out" --sign-macos >"$tmp/o" 2>&1 && fail "--sign-macos sem identidade aceito"
+grep -q TOOLKIT_SIGN_IDENTITY "$tmp/o" || fail "mensagem não cita TOOLKIT_SIGN_IDENTITY"
+printf 'NOTARY_KEY_ID=K\nNOTARY_ISSUER=I\nNOTARY_P8_OP_REF=op://x/y\nTOOLKIT_SIGN_IDENTITY=x\n' >"$tmp/aberto.env"; chmod 644 "$tmp/aberto.env"
+TOOLKIT_RELEASE_ENV="$tmp/aberto.env" rel --version v0.0.1 --out "$out" --sign-macos >"$tmp/o" 2>&1 && fail "release.env 644 aceito"
+grep -q 'permissão 600' "$tmp/o" || fail "mensagem do modo do release.env: $(cat "$tmp/o")"
+chmod 600 "$tmp/aberto.env"
+TOOLKIT_RELEASE_ENV="$tmp/aberto.env" rel --version v0.0.1 --out "$out" --sign-macos --dry-run >"$tmp/o" 2>&1 || fail "release.env 600 recusado: $(cat "$tmp/o")"
+
+# 5c. estado do git: árvore suja, tag ausente ou fora de HEAD recusam ANTES de compilar/apagar
+rm -rf "$out"; mkdir "$out"; echo guarda >"$out/marca"
+echo sujo >"$repo/sujo.txt"
+rel --version v0.0.1 --out "$out" >"$tmp/o" 2>&1 && fail "árvore suja aceita"
+grep -q 'árvore suja' "$tmp/o" || fail "mensagem da árvore suja: $(cat "$tmp/o")"
+rm "$repo/sujo.txt"
+rel --version v0.0.2 --out "$out" >"$tmp/o" 2>&1 && fail "tag ausente aceita"
+grep -q 'não existe' "$tmp/o" || fail "mensagem da tag ausente: $(cat "$tmp/o")"
+( cd "$repo" && git commit -q --allow-empty -m novo )
+rel --version v0.0.1 --out "$out" >"$tmp/o" 2>&1 && fail "tag fora de HEAD aceita"
+grep -q 'não aponta para HEAD' "$tmp/o" || fail "mensagem da tag fora de HEAD: $(cat "$tmp/o")"
+[ -f "$out/marca" ] || fail "apagou o --out antes de validar o git"
+( cd "$repo" && git tag -f v0.0.1 >/dev/null )   # volta a tag para HEAD
+
+# 5d. --out só dentro do repositório, nunca raiz, repo, .git, link, vazio ou diretório versionado
+mkdir "$tmp/fora"; echo guarda >"$tmp/fora/marca"
+ln -s "$tmp/fora" "$repo/elo"
+for bad in "$tmp/fora" "$repo" "$repo/" / "" . .. "$repo/.git" "$repo/elo" "$repo/scripts" "$repo/dist/../.." ; do
+  rel --version v0.0.1 --out "$bad" >"$tmp/o" 2>&1 && fail "--out '$bad' aceito"
+  [ -f "$repo/scripts/release.sh" ] && [ -f "$tmp/fora/marca" ] && [ -d "$repo/.git" ] || fail "--out '$bad' apagou algo"
+done
+rm -f "$repo/elo"
+rel --version v0.0.1 --out "$out" --dry-run >"$tmp/o" 2>&1 || fail "--out legítimo recusado: $(cat "$tmp/o")"
+rm -rf "$out"
+
 # 6. nada de segredo nem de caminho do 1Password no repositório, e sem publicação automática
 if grep -nE 'op://|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$script"; then fail "release.sh tem credencial/caminho literal"; fi
 grep -nE '^[^#]*gh +release' "$script" | grep -v echo && fail "release.sh publica sozinho"
+grep -n 'Paulo\|WU7Z54BRYQ' "$script" && fail "release.sh tem a identidade de assinatura literal"
 
 echo "ok release_test"

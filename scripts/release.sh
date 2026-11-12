@@ -5,6 +5,9 @@
 #
 #   scripts/release.sh --version v0.1.0 [--out dist] [--dry-run] [--sign-macos]
 #
+# Exige árvore limpa e a tag da versão apontando para HEAD (git tag vX.Y.Z). --out tem de ser um
+# subdiretório do repositório (é apagado e recriado).
+#
 # --dry-run     só imprime os passos (nenhum build, codesign, op ou notarytool roda).
 # --sign-macos  liga a assinatura (Developer ID) e a notarização, DESLIGADAS por padrão. Lê de variáveis
 #               de ambiente, ou de um arquivo local fora do git (padrão ~/.config/toolkit/release.env,
@@ -12,14 +15,13 @@
 #                 NOTARY_KEY_ID        id da chave de API do notarytool
 #                 NOTARY_ISSUER        issuer da chave de API
 #                 NOTARY_P8_OP_REF     referência do 1Password (op read) para o arquivo .p8
-#                 TOOLKIT_SIGN_IDENTITY (opcional) identidade do codesign
+#                 TOOLKIT_SIGN_IDENTITY identidade do codesign ("Developer ID Application: ...")
 #               Nada disso é gravado no repositório. O .p8 vai para um arquivo temporário 600 apagado
 #               por trap e nunca é impresso.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 TARGETS=(windows/amd64 windows/arm64 linux/amd64 linux/arm64 darwin/amd64 darwin/arm64)
-DEFAULT_IDENTITY='Developer ID Application: Paulo Victor Torres Silva (WU7Z54BRYQ)'
 
 VERSION="" OUT="dist" DRY=0 SIGN=0
 while [ $# -gt 0 ]; do
@@ -28,7 +30,7 @@ while [ $# -gt 0 ]; do
     --out) OUT="${2:?--out precisa de valor}"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
     --sign-macos) SIGN=1; shift ;;
-    -h | --help) sed -n '2,19p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,24p' "$0"; exit 0 ;;
     *) echo "release: argumento desconhecido: $1" >&2; exit 2 ;;
   esac
 done
@@ -66,10 +68,18 @@ build_all() {
 
 # ---- macOS: assinatura e notarização (funções separadas, só com --sign-macos) ----------------------
 
+# O arquivo guarda referências de segredo: só o dono pode ler (600 ou 400).
+check_env_file_mode() {
+  local mode
+  mode="$(stat -f %Lp "$1" 2>/dev/null || stat -c %a "$1")"
+  case "$mode" in 600 | 400) ;; *) die "$1 deve ter permissão 600 (tem $mode): chmod 600 '$1'" ;; esac
+}
+
 # env_get NOME: variável de ambiente, ou a linha NOME=valor do arquivo local fora do git.
 env_get() {
   local name="$1" v="${!1:-}" file="${TOOLKIT_RELEASE_ENV:-$HOME/.config/toolkit/release.env}" line
   if [ -z "$v" ] && [ -f "$file" ]; then
+    check_env_file_mode "$file"
     line="$(grep -E "^${name}=" "$file" | tail -n1 || true)"
     v="${line#*=}"
     v="${v%\"}"; v="${v#\"}"
@@ -79,7 +89,7 @@ env_get() {
 
 sign_macos_check() { # valida o necessário ANTES de compilar qualquer coisa
   local n
-  for n in NOTARY_KEY_ID NOTARY_ISSUER NOTARY_P8_OP_REF; do
+  for n in NOTARY_KEY_ID NOTARY_ISSUER NOTARY_P8_OP_REF TOOLKIT_SIGN_IDENTITY; do
     [ -n "$(env_get "$n")" ] || die "--sign-macos: defina $n no ambiente ou no arquivo de release local (fora do git)"
   done
   if [ "$DRY" = 0 ]; then
@@ -89,7 +99,8 @@ sign_macos_check() { # valida o necessário ANTES de compilar qualquer coisa
 }
 
 sign_macos_binaries() {
-  local identity="${TOOLKIT_SIGN_IDENTITY:-$DEFAULT_IDENTITY}" a
+  local identity a
+  identity="$(env_get TOOLKIT_SIGN_IDENTITY)"
   for a in toolkit_darwin_amd64 toolkit_darwin_arm64; do
     run codesign --force --options runtime --timestamp --sign "$identity" "$OUT/$a"
     run codesign --verify --strict --verbose=2 "$OUT/$a"
@@ -135,7 +146,36 @@ write_checksums() { # SEMPRE depois da assinatura: assinar muda o binário
   cat "$OUT/checksums.txt"
 }
 
+# O binário leva Commit=HEAD: só compila árvore limpa e com a tag da versão exatamente em HEAD.
+check_git_state() {
+  [ -z "$(git status --porcelain --untracked-files=all)" ] || die "árvore suja: faça commit ou descarte as mudanças antes da release"
+  git rev-parse -q --verify "refs/tags/${VERSION}^{commit}" >/dev/null || die "a tag $VERSION não existe: crie-a em HEAD antes (git tag $VERSION)"
+  [ "$(git rev-parse "refs/tags/${VERSION}^{commit}")" = "$(git rev-parse HEAD)" ] || die "a tag $VERSION não aponta para HEAD"
+}
+
+# resolve_out: caminho REAL de --out, que tem de ser um subdiretório do repositório (nunca o próprio repo,
+# a raiz do disco, .git, um link simbólico ou um diretório com arquivo versionado), pois será apagado.
+resolve_out() {
+  local root parent base resolved
+  [ -n "$OUT" ] || die "--out vazio"
+  root="$(pwd -P)"
+  base="$(basename "$OUT")"
+  case "$base" in . | .. | /) die "--out inválido: $OUT" ;; esac
+  [ ! -L "$OUT" ] || die "--out não pode ser link simbólico: $OUT"
+  parent="$(cd "$(dirname "$OUT")" 2>/dev/null && pwd -P)" || die "o diretório pai de --out não existe: $OUT"
+  resolved="$parent/$base"
+  case "$resolved" in
+    "$root"/*) ;;
+    *) die "--out fora do repositório: $resolved" ;;
+  esac
+  case "$resolved" in "$root/.git" | "$root/.git/"*) die "--out dentro de .git" ;; esac
+  if [ -n "$(git ls-files -- "$resolved")" ]; then die "--out contém arquivos versionados: $resolved"; fi
+  OUT="$resolved"
+}
+
 step "release $VERSION (dry-run=$DRY, sign-macos=$SIGN)"
+check_git_state
+resolve_out
 [ "$SIGN" = 1 ] && sign_macos_check
 if [ "$DRY" = 0 ]; then rm -rf "${OUT:?}"; mkdir -p "$OUT"; else echo "+ rm -rf $OUT && mkdir -p $OUT"; fi
 
