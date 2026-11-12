@@ -10,6 +10,16 @@ import (
 type Step struct {
 	Cmd Cmd
 	Err error
+	// Note é um passo que não é processo (baixar um arquivo, extrair um zip), registrado por Planner.Note;
+	// com Note preenchida, Cmd fica vazio.
+	Note string
+}
+
+// Planner é implementado pelo Runner que só simula (o DryRunRunner). Um provider que faz algo fora do Runner
+// (baixar um instalador, extrair um zip) o detecta com uma asserção de tipo no Runner recebido, NÃO executa
+// essa parte e registra no plano o que faria.
+type Planner interface {
+	Note(text string)
 }
 
 // DryRunRunner envolve outro Runner e FALHA FECHADO: só executa o que é declarado explicitamente
@@ -56,12 +66,20 @@ func (d *DryRunRunner) Plan() []Step {
 	return append([]Step(nil), d.steps...)
 }
 
-// Planned devolve só os comandos de Plan.
+// Note registra um passo que não é processo (implementa Planner).
+func (d *DryRunRunner) Note(text string) {
+	d.mu.Lock()
+	d.steps = append(d.steps, Step{Note: text})
+	d.mu.Unlock()
+}
+
+// Planned devolve só os comandos de Plan (as notas ficam de fora).
 func (d *DryRunRunner) Planned() []Cmd {
-	steps := d.Plan()
-	cmds := make([]Cmd, len(steps))
-	for i, s := range steps {
-		cmds[i] = s.Cmd
+	var cmds []Cmd
+	for _, s := range d.Plan() {
+		if s.Note == "" {
+			cmds = append(cmds, s.Cmd)
+		}
 	}
 	return cmds
 }
