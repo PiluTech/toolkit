@@ -104,6 +104,26 @@ Limites: o provider `url` não sabe se o app já está instalado (`IsInstalled` 
 só existe a versão da URL (para `app@versão`, use `{{version}}` na URL; o `sha256` fixado cobre UMA versão, as outras falham no hash);
 o proxy do ambiente não é usado.
 
+### Como o provider `github-release` instala
+
+`repo` (`dono/repositório`) e `asset` (glob de um nome de arquivo, ex.: `tool_*_{{os}}_{{arch}}.tar.gz`; sem barras) escolhem o arquivo da release
+mais recente (rascunho e pré-release não valem). `toolkit install app@1.2.3` escolhe a tag `v1.2.3` (ou `1.2.3`). O glob tem de casar com **exatamente um**
+asset (zero = não encontrado, vários = erro de ambiguidade). O tipo vem de `type` ou da extensão do glob; depois a instalação é a da tabela acima.
+
+O hash do asset vem, nesta ordem (decisão 18):
+
+1. `sha256` fixado no catálogo: é a autoridade (a API e os checksums nem são consultados);
+2. o arquivo de checksums da própria release (`checksums.txt`, `SHA256SUMS`, `sha256sums.txt`, `*_checksums.txt`, `<asset>.sha256`);
+3. o campo `digest` do asset na API (`sha256:...`).
+
+Se (2) e (3) existem e divergem, a instalação é recusada. Sem nenhum dos três, recusa **antes de baixar o asset**. Só o pin do catálogo é independente do GitHub (checksums e
+`digest` vêm do mesmo canal da release): para quem precisa de mais que integridade de transporte, fixe o `sha256`. A assinatura dos checksums (cosign, minisign, gpg) **não** é verificada ainda.
+
+A URL do asset vem da API mas só vale se for `https://github.com/<repo>/releases/download/...`; os redirects para a CDN do GitHub passam pela mesma checagem de
+URL do `url`. A API aceita `GITHUB_TOKEN` (opcional, contra o limite de requisições): ele é enviado **só** ao `api.github.com`, nunca aos downloads, e fora do formato de token
+(letras, números, `_ . -`) a execução é recusada. O `--dry-run` consulta a API e o arquivo de checksums (leituras) e mostra o asset e o hash que seriam usados, sem baixá-lo.
+`IsInstalled` é sempre "não" (como no `url`).
+
 ### Chaves repetidas e limites
 
 Chave repetida em qualquer nível (topo, app, instalador, `provider`) é erro: a última não vence em silêncio.

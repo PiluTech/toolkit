@@ -83,3 +83,27 @@ func TestInstallURLZipPlanoSoComNota(t *testing.T) {
 		t.Fatalf("saída:\n%s", o.String())
 	}
 }
+
+func TestInstallGitHubReleaseDryRunLeAAPIMasNaoBaixaOAsset(t *testing.T) {
+	z := []byte("zip")
+	dl, hits := downloadtest.New(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Host {
+		case "api.github.com":
+			_, _ = w.Write([]byte(`{"tag_name":"v1.0.0","assets":[{"name":"tool_linux.tar.gz","state":"uploaded","digest":"sha256:` + hashOf(z) + `","browser_download_url":"https://github.com/o/r/releases/download/v1.0.0/tool_linux.tar.gz"}]}`))
+		default:
+			t.Errorf("download inesperado no dry-run: %s%s", r.Host, r.URL.Path)
+		}
+	}))
+	var o, e bytes.Buffer
+	yml := "apps:\n  tool:\n    name: Tool\n    category: dev\n    linux: [{ provider: github-release, repo: o/r, asset: \"tool_*.tar.gz\" }]\n"
+	deps := Deps{GOOS: "linux", EmbeddedYML: []byte(yml), NewRunner: func() exec.Runner { return exectest.New(t) }, CheckElevation: func(exec.Cmd) error { return nil },
+		Interactive: func() bool { return false }, Downloader: dl, GitHubToken: func() string { return "" }, AppsDir: func() (string, error) { return "/apps", nil }}
+	cmd := NewRootCmdWith(&o, &e, deps)
+	cmd.SetArgs([]string{"install", "tool", "--dry-run"})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("%v\n%s", err, e.String())
+	}
+	if hits.Load() != 1 || !strings.Contains(o.String(), "baixar https://github.com/o/r/releases/download/v1.0.0/tool_linux.tar.gz (sha256 "+hashOf(z)) || !strings.Contains(o.String(), "extrair o tar.gz em /apps/tool") {
+		t.Fatalf("hits=%d\n%s", hits.Load(), o.String())
+	}
+}

@@ -52,6 +52,17 @@ var (
 	ErrStatus = errors.New("resposta http inesperada")
 )
 
+// StatusError é a resposta http que não é 200; errors.Is(err, ErrStatus) vale e Code traz o status.
+type StatusError struct {
+	Code   int
+	Status string
+}
+
+func (e *StatusError) Error() string { return fmt.Sprintf("%v: %s", ErrStatus, e.Status) }
+
+// Is faz errors.Is(err, ErrStatus) valer para qualquer StatusError.
+func (*StatusError) Is(target error) bool { return target == ErrStatus }
+
 // Padrões.
 const (
 	MaxRedirects      = 5
@@ -243,7 +254,7 @@ func (d *Downloader) get(ctx context.Context, rawURL string, header http.Header,
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		e := fmt.Errorf("%w: %s", ErrStatus, resp.Status)
+		var e error = &StatusError{Code: resp.StatusCode, Status: resp.Status}
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			return 0, transient{e}
 		}

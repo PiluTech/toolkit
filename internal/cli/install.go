@@ -19,6 +19,7 @@ import (
 	"github.com/PiluTech/toolkit/internal/providers/brew"
 	"github.com/PiluTech/toolkit/internal/providers/dnf"
 	"github.com/PiluTech/toolkit/internal/providers/flatpak"
+	"github.com/PiluTech/toolkit/internal/providers/githubrelease"
 	"github.com/PiluTech/toolkit/internal/providers/pacman"
 	urlprovider "github.com/PiluTech/toolkit/internal/providers/url"
 	"github.com/PiluTech/toolkit/internal/providers/winget"
@@ -61,7 +62,15 @@ func (d Deps) providerList(r exec.Runner) []providers.Provider {
 	if d.Providers != nil {
 		return d.Providers(r)
 	}
-	return []providers.Provider{winget.New(r), brew.New(r), apt.New(r), dnf.New(r), pacman.New(r), flatpak.New(r), urlprovider.New(r, urlprovider.Options{GOOS: d.GOOS, Downloader: d.Downloader, AppsDir: d.AppsDir})}
+	return []providers.Provider{winget.New(r), brew.New(r), apt.New(r), dnf.New(r), pacman.New(r), flatpak.New(r), urlprovider.New(r, urlprovider.Options{GOOS: d.GOOS, Downloader: d.Downloader, AppsDir: d.AppsDir}),
+		githubrelease.New(r, githubrelease.Options{GOOS: d.GOOS, Downloader: d.Downloader, AppsDir: d.AppsDir, Token: d.githubToken})}
+}
+
+func (d Deps) githubToken() string {
+	if d.GitHubToken != nil {
+		return d.GitHubToken()
+	}
+	return os.Getenv("GITHUB_TOKEN")
 }
 
 func (d Deps) stdin() io.Reader {
