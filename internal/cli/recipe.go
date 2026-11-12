@@ -525,7 +525,7 @@ type catalogInstaller struct {
 
 func (c catalogInstaller) Install(ctx context.Context, apps []string) (recipes.InstallOutcome, error) {
 	var outcome recipes.InstallOutcome
-	cat, err := loadCatalog(c.deps, listFlags{}, c.errOut)
+	cat, err := loadCatalog(ctx, c.deps, listFlags{}, c.errOut)
 	if err != nil {
 		return outcome, err
 	}
