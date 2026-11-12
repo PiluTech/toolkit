@@ -1,0 +1,24 @@
+ toolkit   1 Apps   2 Receitas  [3 Diagnóstico]  4 Log                   v0.1.0 
+────────────────────────────────────────────────────────────────────────────────
+ > [ ] Diagnóstico de memória                                 admin · reinicia  
+   [ ] Diagnóstico de rede                                                      
+─ Etapas de diag-memoria ─────── 0 de 2 · exige administrador · reinicia 1 vez 
+ Nunca rodou. Marque e tecle Enter: a Revisão mostra o que será executado.
+    1 Informações de RAM                              ○ pendente
+    2 Agendar o diagnóstico                           ○ pendente
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+ diag-memoria — Diagnóstico de memória                                          
+ ↑↓ mover  espaço marcar  → etapas  / buscar  Enter revisar  ? ajuda  q sair

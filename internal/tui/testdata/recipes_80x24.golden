@@ -1,0 +1,24 @@
+ toolkit   1 Apps  [2 Receitas]  3 Diagnóstico   4 Log                   v0.1.0 
+────────────────────────────────────────────────────────────────────────────────
+ > [ ] Ambiente WSL para desenvol…  ! aguardando reinício     admin · reinicia  
+   [ ] Ambiente Linux               ✗ falhou                                    
+─ Etapas de wsl-dev ──────────── 0 de 3 · exige administrador · reinicia 1 vez 
+    1 Habilitar o WSL                                 ! aguardando reinício
+    2 Instalar a distro                               ○ pendente
+    3 Instalar ferramentas                            ○ pendente
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+ wsl-dev — Ambiente WSL para desenvolvimento: Instala o WSL e as ferramentas.   
+ ↑↓ mover  espaço marcar  → etapas  / buscar  Enter revisar  ? ajuda  q sair
