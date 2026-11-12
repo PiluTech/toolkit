@@ -1,0 +1,26 @@
+id: wsl-dev
+name: Ambiente WSL + Ubuntu para dev
+description: Habilita o WSL, instala o Ubuntu e as ferramentas de dev. Reinicia uma vez e continua sozinha.
+os: windows
+requires_admin: true
+steps:
+  - id: enable-features
+    name: Habilitar WSL e Plataforma de Máquina Virtual
+    check: { powershell: "(Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform).State -eq 'Enabled' -and (Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux).State -eq 'Enabled'" }
+    run:
+      powershell: >-
+        dism /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart;
+        if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 3010) { exit $LASTEXITCODE };
+        dism /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart;
+        exit $LASTEXITCODE
+      success_codes: [3010]
+    reboot: if-needed
+    timeout: 30m
+  - id: install-distro
+    name: Instalar o Ubuntu
+    check: { powershell: "if (wsl -l -q | Select-String -Quiet Ubuntu) { exit 0 } else { exit 1 }" }
+    run: { powershell: "wsl --install -d Ubuntu --no-launch" }
+    timeout: 30m
+  - id: apps
+    name: Instalar ferramentas do Windows
+    install: [git, vscode]

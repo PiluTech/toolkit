@@ -1,0 +1,15 @@
+id: diag-rede
+name: Diagnóstico de rede
+description: Mostra os adaptadores, os endereços e os servidores DNS. Só leitura.
+os: windows
+kind: diagnostic
+steps:
+  - id: adaptadores
+    name: Adaptadores
+    run: { powershell: "Get-NetAdapter | Select-Object Name,Status,LinkSpeed,MacAddress | Format-Table -AutoSize | Out-String -Width 200" }
+  - id: enderecos
+    name: Endereços IP
+    run: { powershell: "Get-NetIPAddress | Select-Object InterfaceAlias,AddressFamily,IPAddress,PrefixLength | Format-Table -AutoSize | Out-String -Width 200" }
+  - id: dns
+    name: Servidores DNS
+    run: { powershell: "Get-DnsClientServerAddress | Select-Object InterfaceAlias,AddressFamily,ServerAddresses | Format-Table -AutoSize | Out-String -Width 200" }

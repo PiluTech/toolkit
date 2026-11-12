@@ -1,0 +1,12 @@
+id: diag-memoria
+name: Diagnóstico de memória
+description: Lista os módulos de RAM e a saúde dos discos. Só leitura.
+os: windows
+kind: diagnostic
+steps:
+  - id: modulos
+    name: Módulos de RAM
+    run: { powershell: "Get-CimInstance Win32_PhysicalMemory | Select-Object Manufacturer,PartNumber,Capacity,Speed | Format-Table -AutoSize | Out-String -Width 200" }
+  - id: disco
+    name: Saúde dos discos
+    run: { powershell: "Get-PhysicalDisk | Select-Object FriendlyName,MediaType,HealthStatus,OperationalStatus | Format-Table -AutoSize | Out-String -Width 200" }
