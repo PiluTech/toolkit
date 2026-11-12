@@ -71,6 +71,9 @@ func (e *Engine) ResumePending(ctx context.Context) (rep Report, err error) {
 	}
 	st := r.Steps[idx]
 	ss := rs.Step(st.ID)
+	if ss == nil {
+		return rep, fmt.Errorf("etapa %q ausente no state da receita %q (arquivo alterado ou de outra versão): use `recipe reset %s`", st.ID, id, id)
+	}
 
 	switch ss.Status {
 	case state.StepAwaitingReboot:
