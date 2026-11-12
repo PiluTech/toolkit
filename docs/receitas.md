@@ -53,10 +53,20 @@ Cada `check` ou `run` tem exatamente um destes campos:
 2. Quando uma etapa pede reboot, o toolkit, nesta ordem: salva `awaiting-reboot`, registra a retomada,
    pede confirmação (ou segue direto com `--yes`) e reinicia. Nunca há reboot sem a retomada registrada.
 3. Depois do boot, `toolkit resume` continua da etapa pendente:
-   - Windows: Tarefa Agendada no logon do usuário que iniciou a receita, com privilégio elevado.
-   - Linux: unit systemd de sistema, oneshot, no boot e depois de `network-online.target`. Roda sem
-     terminal (`toolkit resume --yes --no-tui`), e o resultado fica no log e em `toolkit recipe status`.
-   - macOS: LaunchAgent no login do usuário, que abre o Terminal para mostrar o progresso.
+   - Windows: Tarefa Agendada (`Register-ScheduledTask`) no logon do usuário que iniciou a receita, com
+     privilégio elevado quando a receita é `requires_admin`. O binário é copiado para a pasta `bin` do
+     toolkit antes de registrar.
+   - Linux (segurança): o root do boot só executa e lê o que é de root. O binário é COPIADO para
+     `/usr/local/lib/toolkit/toolkit` (root:root 0755), nunca o `~/.local/bin` de quem iniciou a receita; o
+     `state.json` e o log têm de ficar em `/var/lib` (ou `/var/log`). Fora disso o registro é recusado
+     (`ErrUnsafeRootPath`) antes de qualquer comando, e a máquina não reinicia: receita com reboot no
+     Linux exige rodar com `sudo`.
+   - Linux: unit systemd de sistema (`toolkit-resume.service`), oneshot, no boot e depois de
+     `network-online.target`, com `ConditionPathExists` no `state.json` e `ProtectHome=true`. Roda como root e sem terminal
+     (`toolkit resume --no-tui`); sem `--yes` um reboot novo é recusado e a receita espera o próximo boot.
+     O resultado fica no log e em `toolkit recipe status`. Caminhos com espaço não são aceitos.
+   - macOS: LaunchAgent do usuário (`RunAtLoad`, `LaunchOnlyOnce`), que abre o Terminal com um
+     `.command` para mostrar o progresso. Só no login: não é no boot.
    - Nomes: a tarefa agendada e o label do launchd usam `dev.pilutech.<name>`.
 4. Ao terminar, com sucesso ou falha, o registro de retomada é removido.
 

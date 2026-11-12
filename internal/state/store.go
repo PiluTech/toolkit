@@ -10,6 +10,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -227,8 +229,7 @@ func (s *FileStore) lock(ctx context.Context) (func(), error) {
 		if !errors.Is(err, fs.ErrExist) {
 			return nil, err
 		}
-		if fi, statErr := os.Lstat(s.lockPath()); statErr == nil && s.now().Sub(fi.ModTime()) > stale {
-			_ = os.Remove(s.lockPath())
+		if fi, statErr := os.Lstat(s.lockPath()); statErr == nil && s.now().Sub(fi.ModTime()) > stale && s.removeStaleLock(fi) {
 			continue
 		}
 		if !s.now().Before(deadline) {
@@ -236,4 +237,23 @@ func (s *FileStore) lock(ctx context.Context) (func(), error) {
 		}
 		s.sleep(50 * time.Millisecond)
 	}
+}
+
+// removeStaleLock apaga o lock velho SÓ se ele ainda é o mesmo arquivo observado e o processo que o
+// criou não existe mais. Lock de processo vivo nunca é "velho" (uma execução longa não pode perder o
+// lock para um segundo processo); conteúdo ilegível não identifica dono e vale só a idade. A
+// conferência de identidade (mesmo arquivo, mesma data) logo antes do Remove evita apagar o lock novo
+// de outro processo que acabou de trocá-lo.
+func (s *FileStore) removeStaleLock(seen os.FileInfo) bool {
+	data, err := os.ReadFile(s.lockPath())
+	if err == nil {
+		if pid, perr := strconv.Atoi(strings.TrimSpace(string(data))); perr == nil && pid > 0 && pidAlive(pid) {
+			return false
+		}
+	}
+	now, err := os.Lstat(s.lockPath())
+	if err != nil || !os.SameFile(seen, now) || !now.ModTime().Equal(seen.ModTime()) {
+		return false
+	}
+	return os.Remove(s.lockPath()) == nil
 }

@@ -45,12 +45,12 @@ func BuildCmd(a *Action, goos platform.OS, timeout time.Duration, elevate, readO
 		if a.WSL.User != "" {
 			c.Args = append(c.Args, "-u", a.WSL.User)
 		}
-		c.Args = append(c.Args, "--", "bash", "-c", a.WSL.Bash)
+		c.Args = append(c.Args, "--", "/bin/bash", "-c", a.WSL.Bash)
 	case a.Sh != "" && goos != platform.Windows:
 		c.Name = "/bin/sh"
 		c.Args = []string{"-c", a.Sh}
 	case a.Bash != "" && goos != platform.Windows:
-		c.Name = "bash"
+		c.Name = "/bin/bash" // caminho absoluto: nada de bash achado pelo PATH
 		c.Args = []string{"-c", a.Bash}
 	default:
 		return exec.Cmd{}, ErrBadAction

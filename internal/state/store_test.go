@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -264,6 +266,44 @@ func TestStaleLockRemoved(t *testing.T) {
 	}
 	if _, err := os.Stat(s.lockPath()); err == nil {
 		t.Fatal("o lock deve ser liberado ao fim")
+	}
+}
+
+// Lock velho mas de um processo AINDA VIVO não é "velho": quem está rodando é o dono (sem checar a
+// identidade, um segundo processo apagaria o lock de uma execução longa e as duas gravariam o state).
+func TestStaleLockOfLiveProcessIsKept(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sem checagem de pid no Windows: vale só a idade")
+	}
+	s := newStore(t)
+	s.LockTimeout = 100 * time.Millisecond
+	_ = os.MkdirAll(s.Dir, 0o700)
+	if err := os.WriteFile(s.lockPath(), []byte(strconv.Itoa(os.Getpid())+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(s.lockPath(), old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Save(context.Background(), sample()); !errors.Is(err, ErrLocked) {
+		t.Fatalf("lock de processo vivo foi removido: %v", err)
+	}
+	if _, err := os.Stat(s.lockPath()); err != nil {
+		t.Fatal("o lock do processo vivo tem de continuar")
+	}
+}
+
+// Conteúdo ilegível não identifica dono: vale só a idade.
+func TestStaleLockWithGarbageIsRemoved(t *testing.T) {
+	s := newStore(t)
+	_ = os.MkdirAll(s.Dir, 0o700)
+	if err := os.WriteFile(s.lockPath(), []byte("lixo\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-time.Hour)
+	_ = os.Chtimes(s.lockPath(), old, old)
+	if err := s.Save(context.Background(), sample()); err != nil {
+		t.Fatal(err)
 	}
 }
 

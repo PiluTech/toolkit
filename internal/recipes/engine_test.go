@@ -787,7 +787,7 @@ steps:
     run: { wsl: { distro: Ubuntu, user: dev, bash: "echo oi" } }
 `)
 	ps := exec.Cmd{Name: windowsPowerShell, Args: []string{"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", EncodePowerShell("Write-Output ok")}}
-	wsl := exec.Cmd{Name: windowsWSL, Args: []string{"-d", "Ubuntu", "-u", "dev", "--", "bash", "-c", "echo oi"}}
+	wsl := exec.Cmd{Name: windowsWSL, Args: []string{"-d", "Ubuntu", "-u", "dev", "--", "/bin/bash", "-c", "echo oi"}}
 	e.run.On(ps.String(), exectest.Exit(0, "ok")).On(wsl.String(), exectest.Exit(0, ""))
 	if _, err := e.eng.Run(context.Background(), r, RunOptions{}); err != nil {
 		t.Fatal(err)
@@ -808,7 +808,7 @@ func TestBuildCmdWrongOS(t *testing.T) {
 		t.Fatal("powershell em linux")
 	}
 	c, err := BuildCmd(&Action{Bash: "echo"}, platform.Darwin, time.Minute, true, true)
-	if err != nil || c.Name != "bash" || !c.Elevate || !c.ReadOnly || c.Timeout != time.Minute {
+	if err != nil || c.Name != "/bin/bash" || !c.Elevate || !c.ReadOnly || c.Timeout != time.Minute {
 		t.Fatalf("%+v %v", c, err)
 	}
 }
@@ -832,5 +832,30 @@ func TestSystemRebooter(t *testing.T) {
 	r.On(win.String(), exectest.Exit(1, ""))
 	if err := (SystemRebooter{Runner: r, Info: platform.Info{OS: platform.Windows}}).Reboot(context.Background()); err == nil {
 		t.Fatal("exit != 0 deve virar erro")
+	}
+}
+
+// State sem a etapa (arquivo editado ou de outra versão): erro claro, nunca nil deref.
+func TestResumeWithStepMissingFromStateDoesNotPanic(t *testing.T) {
+	e := newEnv(t, linuxInfo())
+	r := e.recipe(rebootRecipe)
+	e.run.On(sh("step-a"), exectest.Exit(0, ""))
+	if _, err := e.eng.Run(context.Background(), r, RunOptions{Yes: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.store.Update(context.Background(), func(f *state.File) error {
+		f.Recipes["demo"].Steps = nil
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	e.eng.Platform.BootID = "boot-2"
+	defer func() {
+		if p := recover(); p != nil {
+			t.Fatalf("panic: %v", p)
+		}
+	}()
+	if _, err := e.eng.ResumePending(context.Background()); err == nil || !strings.Contains(err.Error(), "ausente") {
+		t.Fatalf("err = %v, quero erro citando etapa ausente", err)
 	}
 }
