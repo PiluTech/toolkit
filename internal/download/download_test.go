@@ -249,7 +249,9 @@ func TestStatusEErrosTransitorios(t *testing.T) {
 	defer srv2.Close()
 	d = newDL(srv2)
 	d.Retries = 2
-	if _, err := d.Bytes(context.Background(), Request{URL: "https://example.com/a", SHA256: sum(nil), MaxSize: 10}); !errors.Is(err, ErrStatus) || n.Load() != 1 {
+	_, err = d.Bytes(context.Background(), Request{URL: "https://example.com/a", SHA256: sum(nil), MaxSize: 10})
+	var se *StatusError
+	if !errors.Is(err, ErrStatus) || !errors.As(err, &se) || se.Code != http.StatusNotFound || n.Load() != 1 {
 		t.Fatalf("%v %d", err, n.Load())
 	}
 }
