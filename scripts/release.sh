@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Release LOCAL (o GitHub Actions da conta está sem cobrança). Compila os 6 alvos com CGO_ENABLED=0,
+# Release (plano B local; o caminho normal é .github/workflows/release.yml, docs/release.md, que reusa este
+# script sem --sign-macos e assina com scripts/release-sign-macos.sh). Compila os 6 alvos com CGO_ENABLED=0,
 # opcionalmente assina e notariza os de macOS, gera o checksums.txt e deixa tudo em dist/.
 # NÃO publica nada: a criação da release no GitHub (gh release create) é um passo manual e separado.
 #
@@ -30,7 +31,7 @@ while [ $# -gt 0 ]; do
     --out) OUT="${2:?--out precisa de valor}"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
     --sign-macos) SIGN=1; shift ;;
-    -h | --help) sed -n '2,24p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,25p' "$0"; exit 0 ;;
     *) echo "release: argumento desconhecido: $1" >&2; exit 2 ;;
   esac
 done
@@ -150,13 +151,7 @@ notarize_macos_binaries() {
 
 write_checksums() { # SEMPRE depois da assinatura: assinar muda o binário
   if [ "$DRY" = 1 ]; then echo "+ (cd $OUT && sha256 de todos os arquivos > checksums.txt)"; return; fi
-  ( cd "$OUT"
-    export LC_ALL=C
-    sums=""
-    for f in *; do
-      if command -v sha256sum >/dev/null 2>&1; then sums+="$(sha256sum "$f")"$'\n'; else sums+="$(shasum -a 256 "$f")"$'\n'; fi
-    done
-    printf '%s' "$sums" >checksums.txt )
+  scripts/release-checksums.sh "$OUT"
   cat "$OUT/checksums.txt"
 }
 
