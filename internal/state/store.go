@@ -222,7 +222,7 @@ func (s *FileStore) lock(ctx context.Context) (func(), error) {
 		}
 		fh, err := os.OpenFile(s.lockPath(), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
-			_, _ = fmt.Fprintf(fh, "%d\n", os.Getpid())
+			_, _ = fmt.Fprintf(fh, "%d %s\n", os.Getpid(), procStart(os.Getpid()))
 			_ = fh.Close()
 			return func() { _ = os.Remove(s.lockPath()) }, nil
 		}
@@ -239,16 +239,30 @@ func (s *FileStore) lock(ctx context.Context) (func(), error) {
 	}
 }
 
-// removeStaleLock apaga o lock velho SÓ se ele ainda é o mesmo arquivo observado e o processo que o
-// criou não existe mais. Lock de processo vivo nunca é "velho" (uma execução longa não pode perder o
-// lock para um segundo processo); conteúdo ilegível não identifica dono e vale só a idade. A
-// conferência de identidade (mesmo arquivo, mesma data) logo antes do Remove evita apagar o lock novo
-// de outro processo que acabou de trocá-lo.
+// HardStaleLock: o lock só é segurado durante uma leitura/gravação do state (milissegundos). Passado
+// esse tempo, mesmo com o pid gravado "vivo", o pid foi reaproveitado por outro processo.
+const hardStaleLock = time.Hour
+
+// removeStaleLock apaga o lock velho SÓ se ele ainda é o mesmo arquivo observado e o dono não existe
+// mais. O dono é o pid MAIS o instante de início do processo (Linux: /proc/<pid>/stat), então um pid
+// reaproveitado por outro processo não segura o lock; onde o início não é conhecido, vale também o
+// teto hardStaleLock. Conteúdo ilegível não identifica dono e vale só a idade. A conferência de
+// identidade (mesmo arquivo, mesma data) logo antes do Remove evita apagar o lock novo de outro
+// processo que acabou de trocá-lo.
 func (s *FileStore) removeStaleLock(seen os.FileInfo) bool {
 	data, err := os.ReadFile(s.lockPath())
-	if err == nil {
-		if pid, perr := strconv.Atoi(strings.TrimSpace(string(data))); perr == nil && pid > 0 && pidAlive(pid) {
-			return false
+	if err == nil && s.now().Sub(seen.ModTime()) <= hardStaleLock {
+		f := strings.Fields(string(data))
+		if len(f) > 0 {
+			if pid, perr := strconv.Atoi(f[0]); perr == nil && pid > 0 && pidAlive(pid) {
+				start := ""
+				if len(f) > 1 {
+					start = f[1]
+				}
+				if cur := procStart(pid); start == "" || cur == "" || start == cur {
+					return false
+				}
+			}
 		}
 	}
 	now, err := os.Lstat(s.lockPath())

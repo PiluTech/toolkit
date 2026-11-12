@@ -3,8 +3,11 @@ package resume
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path"
 	"slices"
 	"strings"
@@ -42,9 +45,10 @@ func rootOnly(p string, prefixes ...string) bool {
 type Systemd struct {
 	Runner    exec.Runner
 	IsRoot    bool
-	BinDir    string // cópia do binário do ROOT; vazio = RootBinDir. Tem de ficar em /usr ou /opt
-	StatePath string // ConditionPathExists: só roda se o state.json existe; tem de ficar em /var/lib
-	UnitDir   string // padrão /etc/systemd/system
+	BinDir    string                       // cópia do binário do ROOT; vazio = RootBinDir. Tem de ficar em /usr ou /opt
+	StatePath string                       // ConditionPathExists: só roda se o state.json existe; tem de ficar em /var/lib
+	UnitDir   string                       // padrão /etc/systemd/system
+	ReadFile  func(string) ([]byte, error) // padrão os.ReadFile (injetável nos testes)
 }
 
 var _ Registrar = Systemd{}
@@ -125,6 +129,11 @@ func (s Systemd) UnitFile(sp Spec) (string, error) {
 }
 
 // Register instala o binário, grava a unit, recarrega o systemd e habilita (enable, não start: ela roda no boot).
+//
+// O binário de origem é lido UMA vez (os bytes e o SHA-256 vêm da mesma leitura) e entregue ao `tee` por
+// stdin: não há segunda abertura do arquivo do usuário que ele possa trocar no meio (TOCTOU). Antes do
+// `enable` o SHA-256 do destino é conferido de novo, e o state tem de ser de root (dono e modo), não só
+// estar num prefixo certo.
 func (s Systemd) Register(ctx context.Context, sp Spec) error {
 	unit, err := s.UnitFile(sp)
 	if err != nil {
@@ -136,23 +145,105 @@ func (s Systemd) Register(ctx context.Context, sp Spec) error {
 	if err := validPath(sp.Executable, false); err != nil {
 		return err
 	}
+	read := s.ReadFile
+	if read == nil {
+		read = os.ReadFile
+	}
+	bin, err := read(sp.Executable)
+	if err != nil {
+		return fmt.Errorf("ler o binário: %w", err)
+	}
+	sum := sha256.Sum256(bin)
+	want := hex.EncodeToString(sum[:])
+
+	if err := s.checkStateOwnership(ctx); err != nil {
+		return err
+	}
+
+	tmp := s.exe() + ".new"
 	steps := []exec.Cmd{s.cmd("install", false, "-d", "-m", "0755", "-o", "root", "-g", "root", s.binDir())}
 	if path.Clean(sp.Executable) != path.Clean(s.exe()) {
-		steps = append(steps, s.cmd("install", false, "-m", "0755", "-o", "root", "-g", "root", "--", sp.Executable, s.exe()))
+		put := s.cmd("tee", false, "--", tmp)
+		put.Stdin = bytes.NewReader(bin)
+		steps = append(steps, put,
+			s.cmd("chown", false, "root:root", "--", tmp),
+			s.cmd("chmod", false, "0755", "--", tmp),
+		)
 	}
-	write := s.cmd("tee", false, "--", s.unitPath())
-	write.Stdin = strings.NewReader(unit)
-	steps = append(steps, write,
-		s.cmd("chmod", false, "0644", "--", s.unitPath()),
-		s.cmd("systemctl", false, "daemon-reload"),
-		s.cmd("systemctl", false, "enable", "--", UnitName()),
-	)
 	for _, c := range steps {
 		if err := runOK(ctx, s.Runner, c, "registrar a retomada ("+c.Name+")"); err != nil {
 			return err
 		}
 	}
+	if path.Clean(sp.Executable) != path.Clean(s.exe()) {
+		if err := s.verifyHash(ctx, tmp, want); err != nil {
+			return err
+		}
+		if err := runOK(ctx, s.Runner, s.cmd("mv", false, "-f", "--", tmp, s.exe()), "registrar a retomada (mv)"); err != nil {
+			return err
+		}
+	}
+	write := s.cmd("tee", false, "--", s.unitPath())
+	write.Stdin = strings.NewReader(unit)
+	for _, c := range []exec.Cmd{
+		write,
+		s.cmd("chmod", false, "0644", "--", s.unitPath()),
+		s.cmd("systemctl", false, "daemon-reload"),
+	} {
+		if err := runOK(ctx, s.Runner, c, "registrar a retomada ("+c.Name+")"); err != nil {
+			return err
+		}
+	}
+	// o destino final, conferido de novo logo antes de habilitar
+	if err := s.verifyHash(ctx, s.exe(), want); err != nil {
+		return err
+	}
+	return runOK(ctx, s.Runner, s.cmd("systemctl", false, "enable", "--", UnitName()), "registrar a retomada (systemctl)")
+}
+
+// ErrBinaryMismatch indica que o binário que ficou em RootBinDir não tem o SHA-256 do que foi lido.
+var ErrBinaryMismatch = errors.New("o binário instalado não confere com o original (SHA-256)")
+
+// verifyHash confere o SHA-256 de um arquivo de root (sha256sum, leitura).
+func (s Systemd) verifyHash(ctx context.Context, file, want string) error {
+	res, err := s.Runner.Run(ctx, s.cmd("sha256sum", true, "--", file))
+	if err != nil {
+		return fmt.Errorf("conferir o binário: %w", err)
+	}
+	if res.ExitCode != 0 {
+		return fmt.Errorf("conferir o binário: código %d: %s", res.ExitCode, snippet(res))
+	}
+	f := strings.Fields(string(res.Stdout))
+	if len(f) == 0 || !strings.EqualFold(f[0], want) {
+		return fmt.Errorf("%w: %s", ErrBinaryMismatch, file)
+	}
 	return nil
+}
+
+// checkStateOwnership exige que o state e todos os diretórios acima dele, até /var/lib, sejam de root
+// (uid 0) e sem escrita para grupo/outros: um prefixo em /var/lib não prova nada se o diretório for do usuário.
+func (s Systemd) checkStateOwnership(ctx context.Context) error {
+	p := s.StatePath
+	for {
+		res, err := s.Runner.Run(ctx, s.cmd("stat", true, "-c", "%u %a", "--", p))
+		if err != nil {
+			return fmt.Errorf("conferir o dono de %s: %w", p, err)
+		}
+		if res.ExitCode != 0 {
+			return fmt.Errorf("%w: não consegui ler o dono/modo de %s (código %d)", ErrUnsafeRootPath, p, res.ExitCode)
+		}
+		var uid, mode int
+		if _, err := fmt.Sscanf(strings.TrimSpace(string(res.Stdout)), "%d %o", &uid, &mode); err != nil {
+			return fmt.Errorf("%w: saída inesperada do stat em %s", ErrUnsafeRootPath, p)
+		}
+		if uid != 0 || mode&0o022 != 0 {
+			return fmt.Errorf("%w: %s deve ser de root e sem escrita para grupo/outros (dono %d, modo %o)", ErrUnsafeRootPath, p, uid, mode)
+		}
+		if p == "/var/lib" {
+			return nil
+		}
+		p = path.Dir(p)
+	}
 }
 
 // Unregister desabilita e apaga a unit. Não registrada = sucesso.
