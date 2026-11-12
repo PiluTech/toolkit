@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/exec/exectest"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/exec/exectest"
 )
 
 const statusGit = `dpkg-query -W "-f=${db:Status-Status}\t${Version}\n" git`

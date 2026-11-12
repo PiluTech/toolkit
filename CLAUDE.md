@@ -2,7 +2,11 @@
 
 Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (catálogo YAML de apps, providers, receitas multi-etapa que sobrevivem a reboot, TUI Bubble Tea, bootstraps). Nome provisório, centralizado em `internal/buildinfo`.
 
-**Estado atual:** repositório `PiluVitu/toolkit`, **privado por enquanto** (planejado para ser público). Licença MIT. As 22 perguntas da proposta foram respondidas, com todas as recomendações aceitas (`docs/decisoes.md`). **Fase 1 (esqueleto) em andamento** desde 2026-11-11, em PRs pequenos: PR1 módulo + Cobra `version` + gate local (feito), PR2 `exec` (feito), PR3 `platform` (feito), PR4 `catalog` (feito), PR5 `toolkit list` (feito). **Fase 1 completa e aprovada.** **Fase 2 (providers + `toolkit install`) liberada em 2026-11-11**, em PRs empilhados: PR1 Crivo Cf/Zl/Zp (feito, #8), PR2 núcleo `providers` (feito, #9), PR3 winget (feito, #10), PR4 brew (feito, #11), PR5 apt (feito, #12), PR6 dnf+pacman (feito, #13), PR7 flatpak (feito, #14), PR8 `toolkit install` (feito). **Fase 2 completa; parar para revisão do Paulo (smoke manual em `docs/smoke.md`).** depois apt, dnf+pacman, flatpak e `install`/`--dry-run`.
+**Estado atual:** repositório `PiluTech/toolkit`, **público**. Licença MIT. As 22 perguntas da proposta foram respondidas, com todas as recomendações aceitas (`docs/decisoes.md`). **Fase 1 (esqueleto) em andamento** desde 2026-11-11, em PRs pequenos: PR1 módulo + Cobra `version` + gate local (feito), PR2 `exec` (feito), PR3 `platform` (feito), PR4 `catalog` (feito), PR5 `toolkit list` (feito). **Fase 1 completa e aprovada.** **Fase 2 (providers + `toolkit install`) liberada em 2026-11-11**, em PRs empilhados: PR1 Crivo Cf/Zl/Zp (feito, #8), PR2 núcleo `providers` (feito, #9), PR3 winget (feito, #10), PR4 brew (feito, #11), PR5 apt (feito, #12), PR6 dnf+pacman (feito, #13), PR7 flatpak (feito, #14), PR8 `toolkit install` (feito). **Fase 2 completa; parar para revisão do Paulo (smoke manual em `docs/smoke.md`).** depois apt, dnf+pacman, flatpak e `install`/`--dry-run`.
+
+**Pendências para o próximo PR (sem pressa, só depois do smoke do Paulo; #16 já mergeado):**
+- `printPlan` deve usar o mesmo GOOS/euid do runner real: como root o plano não mostra `sudo` (hoje mostra o `sudo -n -- env ...` mesmo sem ele).
+- Cabeçalhos do plano não devem se repetir no `install` real (o plano é impresso antes da confirmação e de novo na execução).
 
 ## Documentos
 - `README.md`: o que é, comandos planejados, plataformas, o que o toolkit não faz.
@@ -43,7 +47,7 @@ Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (
 - Gate: `scripts/ci.sh` (ou `make ci`; `~/.local/bin` entra no FIM do PATH; o gofmt vai por `scripts/check-gofmt.sh`, que reprova também sintaxe quebrada, com autoteste em `scripts/check-gofmt_test.sh`). Actions do workflow fixadas por SHA de commit (versão em comentário) e checkout com `persist-credentials: false`. Heavy pelo build-slot: `~/.maestri-local/build-slot.sh ./scripts/ci.sh`. `.github/workflows/ci.yml` só em `workflow_dispatch`.
 
 ## Regras do projeto
-- Escrever como repositório público, mesmo enquanto ele está privado: nada de dado de cliente, segredo, IP, e-mail ou referência a projetos privados em código, docs, testes ou mensagens de commit.
+- Escrever como repositório público, o repositório é público: nada de dado de cliente, segredo, IP, e-mail ou referência a projetos privados em código, docs, testes ou mensagens de commit.
 - Trabalhar por fases do briefing e parar ao fim de cada uma para revisão.
 - Nunca executar instaladores, winget, dism, apt ou reboot de verdade na máquina de desenvolvimento: usar o `exec.Runner` mockado (`internal/exec/exectest`) ou `--dry-run`.
 - Nada de download sem SHA-256 e nenhum `curl | bash` de terceiros. Nada que contorne licenciamento.

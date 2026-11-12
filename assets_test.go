@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	toolkit "github.com/PiluVitu/toolkit"
-	"github.com/PiluVitu/toolkit/internal/catalog"
+	toolkit "github.com/PiluTech/toolkit"
+	"github.com/PiluTech/toolkit/internal/catalog"
 )
 
 func TestCatalogoEmbutidoEValido(t *testing.T) {
