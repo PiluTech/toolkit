@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/download"
 	"github.com/PiluTech/toolkit/internal/exec"
 	"github.com/PiluTech/toolkit/internal/msg"
 	"github.com/PiluTech/toolkit/internal/providers"
@@ -19,7 +20,9 @@ import (
 	"github.com/PiluTech/toolkit/internal/providers/brew"
 	"github.com/PiluTech/toolkit/internal/providers/dnf"
 	"github.com/PiluTech/toolkit/internal/providers/flatpak"
+	"github.com/PiluTech/toolkit/internal/providers/githubrelease"
 	"github.com/PiluTech/toolkit/internal/providers/pacman"
+	urlprovider "github.com/PiluTech/toolkit/internal/providers/url"
 	"github.com/PiluTech/toolkit/internal/providers/winget"
 )
 
@@ -60,7 +63,22 @@ func (d Deps) providerList(r exec.Runner) []providers.Provider {
 	if d.Providers != nil {
 		return d.Providers(r)
 	}
-	return []providers.Provider{winget.New(r), brew.New(r), apt.New(r), dnf.New(r), pacman.New(r), flatpak.New(r)}
+	return []providers.Provider{winget.New(r), brew.New(r), apt.New(r), dnf.New(r), pacman.New(r), flatpak.New(r), urlprovider.New(r, urlprovider.Options{GOOS: d.GOOS, Downloader: d.Downloader, AppsDir: d.AppsDir}),
+		githubrelease.New(r, githubrelease.Options{GOOS: d.GOOS, Downloader: d.Downloader, AppsDir: d.AppsDir, Token: d.githubToken})}
+}
+
+func (d Deps) downloader() *download.Downloader {
+	if d.Downloader != nil {
+		return d.Downloader
+	}
+	return &download.Downloader{}
+}
+
+func (d Deps) githubToken() string {
+	if d.GitHubToken != nil {
+		return d.GitHubToken()
+	}
+	return os.Getenv("GITHUB_TOKEN")
 }
 
 func (d Deps) stdin() io.Reader {
@@ -140,7 +158,7 @@ func resolveVersion(app catalog.App, requested string) (map[string]string, strin
 }
 
 func runInstall(ctx context.Context, out, errOut io.Writer, deps Deps, f installFlags, args []string) error {
-	cat, err := loadCatalog(deps, listFlags{catalog: f.catalog, sha256: f.sha256, replace: f.replace}, errOut)
+	cat, err := loadCatalog(ctx, deps, listFlags{catalog: f.catalog, sha256: f.sha256, replace: f.replace}, errOut)
 	if err != nil {
 		return err
 	}
@@ -244,6 +262,10 @@ func printPlan(out io.Writer, deps Deps, dry *exec.DryRunRunner, dryRun bool) {
 	display := exec.OSRunner{GOOS: deps.GOOS}
 	usesSudo := false
 	for _, step := range plan {
+		if step.Note != "" {
+			_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallPlanLine, printable(step.Note)))
+			continue
+		}
 		line := printable(display.Display(step.Cmd))
 		if step.Cmd.Elevate && deps.GOOS != "windows" {
 			usesSudo = true
