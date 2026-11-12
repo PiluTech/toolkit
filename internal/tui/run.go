@@ -28,7 +28,9 @@ func run(ctx context.Context, o Options, popts []tea.ProgramOption, tabs ...Tab)
 		}
 	}
 	popts = append(popts, tea.WithContext(ctx))
-	_, err := tea.NewProgram(New(o, tabs...), popts...).Run()
+	m := New(o, tabs...)
+	m.SetExec(ctx, o.Planner, o.Runner)
+	_, err := tea.NewProgram(m, popts...).Run()
 	cancel() // antes de voltar: as chamadas em andamento acordam e terminam
 	return err
 }

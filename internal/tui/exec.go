@@ -59,9 +59,9 @@ type Event struct {
 	Status   ItemStatus
 	Err      string
 	Duration time.Duration
-	Items    []string // EventItems: nomes de todos os itens, na ordem
-	Prompt   string   // EventRebootPrompt: texto da pergunta
-	Reply    chan<- bool
+	Items    []string    // EventItems: nomes de todos os itens, na ordem
+	Prompt   string      // EventRebootPrompt: texto da pergunta
+	Reply    chan<- bool // bufferizado (cap 1): quem responde nunca bloqueia
 }
 
 // EventKind é o tipo de Event.
@@ -74,6 +74,7 @@ const (
 	EventLog
 	EventItemDone
 	EventRebootPrompt // pergunta [s/N] na linha de estado; a resposta vai em Reply
+	EventWarn         // aviso da execução (ex.: "não deu para gravar o log em arquivo"), texto em Line
 	EventDone
 )
 

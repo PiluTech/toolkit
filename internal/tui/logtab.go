@@ -92,6 +92,8 @@ func (t *LogTab) Apply(ev Event) {
 		if it := t.at(ev.Index); it != nil {
 			it.status, it.dur, it.err = ev.Status, ev.Duration, textsafe.Line(ev.Err)
 		}
+	case EventWarn:
+		t.Warn(ev.Line)
 	case EventDone:
 		t.running, t.question = false, ""
 		t.title = t.summaryTitle()

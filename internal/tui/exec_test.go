@@ -3,8 +3,10 @@ package tui
 import (
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -744,4 +746,115 @@ func TestEnterWithoutExecWiringOnlyWarns(t *testing.T) {
 	if !strings.Contains(m.render(), "executar pela TUI ainda não está ligado") {
 		t.Fatalf("aviso:\n%s", m.render())
 	}
+}
+
+// --- 5c: depois da execução as abas de estado se releem, o Run liga Planner/Runner e EventWarn vira aviso ---
+
+type reloadSpy struct {
+	fakeTab
+	reloads int
+}
+
+func (r *reloadSpy) Reload() tea.Cmd { r.reloads++; return nil }
+
+func TestRunClosedReloadsTheStateTabs(t *testing.T) {
+	spy := &reloadSpy{fakeTab: fakeTab{title: "Apps", short: "Apps"}}
+	other := &fakeTab{title: "Log", short: "Log"}
+	m := sized(Options{Mono: true}, 80, 24, spy, other)
+	m.Update(runClosedMsg{})
+	if spy.reloads != 1 {
+		t.Fatalf("as abas Reloader releem o estado depois da execução: %d", spy.reloads)
+	}
+}
+
+func TestAppsTabReloadRefetchesEveryStatus(t *testing.T) {
+	be := &fakeBackend{apps: sampleApps(), status: defaultStatus()}
+	tab := loaded(t, be)
+	before := len(be.asked)
+	if len(tab.status) == 0 {
+		t.Fatal("estado lido")
+	}
+	cmd := tab.Reload()
+	if cmd == nil || len(tab.status) != 0 || len(tab.pending) == 0 {
+		t.Fatalf("Reload zera o estado e pede de novo: status=%d pendentes=%d", len(tab.status), len(tab.pending))
+	}
+	for id := range tab.pending {
+		tab.Update(appStateMsg{id: id, st: be.status[id]})
+	}
+	for len(tab.pending) > 0 {
+		for id := range tab.pending {
+			tab.Update(appStateMsg{id: id, st: be.status[id]})
+		}
+	}
+	if len(tab.status) == 0 {
+		t.Fatal("o estado volta depois do Reload")
+	}
+	_ = before
+}
+
+func TestRecipesTabReloadReloads(t *testing.T) {
+	tab := loadedRecipes(t, recipeSample(), false)
+	if cmd := tab.Reload(); cmd == nil || !tab.loading {
+		t.Fatal("Reload volta ao carregando e devolve o comando de carga")
+	}
+}
+
+func TestLogTabShowsWarnEvent(t *testing.T) {
+	l := NewLogTab(Theme{Mono: true}, "")
+	l.Apply(Event{Kind: EventItems, Items: []string{"x"}})
+	l.Apply(Event{Kind: EventWarn, Line: "Não deu para gravar o log em arquivo; a execução continua e o log fica só na tela."})
+	if !strings.Contains(l.Status(), "! Não deu para gravar o log em arquivo") {
+		t.Fatalf("status: %q", l.Status())
+	}
+}
+
+// tui.run liga Options.Planner/Runner: Enter com um app marcado abre a Revisão e chama o Planner (sem terminal
+// real, com entrada por pipe). O teste NÃO lê o estado da aba (só o loop do Bubble Tea o toca): sincroniza pelo
+// backend (a 1ª leitura de estado só acontece depois de o catálogo ser tratado) e pelo Planner.
+func TestRunWiresPlannerAndRunnerFromOptions(t *testing.T) {
+	p := &countingPlanner{}
+	be := &signalBackend{fakeBackend: fakeBackend{apps: sampleApps(), status: defaultStatus()}, firstStatus: make(chan struct{})}
+	apps := NewAppsTab(context.Background(), be, Theme{Mono: true}, "linux")
+	in, out := io.Pipe()
+	done := make(chan error, 1)
+	go func() {
+		done <- run(context.Background(), Options{Mono: true, Planner: p, Runner: &fakeRunner{script: scriptOK}},
+			[]tea.ProgramOption{tea.WithInput(in), tea.WithOutput(io.Discard), tea.WithWindowSize(80, 24)}, apps)
+	}()
+	select {
+	case <-be.firstStatus:
+	case <-time.After(5 * time.Second):
+		t.Fatal("o catálogo não carregou")
+	}
+	_, _ = out.Write([]byte(" "))  // marca o primeiro app (git); as teclas são tratadas na ordem em que chegam
+	_, _ = out.Write([]byte("\r")) // Enter: Revisão + Planner
+	waitFor(t, "o Planner ser chamado", func() bool { return p.calls.Load() == 1 })
+	_, _ = out.Write([]byte("q"))
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("o Run não voltou")
+	}
+}
+
+// signalBackend avisa quando a primeira leitura de estado começa (o catálogo já foi tratado pela aba).
+type signalBackend struct {
+	fakeBackend
+	once        sync.Once
+	firstStatus chan struct{}
+}
+
+func (s *signalBackend) Status(ctx context.Context, id string) AppStatus {
+	s.once.Do(func() { close(s.firstStatus) })
+	return s.fakeBackend.Status(ctx, id)
+}
+
+type countingPlanner struct{ calls atomic.Int32 }
+
+func (c *countingPlanner) Plan(context.Context, Selection) (Plan, error) {
+	c.calls.Add(1)
+	return okPlan(), nil
 }

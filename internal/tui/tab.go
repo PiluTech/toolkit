@@ -34,3 +34,6 @@ type Tab interface {
 	// Selected é quantos itens estão marcados (alimenta "Enter revisa N marcados").
 	Selected() int
 }
+
+// Reloader é implementada pelas abas que mostram o estado do sistema: depois de uma execução elas o releem.
+type Reloader interface{ Reload() tea.Cmd }

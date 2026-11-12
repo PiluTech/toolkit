@@ -18,6 +18,9 @@ type Options struct {
 	Version string // versão em execução ("v0.1.0")
 	Latest  string // versão nova disponível, vazia = nenhuma (faixa "↑ v0.2.0 disponível (u)")
 	Mono    bool   // sem cor, negrito nem reverso (NO_COLOR)
+	// Planner e Runner ligam a Revisão e a execução (nil: Enter só avisa que a execução não está ligada).
+	Planner Planner
+	Runner  Runner
 }
 
 type modal int
@@ -118,7 +121,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.onRunEvent(msg.ev)
 	case runClosedMsg:
 		m.finishRun()
-		return m, nil
+		// depois da execução as abas que mostram o estado do sistema o releem (Apps, Receitas)
+		var cmds []tea.Cmd
+		for _, t := range m.tabs {
+			if r, ok := t.(Reloader); ok {
+				cmds = append(cmds, r.Reload())
+			}
+		}
+		return m, tea.Batch(cmds...)
 	case tickMsg:
 		if m.review != nil && m.review.loading {
 			m.review.frame++
