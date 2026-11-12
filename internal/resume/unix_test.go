@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -496,5 +497,25 @@ func TestNewLinuxIgnoresUserBinDir(t *testing.T) {
 	sd := reg.(resume.Systemd)
 	if sd.BinDir != "" {
 		t.Fatalf("BinDir do usuário vazou para o systemd: %q", sd.BinDir)
+	}
+}
+
+// Sem ReadFile injetado, só o próprio executável é lido (por /proc/self/exe no Linux).
+func TestSystemdDefaultReadsOnlyOwnExecutable(t *testing.T) {
+	r := exectest.New(t) // nada pode executar: a leitura falha antes de qualquer comando
+	s := newSystemd(r, true)
+	err := s.Register(context.Background(), resume.Spec{Executable: "/home/ana/dl/toolkit", Args: []string{"resume"}})
+	if !errors.Is(err, resume.ErrNotOwnExecutable) {
+		t.Fatalf("err = %v, quero ErrNotOwnExecutable", err)
+	}
+	if len(r.Calls()) != 0 {
+		t.Fatalf("executou comando: %v", r.Calls())
+	}
+	self, _ := os.Executable()
+	if _, err := resume.ReadOwnExecutableForTest(self); err != nil {
+		t.Fatalf("o próprio executável deve ser lido: %v", err)
+	}
+	if _, err := resume.ReadOwnExecutableForTest("/bin/sh"); !errors.Is(err, resume.ErrNotOwnExecutable) {
+		t.Fatalf("/bin/sh não é o executável em execução: %v", err)
 	}
 }
