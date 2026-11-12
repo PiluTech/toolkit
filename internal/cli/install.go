@@ -20,6 +20,7 @@ import (
 	"github.com/PiluTech/toolkit/internal/providers/dnf"
 	"github.com/PiluTech/toolkit/internal/providers/flatpak"
 	"github.com/PiluTech/toolkit/internal/providers/pacman"
+	urlprovider "github.com/PiluTech/toolkit/internal/providers/url"
 	"github.com/PiluTech/toolkit/internal/providers/winget"
 )
 
@@ -60,7 +61,7 @@ func (d Deps) providerList(r exec.Runner) []providers.Provider {
 	if d.Providers != nil {
 		return d.Providers(r)
 	}
-	return []providers.Provider{winget.New(r), brew.New(r), apt.New(r), dnf.New(r), pacman.New(r), flatpak.New(r)}
+	return []providers.Provider{winget.New(r), brew.New(r), apt.New(r), dnf.New(r), pacman.New(r), flatpak.New(r), urlprovider.New(r, urlprovider.Options{GOOS: d.GOOS, Downloader: d.Downloader, AppsDir: d.AppsDir})}
 }
 
 func (d Deps) stdin() io.Reader {
@@ -244,6 +245,10 @@ func printPlan(out io.Writer, deps Deps, dry *exec.DryRunRunner, dryRun bool) {
 	display := exec.OSRunner{GOOS: deps.GOOS}
 	usesSudo := false
 	for _, step := range plan {
+		if step.Note != "" {
+			_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallPlanLine, printable(step.Note)))
+			continue
+		}
 		line := printable(display.Display(step.Cmd))
 		if step.Cmd.Elevate && deps.GOOS != "windows" {
 			usesSudo = true

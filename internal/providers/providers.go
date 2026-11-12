@@ -51,7 +51,8 @@ type PackageRef struct {
 	Type     string
 	Args     []string
 	Line     int // linha no YAML, para mensagens de erro
-	// VersionInID: um template de versão ({{version}}, {{major}}, {{major_minor}}) já foi aplicado ao id/nome
+	// VersionInID: um template de versão ({{version}}, {{major}}, {{major_minor}}) já foi aplicado ao id/nome (ou à
+	// URL do provider url; no github-release a versão escolhe a release e segue ao provider)
 	// (python@{{major_minor}}, Python.Python.{{major_minor}}). A versão já está no id: InstallApp NÃO a passa de
 	// novo ao provider (sem --version no winget, sem =versão no apt, sem ErrVersionUnsupported no brew).
 	VersionInID bool
@@ -171,7 +172,7 @@ func RefFrom(app catalog.App, in catalog.Installer, vars map[string]string) (Pac
 		*f.dst = v
 		if names, err := tmpl.Names(f.src); err == nil {
 			for _, n := range names {
-				if tmpl.VersionVars[n] && (f.dst == &ref.ID || f.dst == &ref.Package || f.dst == &ref.Formula || f.dst == &ref.Cask) {
+				if tmpl.VersionVars[n] && (f.dst == &ref.ID || f.dst == &ref.Package || f.dst == &ref.Formula || f.dst == &ref.Cask || f.dst == &ref.URL) {
 					ref.VersionInID = true
 				}
 			}

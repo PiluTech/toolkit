@@ -14,6 +14,7 @@ import (
 
 	toolkit "github.com/PiluTech/toolkit"
 	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/download"
 	"github.com/PiluTech/toolkit/internal/exec"
 	"github.com/PiluTech/toolkit/internal/msg"
 	"github.com/PiluTech/toolkit/internal/providers"
@@ -26,10 +27,15 @@ type Deps struct {
 	// NewRunner devolve o Runner que executa os comandos do install (nil = exec.OSRunner). Os testes injetam o
 	// exectest.FakeRunner: nenhum teste chega a um gerenciador de verdade.
 	NewRunner func() exec.Runner
-	// Providers monta os providers sobre o Runner (nil = os seis: winget, brew, apt, dnf, pacman, flatpak).
+	// Providers monta os providers sobre o Runner (nil = os sete: winget, brew, apt, dnf, pacman, flatpak e url).
 	Providers func(exec.Runner) []providers.Provider
 	// CheckElevation avisa, no dry-run, quando um passo exigiria administrador (nil = OSRunner).
 	CheckElevation func(exec.Cmd) error
+	// Downloader baixa instaladores (provider url) e catálogos por URL (nil = cliente estrito do pacote download).
+	// Os testes injetam o de internal/download/downloadtest.
+	Downloader *download.Downloader
+	// AppsDir é onde os arquivos compactados (zip, tar.gz) do provider url são extraídos (nil = pasta do usuário).
+	AppsDir func() (string, error)
 	// Stdin e Interactive decidem a confirmação do install real: sem terminal (Interactive false) exige --yes.
 	// Nil = os.Stdin e "stdin é um terminal".
 	Stdin       io.Reader

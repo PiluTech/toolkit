@@ -69,7 +69,7 @@ Qualquer texto do arquivo (chaves e valores: `name`, versões, `args`...) com ca
 | `github-release` | `repo`, `asset` | `sha256`, `type`, `args` | releases do repositório |
 | `url` | `url`, `sha256` | `type`, `args` | uma, a da URL |
 
-`type` é um de `msi`, `exe`, `zip`, `tar.gz`, `dmg`, `deb`, `rpm` e `appimage`. Se ficar vazio, vem da
+`type` é um de `msi`, `exe`, `zip`, `tar.gz`, `pkg`, `dmg`, `deb`, `rpm` e `appimage`. Se ficar vazio, vem da
 extensão do arquivo. `args` são os argumentos silenciosos de um `exe` ou `msi`; cada item tem de ser um
 texto (use aspas em números e booleanos) e passa pela validação de templates como os outros campos.
 
@@ -81,6 +81,28 @@ texto (use aspas em números e booleanos) e passa pela validação de templates 
 - Variável de template só vale **depois do host** (no caminho ou na query), nunca no host.
 - A URL é validada na carga (com os templates) e de novo depois da expansão (`catalog.CheckURL`).
 - O `sha256` é obrigatório no provider `url`.
+
+### Como o provider `url` instala
+
+O arquivo é baixado (`internal/download`: https, até 5 redirects revalidados, só IP público, limite de tamanho),
+o `sha256` é conferido **antes** de qualquer uso (divergência = `ErrHashMismatch`, sem retry) e só então roda o instalador do `type`:
+
+| `type` | SO | O que roda |
+|---|---|---|
+| `msi` | Windows | `msiexec.exe /i <arquivo> /qn /norestart <args>` (3010 e 1641 = reiniciar; exige administrador) |
+| `exe` | Windows | `<arquivo> <args>`; `args` é **obrigatório** (sem eles o instalador abriria a tela interativa) |
+| `pkg` | macOS | `installer -pkg <arquivo> -target /` (`sudo -n`) |
+| `dmg` | macOS | monta, instala o `.pkg` ou copia o `.app` (exatamente um dos dois na raiz) para `/Applications`, desmonta |
+| `deb` | Linux | `apt-get install -y --no-remove <arquivo>` (`sudo -n`) |
+| `rpm` | Linux | `dnf install -y <arquivo>` (ou `rpm -U` sem dnf; `sudo -n`) |
+| `zip`, `tar.gz` | todos | extrai em `<pasta de apps do usuário>/<id do app>` (Windows `%LOCALAPPDATA%\toolkit\apps`, Linux `$XDG_DATA_HOME/toolkit/apps` ou `~/.local/share/toolkit/apps`, macOS `~/Library/Application Support/toolkit/apps`). Recusa caminho absoluto, `..`, link simbólico, dispositivo e entrada repetida; a extração é feita num diretório de staging e só então substitui a versão anterior. **Não** põe nada no PATH |
+
+`args` só valem para `msi` e `exe` e vão sempre **depois** do arquivo. `appimage` ainda não é suportado. O `--dry-run` mostra o
+download (`baixar <url> (sha256 ..., até N MiB)`) e os comandos como serão executados, sem baixar nem executar nada.
+
+Limites: o provider `url` não sabe se o app já está instalado (`IsInstalled` é sempre "não": rodar de novo reinstala);
+só existe a versão da URL (para `app@versão`, use `{{version}}` na URL; o `sha256` fixado cobre UMA versão, as outras falham no hash);
+o proxy do ambiente não é usado.
 
 ### Chaves repetidas e limites
 
