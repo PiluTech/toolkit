@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -63,7 +64,7 @@ func (d TUIDeps) run(ctx context.Context, o tui.Options, tabs ...tui.Tab) error 
 }
 
 // runRoot é o `toolkit` sem argumentos: abre a TUI quando há terminal, senão mostra a ajuda.
-func runRoot(cmd *cobra.Command, deps Deps, rd RecipeDeps, noTUI bool) error {
+func runRoot(cmd *cobra.Command, deps Deps, rd RecipeDeps, noTUI bool, notifier *updateNotifier) error {
 	if !shouldOpenTUI(deps.interactive(), deps.TUI.stdoutTTY(), noTUI, deps.TUI.term()) {
 		return cmd.Help()
 	}
@@ -77,13 +78,37 @@ func runRoot(cmd *cobra.Command, deps Deps, rd RecipeDeps, noTUI bool) error {
 		Planner: &tuiPlanner{deps: deps, rd: rd},
 		Runner:  &tuiRunner{deps: deps, rd: rd, logDir: func() string { return runLogDir(deps, rd) }},
 	}
+	// aviso de versão nova: o cache já traz a faixa; uma consulta em andamento a preenche quando chegar
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+	if rel, ok := notifier.latest(); ok {
+		opts.Latest, opts.LatestNotes, opts.LatestURL = rel.Tag, rel.Notes, rel.URL
+	} else if notifier != nil && notifier.result != nil {
+		ch := make(chan tui.UpdateInfo, 1)
+		opts.Updates = ch
+		go func() { // termina com o ctx (fim da TUI): nada sobra
+			select {
+			case rel := <-notifier.result:
+				ch <- tui.UpdateInfo{Tag: rel.Tag, Notes: rel.Notes, URL: rel.URL}
+			case <-ctx.Done():
+			}
+		}()
+	}
+	if notifier != nil {
+		notifier.silence = true // a faixa da TUI já avisou: sem linha no fim
+	}
 	tabs := []tui.Tab{
 		tui.NewAppsTab(ctx, &appsBackend{deps: deps}, th, deps.GOOS),
 		tui.NewRecipesTab(ctx, &recipesBackend{deps: deps, rd: rd}, th, false),
 		tui.NewRecipesTab(ctx, &recipesBackend{deps: deps, rd: rd}, th, true),
 		tui.NewLogTab(th, ""),
 	}
-	return deps.TUI.run(ctx, opts, tabs...)
+	err := deps.TUI.run(ctx, opts, tabs...)
+	if errors.Is(err, tui.ErrUpdateRequested) {
+		// o usuário escolheu Atualizar: a TUI já fechou; roda o mesmo `toolkit update` do terminal
+		return runUpdate(ctx, cmd.OutOrStdout(), deps, updateFlags{})
+	}
+	return err
 }
 
 // appsBackend liga a aba Apps ao catálogo e aos providers (somente leitura).

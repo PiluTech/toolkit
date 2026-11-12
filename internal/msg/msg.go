@@ -62,6 +62,8 @@ const (
 	UpdateFlagVersion     = "instala esta versão (vX.Y.Z), inclusive mais antiga que a atual"
 	UpdateUpToDate        = "toolkit %s já é a última versão."
 	UpdateAvailable       = "toolkit %s → %s disponível."
+	UpdateNotice          = "aviso: toolkit %s disponível (você usa %s). Para atualizar: toolkit update (desligar este aviso: --no-update-check)"
+	FlagNoUpdateCheck     = "não consulta nem avisa de versão nova (também: TOOLKIT_NO_UPDATE_CHECK=1)"
 	UpdateNotes           = "Notas da release:"
 	UpdateHowTo           = "Para atualizar: toolkit update"
 	UpdateDevBuild        = "toolkit %s é um build de desenvolvimento: não há versão para comparar. Use: toolkit update --version vX.Y.Z"

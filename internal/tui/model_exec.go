@@ -51,6 +51,11 @@ func (m *Model) execKey(k string) (tea.Model, tea.Cmd, bool) {
 		case "ctrl+c", "q":
 			m.open(askInterrupt, "Interromper? O item atual é encerrado e a fila é descartada.", nil)
 			return m, nil, true
+		case "u":
+			if m.opts.Latest != "" {
+				m.notice = "atualizar fica indisponível durante a execução: espere terminar ou interrompa (q)"
+				return m, nil, true
+			}
 		case "space", "enter", "v", "/":
 			m.notice = "bloqueado durante a execução: espere terminar ou interrompa (q)"
 			return m, nil, true

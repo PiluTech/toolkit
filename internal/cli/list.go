@@ -46,6 +46,8 @@ type Deps struct {
 	AppsDir func() (string, error)
 	// Update são os pontos injetáveis do `toolkit update` (zero = a release do GitHub e o binário em execução).
 	Update UpdateDeps
+	// UpdateCheck são os pontos injetáveis do aviso de versão nova (zero = ambiente real; build dev nunca consulta).
+	UpdateCheck UpdateCheckDeps
 	// GitHubToken devolve o token da API de releases do GitHub (nil = variável GITHUB_TOKEN). Só vai ao api.github.com.
 	GitHubToken func() string
 	// Stdin e Interactive decidem a confirmação do install real: sem terminal (Interactive false) exige --yes.
