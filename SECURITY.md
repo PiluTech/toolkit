@@ -2,8 +2,7 @@
 
 ## Versões suportadas
 
-O projeto está em desenvolvimento e ainda não tem release. Quando houver, só a última release recebe
-correções de segurança.
+O projeto está em desenvolvimento. Só a última release recebe correções de segurança.
 
 ## Como reportar uma vulnerabilidade
 
@@ -30,7 +29,10 @@ Qualquer caso em que uma destas regras não se cumpra é uma vulnerabilidade:
    - `url`: `sha256` obrigatório no catálogo.
    - `github-release`: `checksums.txt` da release, ou o `digest` publicado pelo GitHub, ou `sha256`
      fixado no catálogo.
-   - Bootstraps: `checksums.txt` da mesma release do binário.
+   - Bootstraps (`scripts/bootstrap/unix.sh`, `win.ps1`): `checksums.txt` da mesma release do binário;
+     se o hash divergir ou o binário não constar no arquivo, abortam sem instalar. Instalam só no PATH
+     do usuário, sem `sudo` nem administrador. O `unix.sh` é testado com release falsa e checksums
+     adulterados (`scripts/bootstrap/unix_test.sh`).
    - O arquivo baixado fica num diretório temporário e só é usado depois que o hash confere.
 2. **Nenhum `curl | bash` de terceiros** dentro de receitas.
 3. **Extração segura**: arquivos zip e tar com caminho absoluto, `..` ou link simbólico para fora do
@@ -40,6 +42,13 @@ Qualquer caso em que uma destas regras não se cumpra é uma vulnerabilidade:
 5. **Logs sem segredos**: `GITHUB_TOKEN`, cabeçalhos `Authorization` e comandos marcados como secretos
    são mascarados.
 6. **Hash de pacote do winget nunca é ignorado**: `--ignore-security-hash` não é usado em hipótese alguma.
+
+## Release
+
+A release é feita localmente (`scripts/release.sh`): binários estáticos dos 6 alvos, `checksums.txt` calculado
+depois da assinatura e, no macOS, binários assinados com Developer ID e notarizados. As credenciais de
+notarização (key id, issuer e a chave .p8, lida do 1Password na hora para um arquivo temporário 600
+apagado ao final) nunca ficam no repositório, nem o nome da identidade de assinatura. O script só compila com a árvore limpa e a tag da versão em HEAD, e só apaga o `--out` se ele for um subdiretório do repositório. A criação da release no GitHub é um passo manual.
 
 ## Fora do escopo
 

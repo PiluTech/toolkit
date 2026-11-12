@@ -518,7 +518,9 @@ nenhum teste pode executar winget, dism ou reboot de verdade, e o gate de qualid
      caso de processo 32 bits em sistema 64.
   3. Baixa o zip e o `checksums.txt` da tag `$env:TOOLKIT_VERSION` (padrão: latest).
   4. Confere com `Get-FileHash -Algorithm SHA256`.
-  5. Grava em `%ProgramData%\toolkit\bin\` e executa repassando `$args`.
+  5. **Como ficou (fase 6):** grava em `%LOCALAPPDATA%\toolkit\bin\` e acrescenta a pasta ao PATH do
+     usuário, sem exigir administrador, e não executa o binário (só instala). Assets da release: binários
+     crus `toolkit_<os>_<arch>[.exe]`, `checksums.txt`, `unix.sh`, `win.ps1`.
 - `unix.sh` segue o briefing, com `set -eu`, `trap` para limpar o temp e sem bashismos (pode ser
   lido por `sh`).
 - **Receita `wsl-dev`, etapa `setup-inside`**: o exemplo do briefing faz `curl | bash` dentro do WSL.
