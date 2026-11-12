@@ -6,6 +6,7 @@ Ordem combinada com o Paulo; um PR por vez, com revisão (Lupa/Crivo).
 2. **`toolkit update`**: feito (`CLAUDE.md`, pacote `internal/update`). **Aviso de versão nova**: feito (PR empilhado
    no `toolkit update`; 1 consulta/dia, cache em `os.UserCacheDir()/toolkit`, desligável, nunca bloqueia; `u` na
    TUI abre as notas). Detalhes em `docs/tui.md`.
+3. **Ícone** "Porca de comando" (variante A): **feito** (README, `assets/icon/`, PNG gerados do SVG por
    `scripts/gerar-icone.sh`; PNG do site em `assets/icon/toolkit-site.png`). Ainda não há modelo de notas de release
    no repositório para levar o ícone. Possível melhoria: `.ico`/`.syso` no exe do Windows (fora desta etapa).
 4. **`toolkit --version`** (hoje só existe `toolkit version`).
