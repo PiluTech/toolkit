@@ -90,7 +90,8 @@ func (c *Checker) save(e CacheEntry) error {
 		return err
 	}
 	// Pasta que já existia mais aberta (0755 de uma versão antiga ou criada à mão): aperta para 0700 (melhor esforço).
-	if fi, err := os.Stat(dir); err == nil && fi.Mode().Perm()&0o077 != 0 {
+	// Lstat (não Stat): se a pasta é um LINK, não se dá chmod através dele (apertaria o destino, que pode não ser nosso).
+	if fi, err := os.Lstat(dir); err == nil && fi.Mode()&os.ModeSymlink == 0 && fi.IsDir() && fi.Mode().Perm()&0o077 != 0 {
 		_ = os.Chmod(dir, 0o700)
 	}
 	c.removeStaleTemps(dir)
