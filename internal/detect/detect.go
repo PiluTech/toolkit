@@ -13,6 +13,8 @@ import (
 	"context"
 	"io/fs"
 	"strings"
+	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/PiluTech/toolkit/internal/catalog"
@@ -36,12 +38,38 @@ type Options struct {
 	FS fs.FS
 	// Home é a pasta do usuário (absoluta); vazia = só os locais do sistema.
 	Home string
+	// Now é o relógio do cache da varredura (nil = time.Now).
+	Now func() time.Time
 }
 
 // Detector procura apps fora do gerenciador.
 type Detector struct {
 	rn   exec.Runner
 	opts Options
+
+	mu       sync.Mutex
+	macIndex map[string]Found // bundle_id (minúsculo) -> bundle achado, da varredura de /Applications e ~/Applications
+	macAt    time.Time        // quando a varredura foi feita (vale cacheTTL)
+	macBuilt bool
+}
+
+// cacheTTL é por quanto tempo a varredura de .app por bundle_id é reaproveitada: a TUI pergunta o estado de
+// vários apps em seguida e antes cada pergunta lia todos os Info.plist de novo. Curto de propósito: um app
+// instalado agora aparece em segundos; depois de uma execução quem muda o sistema chama Invalidate.
+const cacheTTL = 30 * time.Second
+
+func (d *Detector) now() time.Time {
+	if d.opts.Now != nil {
+		return d.opts.Now()
+	}
+	return time.Now()
+}
+
+// Invalidate descarta a varredura em cache (chamar depois de instalar ou remover algo).
+func (d *Detector) Invalidate() {
+	d.mu.Lock()
+	d.macIndex, d.macBuilt = nil, false
+	d.mu.Unlock()
 }
 
 // New cria o detector sobre o Runner (só leituras).

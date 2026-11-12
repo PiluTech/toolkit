@@ -90,6 +90,9 @@ type Outcome struct {
 	// External não é nil quando o app JÁ está instalado fora do gerenciador (o .dmg no macOS, o instalador no
 	// Windows): nada foi preparado nem instalado, Result fica zerado.
 	External *External
+	// ExternalIgnored não é nil quando havia um app fora do gerenciador mas a instalação seguiu mesmo assim
+	// (Options.ForceExternal): o chamador avisa que o gerenciador pode falhar ou sobrescrever.
+	ExternalIgnored *External
 	// Tried lista os providers que recusaram (não aplicável, não encontrado, versão não suportada) antes do que deu certo.
 	Tried []string
 }
@@ -127,6 +130,9 @@ type Options struct {
 	// External, quando não nil, é consultado UMA vez, depois que o gerenciador diz "não instalado" e antes de
 	// SupportsVersion/Prepare/Install: achou = o app já está lá, nada é preparado nem instalado.
 	External ExternalFinder
+	// ForceExternal: achou o app fora do gerenciador? Instala mesmo assim (Outcome.ExternalIgnored leva o que foi
+	// achado, para o aviso). Sem isto o install pula com "já instalado fora do ...".
+	ForceExternal bool
 }
 
 // DisplayName é o nome do gerenciador para o usuário ("brew" vira "Homebrew"); desconhecido volta como veio.
@@ -186,7 +192,11 @@ func InstallAppWith(ctx context.Context, cands []Candidate, version string, opts
 			if err != nil {
 				return out, fmt.Errorf("%s: %w", c.Provider.Name(), err)
 			}
-			if found {
+			if found && opts.ForceExternal {
+				e := ext
+				e.Manager = DisplayName(c.Provider.Name())
+				out.ExternalIgnored = &e // segue para a instalação normal
+			} else if found {
 				if pinned && (ext.Version == "" || !SameVersion(ext.Version, ver)) {
 					return out, fmt.Errorf("%w: já instalado fora do %s (versão %q), mas %q foi pedida; remova o app antes", ErrExternalVersion, DisplayName(c.Provider.Name()), ext.Version, ver)
 				}

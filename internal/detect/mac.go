@@ -51,35 +51,60 @@ func (d *Detector) findMac(ctx context.Context, spec catalog.Detect) (Found, boo
 		}
 	}
 	if spec.BundleID != "" {
-		bin := 0
-		for _, dir := range d.appDirs() {
-			entries, err := fs.ReadDir(d.opts.FS, rel(dir))
-			if err != nil {
-				continue
-			}
-			for i, e := range entries {
-				if i >= maxScan {
-					break
-				}
-				if ctx.Err() != nil {
-					return Found{}, false
-				}
-				name := e.Name()
-				if !strings.HasSuffix(name, ".app") || strings.Contains(name, "/") {
-					continue
-				}
-				p := dir + "/" + name
-				if st, err := fs.Stat(d.opts.FS, rel(p)); err != nil || !st.IsDir() {
-					continue
-				}
-				info, ok := d.readPlistBudget(ctx, p, &bin)
-				if ok && strings.EqualFold(info.id, spec.BundleID) {
-					return Found{Where: clean(p, 300), Version: info.version()}, true
-				}
-			}
+		idx, ok := d.bundleIndex(ctx)
+		if !ok {
+			return Found{}, false
+		}
+		if f, found := idx[strings.ToLower(spec.BundleID)]; found {
+			return f, true
 		}
 	}
 	return Found{}, false
+}
+
+// bundleIndex varre UMA vez (por cacheTTL) os .app de /Applications e ~/Applications, lendo cada Info.plist, e
+// devolve bundle_id (minúsculo) -> bundle. A TUI consulta vários apps em seguida: antes cada consulta relia tudo.
+// ok é false se o contexto foi cancelado no meio (nada é guardado).
+func (d *Detector) bundleIndex(ctx context.Context) (map[string]Found, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.macBuilt && d.now().Sub(d.macAt) < cacheTTL {
+		return d.macIndex, true
+	}
+	idx := map[string]Found{}
+	bin := 0
+	for _, dir := range d.appDirs() {
+		entries, err := fs.ReadDir(d.opts.FS, rel(dir))
+		if err != nil {
+			continue
+		}
+		for i, e := range entries {
+			if i >= maxScan {
+				break
+			}
+			if ctx.Err() != nil {
+				return nil, false
+			}
+			name := e.Name()
+			if !strings.HasSuffix(name, ".app") || strings.Contains(name, "/") {
+				continue
+			}
+			p := dir + "/" + name
+			if st, err := fs.Stat(d.opts.FS, rel(p)); err != nil || !st.IsDir() {
+				continue
+			}
+			info, ok := d.readPlistBudget(ctx, p, &bin)
+			if !ok || info.id == "" {
+				continue
+			}
+			key := strings.ToLower(info.id)
+			if _, dup := idx[key]; !dup { // o primeiro (sistema antes do usuário) vale
+				idx[key] = Found{Where: clean(p, 300), Version: info.version()}
+			}
+		}
+	}
+	d.macIndex, d.macAt, d.macBuilt = idx, d.now(), true
+	return idx, true
 }
 
 type plistInfo struct{ id, short, build string }
@@ -112,6 +137,11 @@ func (d *Detector) readPlistBudget(ctx context.Context, appPath string, bin *int
 		return plistInfo{}, false
 	}
 	defer func() { _ = f.Close() }()
+	// O Stat acima e o Open são passos separados: alguém pode trocar o arquivo por um FIFO entre os dois. O OSFS
+	// abre com O_NONBLOCK (não trava) e aqui o tipo é conferido NO DESCRITOR aberto (fstat).
+	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() {
+		return plistInfo{}, false
+	}
 	data, err := io.ReadAll(io.LimitReader(f, maxPlist+1))
 	if err != nil || len(data) > maxPlist {
 		return plistInfo{}, false

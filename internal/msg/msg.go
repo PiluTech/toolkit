@@ -86,6 +86,8 @@ const (
 	InstallHeader          = "==> %s (%s)"
 	InstallAlready         = "já instalado (%s%s)"
 	InstallExternal        = "já instalado fora do %s em %s%s: nada a fazer"
+	InstallExternalForced  = "aviso: já instalado fora do %s em %s%s; --force: instalando mesmo assim (o gerenciador pode falhar ou sobrescrever o app existente)"
+	FlagForce              = "instala mesmo que o app já esteja instalado fora do gerenciador (com aviso)"
 	InstallExternalVersion = " (versão %s)"
 	InstallDone            = "instalado com %s"
 	InstallDoneSimul       = "seria instalado com %s (simulado)"

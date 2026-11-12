@@ -493,7 +493,18 @@ func (r *tuiRunner) Run(ctx context.Context, sel tui.Selection, ch chan<- tui.Ev
 			fl.line("item %d (%s): %s", i+1, it.name, status)
 		}
 	}
+	r.invalidateDetector() // o sistema mudou: a varredura de .app em cache já não vale
 	send(tui.Event{Kind: tui.EventDone})
+}
+
+// invalidateDetector descarta o cache do detector de apps fora do gerenciador (se ele tiver um).
+func (r *tuiRunner) invalidateDetector() {
+	if r.deps.Detector == nil {
+		return
+	}
+	if inv, ok := r.deps.Detector(r.deps.runner()).(interface{ Invalidate() }); ok {
+		inv.Invalidate()
+	}
 }
 
 // buildQueue monta a fila: apps na ordem marcada, receitas sem reinício e, por último, as que reiniciam.
@@ -552,7 +563,7 @@ func (r *tuiRunner) runApp(ctx context.Context, w io.Writer, t installTarget) (t
 	_, _ = fmt.Fprintln(w, fmt.Sprintf(msg.InstallHeader, t.app.ID, t.app.Name))
 	rn := r.approved(r.deps.runner())
 	reg := providers.NewRegistry(r.deps.providerList(rn)...)
-	if err := installOne(ctx, w, reg, r.deps.GOOS, t.app, t.vars, t.version, false, r.deps.externalFinder(rn, t.app)); err != nil {
+	if err := installOne(ctx, w, reg, r.deps.GOOS, t.app, t.vars, t.version, false, r.deps.externalFinder(rn, t.app), false); err != nil {
 		if errors.Is(err, providers.ErrNeedsAdmin) {
 			_, _ = fmt.Fprintln(w, msg.HintNeedsAdmin)
 		}
