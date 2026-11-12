@@ -301,3 +301,112 @@ func TestRecipesRootRoutesDataToBackgroundTab(t *testing.T) {
 		t.Fatalf("diagnóstico recebeu %+v", dt.items)
 	}
 }
+
+// --- Lupa no #36: a rolagem e o More contam as linhas RENDERIZADAS (aviso "Nunca rodou" e linhas de erro
+// também ocupam o corpo), não as etapas ---
+
+func longRecipe(diag bool, failedAt int) RecipesData {
+	r := RecipeInfo{ID: "longa", Name: "Receita longa", Diagnostic: diag}
+	run := RecipeRun{Steps: map[string]StepRun{}}
+	for i := 0; i < 14; i++ {
+		id := fmt.Sprintf("s%02d", i)
+		r.Steps = append(r.Steps, StepInfo{ID: id, Name: fmt.Sprintf("Etapa %02d", i)})
+		switch {
+		case failedAt >= 0 && i < failedAt:
+			run.Steps[id] = StepRun{Status: "done"}
+		case i == failedAt:
+			run.Steps[id] = StepRun{Status: "failed", Error: "saiu com código 1. Veja o log."}
+		}
+	}
+	d := RecipesData{Recipes: []RecipeInfo{r}, Runs: map[string]RecipeRun{}}
+	if failedAt >= 0 {
+		run.Status = "failed"
+		d.Runs[r.ID] = run
+	}
+	return d
+}
+
+// Diagnóstico com 14 etapas em corpo 80x9, nunca rodou: → e G selecionam a etapa 14 e ela TEM de aparecer.
+func TestDiagnosticNeverRanLastStepIsVisible(t *testing.T) {
+	tab := loadedRecipes(t, longRecipe(true, -1), true)
+	first := plain(tab.View(80, 9))
+	if !strings.Contains(first, "Nunca rodou.") || tab.More() <= 0 {
+		t.Fatalf("antes de rolar:\n%s (more=%d)", first, tab.More())
+	}
+	rsend(tab, "right", "G")
+	v := plain(tab.View(80, 9))
+	if !strings.Contains(v, "> ") || !strings.Contains(v, "14 Etapa 13") {
+		t.Fatalf("a etapa 14 selecionada some da tela:\n%s", v)
+	}
+	if tab.More() != 0 {
+		t.Fatalf("no fim More deve ser 0, é %d", tab.More())
+	}
+	if n := strings.Count(v, "\n") + 1; n > 9 {
+		t.Fatalf("o corpo passou de 9 linhas: %d", n)
+	}
+}
+
+// Receita cuja etapa 8 falhou: a linha de erro ocupa uma linha a mais; a etapa 14 ainda tem de aparecer.
+func TestRecipeWithFailedStepLastStepIsVisible(t *testing.T) {
+	tab := loadedRecipes(t, longRecipe(false, 7), false)
+	rsend(tab, "right", "G")
+	v := plain(tab.View(80, 9))
+	if !strings.Contains(v, "> ") || !strings.Contains(v, "14 Etapa 13") || tab.More() != 0 {
+		t.Fatalf("a etapa 14 selecionada some da tela (more=%d):\n%s", tab.More(), v)
+	}
+	// na etapa que falhou, a linha de erro aparece junto dela
+	rsend(tab, "g")
+	for i := 0; i < 7; i++ {
+		rsend(tab, "down")
+	}
+	v = plain(tab.View(80, 9))
+	if !strings.Contains(v, "8 Etapa 07") || !strings.Contains(v, "erro: saiu com código 1.") {
+		t.Fatalf("a etapa que falhou e o erro dela ficam juntos:\n%s", v)
+	}
+}
+
+// Invariante: para qualquer altura e qualquer etapa selecionada, a etapa aparece inteira e o More é
+// exatamente o que sobrou abaixo, em LINHAS.
+func TestRecipesStepWindowInvariant(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		d    RecipesData
+		diag bool
+	}{{"diagnóstico nunca rodou", longRecipe(true, -1), true}, {"etapa 8 falhou", longRecipe(false, 7), false}, {"etapa 1 falhou", longRecipe(false, 0), false}} {
+		for h := 6; h <= 22; h++ {
+			tab := loadedRecipes(t, tc.d, tc.diag)
+			rsend(tab, "right")
+			for i := 0; i < 14; i++ {
+				v := plain(tab.View(80, h))
+				want := fmt.Sprintf("%2d Etapa %02d", i+1, i)
+				if !strings.Contains(v, want) {
+					t.Fatalf("%s h=%d: a etapa selecionada %d não aparece:\n%s", tc.name, h, i+1, v)
+				}
+				if n := strings.Count(v, "\n") + 1; n > h {
+					t.Fatalf("%s h=%d: %d linhas", tc.name, h, n)
+				}
+				shown := strings.Count(v, "\n") + 1
+				total := len(tab.renderedSteps(tab.visible()[0], 80).lines)
+				below := total - (tab.stp + stepsShown(v))
+				if tab.More() != max(below, 0) {
+					t.Fatalf("%s h=%d etapa %d: More=%d, abaixo da janela=%d (linhas mostradas %d)", tc.name, h, i+1, tab.More(), below, shown)
+				}
+				rsend(tab, "down")
+			}
+		}
+	}
+}
+
+// stepsShown conta as linhas do painel de etapas na tela (depois da régua "Etapas de").
+func stepsShown(view string) int {
+	n, in := 0, false
+	for _, l := range strings.Split(view, "\n") {
+		if in {
+			n++
+		}
+		if strings.Contains(l, "Etapas de ") {
+			in = true
+		}
+	}
+	return n
+}

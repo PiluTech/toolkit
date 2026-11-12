@@ -357,7 +357,9 @@ func (t *RecipesTab) More() int {
 	if !ok || t.loading || t.loadErr != nil {
 		return 0
 	}
-	return max(len(r.Steps)-(t.stp+t.stepRows()), 0)
+	sr := t.renderedSteps(r, t.lastW)
+	t.fixSteps(sr)
+	return max(len(sr.lines)-(t.stp+t.stepRows()), 0)
 }
 
 func (t *RecipesTab) spin() string { return spinnerFrames[t.frame%len(spinnerFrames)] }
@@ -525,40 +527,68 @@ func (t *RecipesTab) panelRule(r RecipeInfo, w int) string {
 	return clip(SymRule+t.theme.Title().Render(title)+strings.Repeat(SymRule, fill)+right, w)
 }
 
-func (t *RecipesTab) stepLines(r RecipeInfo, w int) []string {
+// stepRender é o painel de etapas já em LINHAS: o aviso "Nunca rodou", a linha de erro de uma etapa que
+// falhou e a dica de reset também ocupam o corpo, então a rolagem e o More contam estas linhas, não as
+// etapas. first/last dão, por etapa, a primeira e a última linha dela.
+type stepRender struct {
+	lines       []string
+	first, last []int
+}
+
+func (t *RecipesTab) renderedSteps(r RecipeInfo, w int) stepRender {
+	var sr stepRender
 	if len(r.Steps) == 0 {
-		return []string{" Esta receita não tem etapas."}
+		sr.lines = []string{" Esta receita não tem etapas."}
+		return sr
 	}
 	run := t.runOf(r.ID)
-	rows := t.stepRows()
-	if t.scur < t.stp {
-		t.stp = t.scur
-	}
-	if t.scur >= t.stp+rows {
-		t.stp = t.scur - rows + 1
-	}
-	var out []string
 	if len(run.Steps) == 0 && r.Diagnostic {
-		out = append(out, " Nunca rodou. Marque e tecle Enter: a Revisão mostra o que será executado.")
+		sr.lines = append(sr.lines, " Nunca rodou. Marque e tecle Enter: a Revisão mostra o que será executado.")
 	}
-	for i := t.stp; i < len(r.Steps) && len(out) < rows; i++ {
-		s := r.Steps[i]
+	if run.Status == "failed" { // no topo: lido primeiro e nunca escondido abaixo da dobra
+		sr.lines = append(sr.lines, clip(" toolkit recipe reset "+r.ID+" libera nova tentativa", w))
+	}
+	for i, s := range r.Steps {
 		cursor := " "
 		if t.focus && i == t.scur {
 			cursor = ">"
 		}
 		st := run.Steps[s.ID]
 		txt, style := stepState(t.theme, st.Status)
-		line := fmt.Sprintf(" %s %2d %s  %s", cursor, i+1, cell(s.Name, max(w-34, 12)), style.Render(txt))
-		out = append(out, line)
-		if st.Status == "failed" && st.Error != "" && len(out) < rows {
-			out = append(out, "       "+t.theme.Err().Render("erro:")+" "+firstSentence(textsafe.Line(st.Error)))
+		sr.first = append(sr.first, len(sr.lines))
+		sr.lines = append(sr.lines, clip(fmt.Sprintf(" %s %2d %s  %s", cursor, i+1, cell(s.Name, max(w-34, 12)), style.Render(txt)), w))
+		if st.Status == "failed" && st.Error != "" {
+			sr.lines = append(sr.lines, clip("       "+t.theme.Err().Render("erro:")+" "+firstSentence(textsafe.Line(st.Error)), w))
+		}
+		sr.last = append(sr.last, len(sr.lines)-1)
+	}
+	return sr
+}
+
+// fixSteps prende a janela (t.stp, em linhas) para a etapa selecionada aparecer inteira (se não couber,
+// a primeira linha dela) e para a janela nunca passar do fim.
+func (t *RecipesTab) fixSteps(sr stepRender) {
+	rows := t.stepRows()
+	if t.scur >= 0 && t.scur < len(sr.first) {
+		first, last := sr.first[t.scur], sr.last[t.scur]
+		if first < t.stp {
+			t.stp = first
+		}
+		if last >= t.stp+rows {
+			t.stp = max(last-rows+1, min(first, t.stp))
+			if last-first+1 > rows {
+				t.stp = first
+			}
 		}
 	}
-	if run.Status == "failed" && len(out) < rows {
-		out = append(out, " toolkit recipe reset "+r.ID+" libera nova tentativa")
-	}
-	return out
+	t.stp = max(min(t.stp, max(len(sr.lines)-rows, 0)), 0)
+}
+
+func (t *RecipesTab) stepLines(r RecipeInfo, w int) []string {
+	sr := t.renderedSteps(r, w)
+	t.fixSteps(sr)
+	rows := t.stepRows()
+	return sr.lines[t.stp:min(t.stp+rows, len(sr.lines))]
 }
 
 func firstSentence(s string) string {
