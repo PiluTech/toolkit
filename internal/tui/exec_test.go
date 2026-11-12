@@ -10,6 +10,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/rivo/uniseg"
+
+	"github.com/PiluTech/toolkit/internal/textsafe"
 )
 
 type fakePlanner struct {
@@ -661,4 +664,71 @@ func TestReviewWrapsWideUnicodeByCellWidth(t *testing.T) {
 			t.Fatalf("w=%d: o comando foi cortado:\n%s", w, out)
 		}
 	}
+}
+
+// (4b) Lupa: grafemas com seletor de presentação (❤️ = U+2764 + U+FE0F, 2 células) e sequências ZWJ
+// (👨‍👩‍👧) são medidos e quebrados por GRAFEMA: o comando aparece inteiro, sem reticências, e nenhuma linha
+// passa da largura.
+func TestReviewWrapsGraphemeClustersWithoutCutting(t *testing.T) {
+	heart := "❤️"
+	family := "\U0001F468" + string(rune(0x200d)) + "\U0001F469" + string(rune(0x200d)) + "\U0001F467"
+	for _, tc := range []struct{ name, cmd string }{
+		{"seletor de presentação", "echo " + strings.Repeat(heart, 80)},
+		{"ZWJ", "echo " + strings.Repeat(family, 40)},
+		{"misto com combinante", "echo " + strings.Repeat("é"+heart+family, 20)},
+	} {
+		for _, w := range []int{60, 80} {
+			p := okPlan()
+			p.Commands = []string{tc.cmd}
+			m, _, _ := rootWithExec(t, &fakePlanner{plan: p}, &fakeRunner{script: scriptOK})
+			m.Update(tea.WindowSizeMsg{Width: w, Height: 40})
+			mkey(m, "space")
+			cmd := mkey(m, "enter")
+			m.Update(cmd().(tea.BatchMsg)[0]())
+			out := m.render()
+			rows := strings.Split(out, "\n")
+			if body := strings.Join(rows[2:len(rows)-3], "\n"); strings.Contains(body, "…") {
+				t.Fatalf("%s w=%d: reticências no corpo (comando cortado):\n%s", tc.name, w, out)
+			}
+			for i, l := range strings.Split(out, "\n") {
+				if lipgloss.Width(l) > w {
+					t.Fatalf("%s w=%d linha %d com %d células: %q", tc.name, w, i+1, lipgloss.Width(l), l)
+				}
+			}
+			flat := strings.Join(strings.Fields(strings.NewReplacer("\\\n", "", "\n", "").Replace(out)), "")
+			// o que aparece é o texto já limpo por textsafe: o ZWJ (U+200D, caractere de formatação) vira \u200d
+			// visível por política de segurança; o que importa aqui é não perder nem cortar nada dele
+			want := strings.Join(strings.Fields(textsafe.Line(tc.cmd)), "")
+			if !strings.Contains(flat, want) {
+				t.Fatalf("%s w=%d: o comando não aparece inteiro:\n%s", tc.name, w, out)
+			}
+		}
+	}
+}
+
+// splitCells nunca separa um grafema e mede cada um como o layout mede.
+func TestSplitCellsKeepsGraphemesWhole(t *testing.T) {
+	heart := "❤️"
+	family := "\U0001F468" + string(rune(0x200d)) + "\U0001F469" + string(rune(0x200d)) + "\U0001F467"
+	for _, s := range []string{strings.Repeat(heart, 10), strings.Repeat(family, 5), "ação" + heart + "é" + family} {
+		rest := s
+		for rest != "" {
+			head, tail := splitCells(rest, 7)
+			if head == "" {
+				t.Fatalf("splitCells não avançou em %q", rest)
+			}
+			if lipgloss.Width(head) > 7 && lipgloss.Width(head) != lipgloss.Width(firstCluster(head)) {
+				t.Fatalf("%q passou de 7 células (%d)", head, lipgloss.Width(head))
+			}
+			if head+tail != rest {
+				t.Fatalf("perdeu conteúdo: %q + %q != %q", head, tail, rest)
+			}
+			rest = tail
+		}
+	}
+}
+
+func firstCluster(s string) string {
+	c, _, _, _ := uniseg.FirstGraphemeClusterInString(s, -1)
+	return c
 }

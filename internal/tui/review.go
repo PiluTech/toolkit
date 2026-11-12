@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/rivo/uniseg"
 
 	"github.com/PiluTech/toolkit/internal/textsafe"
 )
@@ -65,7 +66,9 @@ func (r *reviewScreen) lines(w int) []string {
 		add("", " Nada a fazer: tudo já está instalado.")
 		return out
 	}
-	add(" "+textsafe.Line(r.plan.Summary), " "+t.Muted().Render(textsafe.Line(r.plan.Env)), "")
+	add(wrap(" "+textsafe.Line(r.plan.Summary), w, 1)...)
+	add(wrap(" "+textsafe.Line(r.plan.Env), w, 1)...)
+	add("")
 	if len(r.plan.Problems) > 0 {
 		add(" " + t.Err().Render(titleCase(t, "Não dá para executar")))
 		for _, p := range r.plan.Problems {
@@ -145,16 +148,22 @@ func (r *reviewScreen) buttons() string {
 	return back + "     " + run
 }
 
-// splitCells corta s em (início, resto) com o início ocupando no máximo n CÉLULAS (caractere largo = 2,
-// combinante = 0), sem nunca separar um caractere ao meio; pelo menos um caractere sai por chamada.
+// splitCells corta s em (início, resto) com o início ocupando no máximo n CÉLULAS, medindo por GRAFEMA
+// (cluster de grafemas do Unicode: ❤️ = U+2764 + U+FE0F ocupa 2 células, uma família 👨‍👩‍👧 com ZWJ é um
+// grafema só, um "e" + acento combinante é um só) com a mesma medida do layout (lipgloss.Width). Nunca separa
+// um grafema; pelo menos um sai por chamada, para a quebra sempre avançar.
 func splitCells(s string, n int) (string, string) {
-	used := 0
-	for i, r := range s {
-		w := lipgloss.Width(string(r))
+	used, i := 0, 0
+	rest := s
+	for rest != "" {
+		cluster, next, _, _ := uniseg.FirstGraphemeClusterInString(rest, -1)
+		w := lipgloss.Width(cluster)
 		if used+w > n && i > 0 {
 			return s[:i], s[i:]
 		}
 		used += w
+		i += len(cluster)
+		rest = next
 	}
 	return s, ""
 }
