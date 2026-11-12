@@ -46,6 +46,12 @@ golangci-lint run ./...
 step "go test -race"
 go test -race ./...
 
+# Versão fixa (golang.org/x/vuln): falha em vulnerabilidade ALCANÇÁVEL (govulncheck sai com 3). Precisa de rede
+# para o banco de vulnerabilidades; sem ela o gate falha em vez de fingir que passou.
+GOVULNCHECK_VERSION="v1.9.0"
+step "govulncheck $GOVULNCHECK_VERSION (vulnerabilidade alcançável reprova)"
+GOFLAGS="" go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
+
 step "compila os testes dos outros SOs (sem executar)"
 for os in linux windows; do
   for pkg in $(go list ./...); do

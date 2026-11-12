@@ -42,6 +42,20 @@ run() { if [ "$DRY" = 1 ]; then printf '+ %s\n' "$*"; else "$@"; fi; }
 
 [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || die "use --version vX.Y.Z (recebido: '${VERSION}')"
 
+# O release compila com a toolchain que o go.mod exige (ou mais nova): correções de segurança da biblioteca
+# padrão (ex.: net/http) entram no binário. GOTOOLCHAIN=local com um go mais velho é recusado.
+check_toolchain() {
+  local want have
+  want="$(awk '$1 == "go" { print $2; exit }' go.mod)"
+  have="$(go env GOVERSION 2>/dev/null)" || die "o go não conseguiu usar a toolchain que o go.mod exige (go $want): $(go env GOVERSION 2>&1 | head -n1)"
+  have="${have#go}"
+  [ -n "$want" ] && [ -n "$have" ] || die "não consegui ler a versão do go (go.mod: '$want', go: '$have')"
+  if [ "$(printf '%s\n%s\n' "$want" "$have" | sort -V | head -n1)" != "$want" ]; then
+    die "a toolchain ($have) é mais velha que a do go.mod ($want); use GOTOOLCHAIN=auto"
+  fi
+  echo "toolchain: go$have (go.mod exige go$want)"
+}
+
 asset_name() { # alvo os/arch -> nome do arquivo
   local os="${1%/*}" arch="${1#*/}" ext=""
   [ "$os" = windows ] && ext=".exe"
@@ -175,6 +189,7 @@ resolve_out() {
 
 step "release $VERSION (dry-run=$DRY, sign-macos=$SIGN)"
 check_git_state
+check_toolchain
 resolve_out
 [ "$SIGN" = 1 ] && sign_macos_check
 if [ "$DRY" = 0 ]; then rm -rf "${OUT:?}"; mkdir -p "$OUT"; else echo "+ rm -rf $OUT && mkdir -p $OUT"; fi
