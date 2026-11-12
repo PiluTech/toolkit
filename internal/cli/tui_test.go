@@ -249,3 +249,77 @@ func mkdirWrite(path, data string) error {
 	}
 	return os.WriteFile(path, []byte(data), 0o600)
 }
+
+// Lupa no #40 (1): /dev/null é dispositivo de caractere mas NÃO é terminal; pipe e arquivo comum também não.
+func TestFileIsTerminalRejectsNonTerminals(t *testing.T) {
+	devnull, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Skip("sem /dev/null")
+	}
+	defer func() { _ = devnull.Close() }()
+	if fileIsTerminal(devnull) {
+		t.Error("/dev/null não é terminal: a TUI não pode abrir com a saída em /dev/null")
+	}
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	defer func() { _ = w.Close() }()
+	if fileIsTerminal(w) || fileIsTerminal(r) {
+		t.Error("pipe não é terminal")
+	}
+	regular, err := os.CreateTemp(t.TempDir(), "saida")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = regular.Close() }()
+	if fileIsTerminal(regular) {
+		t.Error("arquivo comum não é terminal")
+	}
+	closed, _ := os.Open(os.DevNull)
+	_ = closed.Close()
+	if fileIsTerminal(closed) {
+		t.Error("descritor fechado não é terminal")
+	}
+}
+
+// Lupa no #40 (2): a lista de versões do catálogo (versions: [...]) é a que a aba oferece, sem consultar o
+// gerenciador; só versions: true consulta o provider.
+func TestAppsBackendVersionsUsesCatalogListWithoutProvider(t *testing.T) {
+	f := aptFake(t) // qualquer comando ao provider falha o teste (sem roteiro)
+	vs, err := appsBE(f, "linux").Versions(context.Background(), "python")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(vs, ",") != "3.13,3.12" {
+		t.Fatalf("python deve oferecer 3.13 e 3.12 do catálogo, ofereceu %v", vs)
+	}
+	if len(f.Calls()) != 0 {
+		t.Fatalf("lista estática não consulta o provider: %v", f.Calls())
+	}
+}
+
+func TestAppsBackendVersionsQueriesProviderOnlyForVersionsTrue(t *testing.T) {
+	f := aptFake(t).On("apt-cache madison git", exectest.Exit(0, " git | 1:2.43.0-1ubuntu7 | http://archive.ubuntu.com/ubuntu noble/main amd64 Packages\n"))
+	vs, err := appsBE(f, "linux").Versions(context.Background(), "git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vs) == 0 {
+		t.Fatal("git (versions: true) lista pelo gerenciador")
+	}
+	for _, c := range f.Calls() {
+		if !c.ReadOnly || c.Elevate {
+			t.Fatalf("só leitura: %s", c)
+		}
+	}
+	// firefox não tem versões: nada a oferecer, nenhuma consulta
+	f2 := aptFake(t)
+	if vs, err := appsBE(f2, "linux").Versions(context.Background(), "firefox"); err != nil || len(vs) != 0 || len(f2.Calls()) != 0 {
+		t.Fatalf("firefox: %v %v %v", vs, err, f2.Calls())
+	}
+	if _, err := appsBE(aptFake(t), "linux").Versions(context.Background(), "nao-existe"); err == nil {
+		t.Fatal("app desconhecido é erro")
+	}
+}

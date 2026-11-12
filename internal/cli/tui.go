@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 
 	"github.com/PiluTech/toolkit/internal/buildinfo"
@@ -25,10 +27,11 @@ func shouldOpenTUI(stdinTTY, stdoutTTY bool, noTUI bool, term string) bool {
 	return t != "" && t != "dumb"
 }
 
-func stdoutIsTerminal() bool {
-	fi, err := os.Stdout.Stat()
-	return err == nil && fi.Mode()&os.ModeCharDevice != 0
-}
+func stdoutIsTerminal() bool { return fileIsTerminal(os.Stdout) }
+
+// fileIsTerminal diz se f é um terminal de verdade (isatty/console do SO). Só "dispositivo de caractere" NÃO
+// basta: /dev/null também é, e a TUI abriria com a saída descartada.
+func fileIsTerminal(f *os.File) bool { return term.IsTerminal(f.Fd()) }
 
 // TUIDeps são os pontos injetáveis da abertura da TUI (os testes trocam Run e os terminais).
 type TUIDeps struct {
@@ -138,7 +141,24 @@ func (b *appsBackend) Status(ctx context.Context, id string) tui.AppStatus {
 	return tui.AppStatus{Installed: ok, Version: version}
 }
 
+// Versions devolve o que a aba oferece: a lista ESTÁTICA do catálogo (versions: [...], a primeira é a
+// padrão) quando existe, sem consultar o gerenciador; só versions: true consulta o provider; app sem versões
+// não oferece nada.
 func (b *appsBackend) Versions(ctx context.Context, id string) ([]string, error) {
+	cat, err := loadCatalog(ctx, b.deps, listFlags{}, io.Discard)
+	if err != nil {
+		return nil, err
+	}
+	app, ok := cat.Get(id)
+	if !ok {
+		return nil, fmt.Errorf("app %q fora do catálogo", id)
+	}
+	if len(app.Versions.List) > 0 {
+		return slices.Clone(app.Versions.List), nil
+	}
+	if !app.Versions.Query {
+		return nil, nil
+	}
 	c, err := b.candidate(ctx, id)
 	if err != nil {
 		return nil, err
