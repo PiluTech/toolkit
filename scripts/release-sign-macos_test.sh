@@ -15,7 +15,7 @@ echo "security \$*" >>"$log"
 case "\$1" in
   list-keychains) case "\$*" in *" -s "*) ;; *) printf '    "/fake/login.keychain-db"\n' ;; esac ;;
   create-keychain) shift; while [ \$# -gt 0 ]; do [ "\$1" = -p ] && echo "kcpass \$2" >>"$log"; last="\$1"; shift; done; echo kc >"\$last"; echo "kcpath \$last" >>"$log" ;;
-  import) echo "p12conteudo \$(cat "\$2")" >>"$log"; echo "p12perm \$(stat -f %Lp "\$2" 2>/dev/null || stat -c %a "\$2") \$2" >>"$log"
+  import) echo "p12conteudo \$(cat "\$2")" >>"$log"; echo "p12perm \$(stat -c %a "\$2" 2>/dev/null || stat -f %Lp "\$2") \$2" >>"$log"
           [ -n "\$FAKE_IMPORT_FAIL" ] && exit 1 ;;
   find-identity) printf '  1) 0123456789ABCDEF0123456789ABCDEF01234567 "Developer ID Application: Teste (ABCDE12345)"\n     1 valid identities found\n' ;;
   delete-keychain) echo "deleted \$2" >>"$log"; rm -f "\$2" ;;
@@ -41,7 +41,7 @@ cat >"$fake/xcrun" <<EOF
 echo "xcrun \$*" >>"$log"
 while [ \$# -gt 0 ]; do
   if [ "\$1" = --key ]; then
-    echo "p8perm \$(stat -f %Lp "\$2" 2>/dev/null || stat -c %a "\$2") \$2" >>"$log"
+    echo "p8perm \$(stat -c %a "\$2" 2>/dev/null || stat -f %Lp "\$2") \$2" >>"$log"
     echo "p8conteudo \$(cat "\$2")" >>"$log"
   fi
   shift

@@ -86,7 +86,7 @@ build_all() {
 # O arquivo guarda referências de segredo: só o dono pode ler (600 ou 400).
 check_env_file_mode() {
   local mode
-  mode="$(stat -f %Lp "$1" 2>/dev/null || stat -c %a "$1")"
+  mode="$(stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1")"
   case "$mode" in 600 | 400) ;; *) die "$1 deve ter permissão 600 (tem $mode): chmod 600 '$1'" ;; esac
 }
 

@@ -41,7 +41,7 @@ cat >"$fake/xcrun" <<EOF
 echo "xcrun \$*" >>"$log"
 while [ \$# -gt 0 ]; do
   if [ "\$1" = --key ]; then
-    perm="\$(stat -f %Lp "\$2" 2>/dev/null || stat -c %a "\$2")"
+    perm="\$(stat -c %a "\$2" 2>/dev/null || stat -f %Lp "\$2")"
     echo "p8perm \$perm \$2" >>"$log"
     echo "p8conteudo \$(cat "\$2")" >>"$log"
   fi
