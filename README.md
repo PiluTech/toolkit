@@ -9,7 +9,7 @@ de um catálogo, escolhe versões e roda receitas de várias etapas que continua
 
 ## Comandos de uma linha (planejados)
 
-Windows (PowerShell 5.1 ou 7, como administrador quando a receita pedir):
+Windows (PowerShell 5.1 ou 7, sem administrador):
 
 ```powershell
 irm https://github.com/PiluTech/toolkit/releases/latest/download/win.ps1 | iex
@@ -23,9 +23,11 @@ curl -fsSL https://github.com/PiluTech/toolkit/releases/latest/download/unix.sh 
 
 Os bootstraps são curtos e legíveis (`scripts/bootstrap/unix.sh` e `win.ps1`). Eles baixam o binário da
 release, conferem o SHA-256 pelo `checksums.txt` da mesma release e, se divergir, abortam sem instalar.
-Instalam no PATH do usuário, nunca com `sudo`: `~/.local/bin` no Linux e no macOS. Para fixar uma
+Instalam no PATH do usuário, sem `sudo` e sem administrador: `~/.local/bin` no Linux e no macOS,
+`%LOCALAPPDATA%\toolkit\bin` no Windows (o script acrescenta essa pasta ao PATH do usuário). Para fixar uma
 versão, defina `TOOLKIT_VERSION` antes de rodar (padrão: a última release). `--dry-run` só mostra o que
-faria: `curl -fsSL .../unix.sh | sh -s -- --dry-run`. Quem prefere ler antes de rodar baixa o `unix.sh`,
+faria: `curl -fsSL .../unix.sh | sh -s -- --dry-run` ou, no PowerShell,
+`$env:TOOLKIT_DRYRUN='1'; irm .../win.ps1 | iex`. Quem prefere ler antes de rodar baixa o `unix.sh`,
 abre e executa com `sh unix.sh`.
 
 Depois de instalado:
