@@ -36,7 +36,7 @@ func TestRateLimitedAPIGivesAFriendlyError(t *testing.T) {
 	d, _ := downloadtest.New(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, `{"message":"API rate limit exceeded"}`, http.StatusForbidden)
 	}))
-	c := Config{APIBase: "https://example.com/api", Downloader: d}
+	c := Config{APIBase: "https://example.com/api", Downloader: d, AllowedHosts: []string{"example.com"}}
 	_, err := Latest(context.Background(), c)
 	if !errors.Is(err, ErrRateLimited) || !strings.Contains(err.Error(), "GITHUB_TOKEN") {
 		t.Fatalf("err = %v", err)

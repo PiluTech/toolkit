@@ -71,7 +71,7 @@ func runUpdateCmd(t *testing.T, rel *updRelease, current string, args ...string)
 	}
 	var o, e bytes.Buffer
 	deps := Deps{GOOS: "linux", EmbeddedYML: []byte(embedded), Downloader: d,
-		Update: UpdateDeps{APIBase: "https://example.com/api", DownloadBase: "https://example.com/dl", Current: current,
+		Update: UpdateDeps{APIBase: "https://example.com/api", DownloadBase: "https://example.com/dl", AllowedHosts: []string{"example.com"}, Current: current,
 			GOOS: "linux", GOARCH: "amd64", Exe: func() (string, error) { return exe, nil }}}
 	cmd := NewRootCmdWith(&o, &e, deps)
 	cmd.SetArgs(append([]string{"update"}, args...))
@@ -220,7 +220,7 @@ func TestUpdateWrongHashLeavesTheBinaryAlone(t *testing.T) {
 	_ = os.WriteFile(exe, []byte("ANTIGO"), 0o755)
 	var o, e bytes.Buffer
 	deps := Deps{GOOS: "linux", EmbeddedYML: []byte(embedded), Downloader: d,
-		Update: UpdateDeps{APIBase: "https://example.com/api", DownloadBase: "https://example.com/dl", Current: "v0.1.0",
+		Update: UpdateDeps{APIBase: "https://example.com/api", DownloadBase: "https://example.com/dl", AllowedHosts: []string{"example.com"}, Current: "v0.1.0",
 			GOOS: "linux", GOARCH: "amd64", Exe: func() (string, error) { return exe, nil }}}
 	cmd := NewRootCmdWith(&o, &e, deps)
 	cmd.SetArgs([]string{"update"})
@@ -257,7 +257,7 @@ func TestUpdateRateLimitedAPI(t *testing.T) {
 		_ = os.WriteFile(exe, []byte("ANTIGO"), 0o755)
 		var o, e bytes.Buffer
 		deps := Deps{GOOS: "linux", EmbeddedYML: []byte(embedded), Downloader: d,
-			Update: UpdateDeps{APIBase: "https://example.com/api", DownloadBase: "https://example.com/dl", Current: "v0.1.0",
+			Update: UpdateDeps{APIBase: "https://example.com/api", DownloadBase: "https://example.com/dl", AllowedHosts: []string{"example.com"}, Current: "v0.1.0",
 				GOOS: "linux", GOARCH: "amd64", Exe: func() (string, error) { return exe, nil }}}
 		cmd := NewRootCmdWith(&o, &e, deps)
 		cmd.SetArgs(append([]string{"update"}, args...))
