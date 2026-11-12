@@ -16,7 +16,7 @@ import (
 // ---- (d) flatpak e snap por caminho ABSOLUTO ----
 
 func TestFlatpakAndSnapRunByTheAbsolutePathFoundByLookPath(t *testing.T) {
-	s := &stub{paths: map[string]bool{"flatpak": true, "snap": true}, handle: func(c exec.Cmd) (exec.Result, error) {
+	s := &stub{paths: map[string]bool{"flatpak": true, "snap": true}, handle: func(exec.Cmd) (exec.Result, error) {
 		return ok("com.discordapp.Discord\t0.0.60\n")
 	}}
 	_, _ = find(t, New(s, Options{GOOS: "linux"}), app(t, linuxSpec))
