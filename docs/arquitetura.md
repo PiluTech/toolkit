@@ -442,6 +442,7 @@ nenhum teste pode executar winget, dism ou reboot de verdade, e o gate de qualid
 - **url**: `sha256` obrigatório. A validação do catálogo já recusa uma entrada `url` sem hash.
 - **download/archive**: tamanho máximo configurável, o arquivo é gravado em temp e só é movido depois
   do hash conferir, e a extração recusa caminho absoluto, `..` e symlink que aponte para fora do destino.
+- **Pacote `internal/download`** (implementado na fase 5): `File`/`Bytes` exigem sha256 e conferem antes de o arquivo existir com o nome final; `Metadata` (sem hash) é só para a resposta da API de releases. Toda URL passa por `catalog.CheckURL` antes e a cada redirect (até 5); o cliente padrão não usa proxy de ambiente, não descomprime e só conecta a IP público (`CheckPublicIP` no `Dialer.Control`, que pega também nome público resolvendo para IP interno). `Accept-Encoding: identity`, limite de tamanho por `Content-Length` e por leitura, timeout por tentativa, retry só para rede/429/5xx, nunca para hash. Pasta temporária 0700 e nome de arquivo próprio (`SafeName`).
 
 ### 3.4 Receitas e engine
 
