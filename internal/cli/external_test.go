@@ -8,6 +8,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/PiluTech/toolkit/internal/catalog"
 	"github.com/PiluTech/toolkit/internal/detect"
 	"github.com/PiluTech/toolkit/internal/exec"
 	"github.com/PiluTech/toolkit/internal/exec/exectest"
@@ -236,3 +237,65 @@ func TestPlannerNaoPlanejaComandoParaAppExterno(t *testing.T) {
 		t.Fatalf("o plano deveria explicar: %q", joined)
 	}
 }
+
+// --force: o app existe fora do Homebrew mas o usuário pede para instalar mesmo assim (com aviso).
+func TestInstallForceInstallsEvenWithTheAppOutsideTheManager(t *testing.T) {
+	f := macFake(t).
+		OnElevated("brew install --cask discord", exectest.Exit(0, "")).
+		On("brew install --cask discord", exectest.Exit(0, ""))
+	f.On("brew update", exectest.Exit(0, "")).OnElevated("brew update", exectest.Exit(0, ""))
+	out, _, err := runCmd(t, macDeps(f, discordDmg()), "install", "discord", "--force", "--yes")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	for _, want := range []string{"aviso: já instalado fora do Homebrew em /Applications/Discord.app (versão 0.0.350); --force: instalando mesmo assim", "instalado com brew"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("saída sem %q:\n%s", want, out)
+		}
+	}
+	var installed bool
+	for _, c := range f.Calls() {
+		if strings.Contains(c.String(), "brew install --cask discord") {
+			installed = true
+		}
+	}
+	if !installed {
+		t.Fatal("com --force o brew install roda")
+	}
+}
+
+func TestInstallWithoutForceStillSkips(t *testing.T) {
+	f := macFake(t)
+	out, _, err := runCmd(t, macDeps(f, discordDmg()), "install", "discord", "--yes")
+	if err != nil || !strings.Contains(out, wantDiscordExternal) || strings.Contains(out, "--force: instalando") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	noMutation(t, f)
+}
+
+// O detector real é UM por processo (a varredura fica em cache) e a execução da TUI o invalida.
+func TestRealDetectorIsSharedAndInvalidatedAfterARun(t *testing.T) {
+	a := realDetector(nil)
+	b := realDetector(nil)
+	if a != b {
+		t.Fatal("o detector real deve ser um só por processo (cache da varredura)")
+	}
+	inv, ok := a.(interface{ Invalidate() })
+	if !ok {
+		t.Fatal("o detector real tem Invalidate")
+	}
+	inv.Invalidate() // não pode quebrar
+	called := 0
+	r := &tuiRunner{deps: Deps{Detector: func(exec.Runner) ExternalDetector { return invalidatingDetector{&called} }, NewRunner: func() exec.Runner { return exectest.New(t) }}}
+	r.invalidateDetector()
+	if called != 1 {
+		t.Fatalf("a execução da TUI invalida o cache: %d", called)
+	}
+}
+
+type invalidatingDetector struct{ n *int }
+
+func (invalidatingDetector) Find(context.Context, catalog.App) (detect.Found, bool, error) {
+	return detect.Found{}, false, nil
+}
+func (d invalidatingDetector) Invalidate() { *d.n++ }

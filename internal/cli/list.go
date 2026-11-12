@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -32,6 +33,8 @@ type Deps struct {
 	// Euid é o uid efetivo (nil: os.Geteuid). O plano do install mostra o comando como o runner real o executa:
 	// como root, sem sudo.
 	Euid func() int
+	// ForceExternal: o `install --force` instala mesmo com o app achado fora do gerenciador (com aviso).
+	ForceExternal bool
 	// TUI são os pontos injetáveis da abertura da interface (zero = terminal e tui.Run reais).
 	TUI         TUIDeps
 	EmbeddedYML []byte // catálogo embutido
@@ -73,16 +76,26 @@ type ExternalDetector interface {
 	Find(ctx context.Context, app catalog.App) (detect.Found, bool, error)
 }
 
-// realDetector usa o disco real (raiz do sistema no Unix) e a pasta do usuário.
+// realDetector usa o disco real (raiz do sistema no Unix, aberta SEM bloquear em FIFO) e a pasta do usuário. É UM
+// Detector por processo: a varredura de .app por bundle_id fica em cache nele (a TUI pergunta vários apps em
+// seguida) e quem muda o sistema (a execução da TUI) chama Invalidate.
+var (
+	realDetectorOnce sync.Once
+	realDetectorVal  *detect.Detector
+)
+
 func realDetector(r exec.Runner) ExternalDetector {
-	o := detect.Options{GOOS: runtime.GOOS}
-	if runtime.GOOS != "windows" {
-		o.FS = os.DirFS("/")
-	}
-	if h, err := os.UserHomeDir(); err == nil && filepath.IsAbs(h) {
-		o.Home = filepath.ToSlash(h)
-	}
-	return detect.New(r, o)
+	realDetectorOnce.Do(func() {
+		o := detect.Options{GOOS: runtime.GOOS}
+		if runtime.GOOS != "windows" {
+			o.FS = detect.OSFS{}
+		}
+		if h, err := os.UserHomeDir(); err == nil && filepath.IsAbs(h) {
+			o.Home = filepath.ToSlash(h)
+		}
+		realDetectorVal = detect.New(r, o)
+	})
+	return realDetectorVal
 }
 
 type listFlags struct {
