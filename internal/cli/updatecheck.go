@@ -115,7 +115,7 @@ func (n *updateNotifier) start(cmd *cobra.Command, off bool) {
 	if err != nil {
 		return
 	}
-	cfg := update.Config{APIBase: n.deps.Update.APIBase, Current: cur, Downloader: n.deps.downloader(), Token: n.deps.githubToken}
+	cfg := passiveConfig(n.deps, cur)
 	fetch := d.Fetch
 	if fetch == nil {
 		fetch = update.Latest
@@ -175,4 +175,11 @@ func (n *updateNotifier) finish(errOut io.Writer) {
 		return
 	}
 	_, _ = fmt.Fprintf(errOut, msg.UpdateNotice+"\n", textsafe.Line(rel.Tag), textsafe.Line(n.current))
+}
+
+// passiveConfig é a configuração da checagem PASSIVA de versão: NUNCA leva GITHUB_TOKEN/GH_TOKEN (60 consultas por
+// hora sem token bastam para 1 por dia, e um token do ambiente não deve sair numa consulta que o usuário não pediu).
+// O `toolkit update` (pedido explícito) continua usando o token.
+func passiveConfig(deps Deps, current string) update.Config {
+	return update.Config{APIBase: deps.Update.APIBase, Current: current, Downloader: deps.downloader()}
 }

@@ -15,6 +15,8 @@ de um catálogo, escolhe versões e roda receitas de várias etapas que continua
 
 `toolkit update` baixa a última release, confere o SHA-256 pelo `checksums.txt` e troca o binário (`--check` só diz se há versão nova, `--dry-run` mostra o que faria, `--version vX.Y.Z` escolhe a versão). Nunca usa `sudo`: se o binário está num diretório do sistema, rode o instalador de novo.
 
+O aviso de versão nova (no fim dos comandos e na TUI, no máximo uma consulta por dia, com cache) roda em segundo plano e nunca atrasa o comando: comandos que terminam em milissegundos raramente chegam a concluí-la, e o resultado fica no cache para a próxima vez. Desligue com `--no-update-check` ou `TOOLKIT_NO_UPDATE_CHECK=1`.
+
 O toolkit avisa quando há versão nova: uma linha em stderr no fim do comando e a faixa `↑ v0.2.0 disponível (u)` na TUI (a tecla `u` abre as notas e oferece atualizar). Consulta no máximo uma vez por dia, em segundo plano, sem atrasar o comando, e guarda só a versão, a data e as notas em `os.UserCacheDir()/toolkit/update-check.json`. Desligue com `--no-update-check` ou `TOOLKIT_NO_UPDATE_CHECK=1`; também fica desligado com `CI` definida, fora de terminal, com `--json` e em build de desenvolvimento.
 
 ## Comandos de uma linha (planejados)

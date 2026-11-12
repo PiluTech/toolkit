@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/PiluTech/toolkit/internal/textsafe"
@@ -88,6 +89,11 @@ func (c *Checker) save(e CacheEntry) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
+	// Pasta que já existia mais aberta (0755 de uma versão antiga ou criada à mão): aperta para 0700 (melhor esforço).
+	if fi, err := os.Stat(dir); err == nil && fi.Mode().Perm()&0o077 != 0 {
+		_ = os.Chmod(dir, 0o700)
+	}
+	c.removeStaleTemps(dir)
 	tmp, err := os.CreateTemp(dir, cacheFile+".*")
 	if err != nil {
 		return err
@@ -105,6 +111,27 @@ func (c *Checker) save(e CacheEntry) error {
 		return err
 	}
 	return nil
+}
+
+// staleTempAge: um update-check.json.* mais velho que isto é sobra de um processo que morreu entre o
+// CreateTemp e o Rename (outro processo vivo termina a escrita em milissegundos).
+const staleTempAge = 10 * time.Minute
+
+// removeStaleTemps apaga as sobras update-check.json.* (só arquivos regulares, só os velhos, só neste padrão).
+func (c *Checker) removeStaleTemps(dir string) {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range ents {
+		name := e.Name()
+		if !strings.HasPrefix(name, cacheFile+".") || name == cacheFile || !e.Type().IsRegular() {
+			continue
+		}
+		if fi, err := e.Info(); err == nil && c.now().Sub(fi.ModTime()) > staleTempAge {
+			_ = os.Remove(filepath.Join(dir, name))
+		}
+	}
 }
 
 // Due diz se uma consulta nova é permitida agora: passou 1 dia da última concluída E acabou o backoff.
