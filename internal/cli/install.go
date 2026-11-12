@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -182,7 +183,18 @@ func runInstall(ctx context.Context, out, errOut io.Writer, deps Deps, f install
 
 	// Pré-passo: o plano. Leituras reais, mutações só registradas (DryRunRunner). No dry-run é a saída final; no
 	// install real é o que o usuário confirma antes de qualquer mutação.
-	failed, plan := installPass(ctx, out, errOut, deps, targets, true)
+	// No install real o passe do plano é só cálculo: o que ele escreveria (cabeçalho e resultado por app) é
+	// descartado, porque o passe real escreve tudo de novo. Se o plano sair vazio (tudo instalado) não há passe
+	// real, e aí o que o passe do plano escreveu ("já instalado, versão X") é o que o usuário vê.
+	planOut := out
+	var planBuf bytes.Buffer
+	if !f.dryRun {
+		planOut = &planBuf
+	}
+	failed, plan := installPass(ctx, planOut, errOut, deps, targets, true)
+	if !f.dryRun && len(plan.Plan()) == 0 {
+		_, _ = out.Write(planBuf.Bytes())
+	}
 	printPlan(out, deps, plan, f.dryRun)
 	if len(failed) > 0 {
 		return fmt.Errorf(msg.ErrInstallFailed, printable(strings.Join(failed, ", ")))
@@ -259,7 +271,11 @@ func printPlan(out io.Writer, deps Deps, dry *exec.DryRunRunner, dryRun bool) {
 		header = msg.InstallPlanHeaderReal
 	}
 	_, _ = fmt.Fprintln(out, header)
-	display := exec.OSRunner{GOOS: deps.GOOS}
+	euid := deps.Euid
+	if euid == nil {
+		euid = os.Geteuid
+	}
+	display := exec.OSRunner{GOOS: deps.GOOS, Euid: euid}
 	usesSudo := false
 	for _, step := range plan {
 		if step.Note != "" {
@@ -267,7 +283,7 @@ func printPlan(out io.Writer, deps Deps, dry *exec.DryRunRunner, dryRun bool) {
 			continue
 		}
 		line := printable(display.Display(step.Cmd))
-		if step.Cmd.Elevate && deps.GOOS != "windows" {
+		if strings.HasPrefix(line, "sudo ") { // só se o runner real usará sudo (não como root, não no Windows)
 			usesSudo = true
 		}
 		if step.Cmd.Elevate && step.Err != nil {
