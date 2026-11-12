@@ -98,4 +98,31 @@ if command -v python3 >/dev/null 2>&1; then
   installed && fail "HTTP: instalou com hash adulterado"
 fi
 
+# 10. download cortado no meio (curl | sh): nenhum pedaço do script executa e nada é instalado
+printf '%s  %s\n' "$(hash_of "$rel/$asset")" "$asset" >"$rel/checksums.txt"
+size=$(wc -c <"$script" | tr -d ' ')
+for n in 200 700 1200 1800 $((size / 2)) $((size - 30)); do
+  rm -rf "${tmp:?}/home"; mkdir -p "$tmp/home"
+  head -c "$n" "$script" | HOME="$tmp/home" TOOLKIT_RELEASE_BASE="file://$rel" sh >"$tmp/out" 2>&1 || true
+  installed && fail "script cortado em $n bytes instalou algo"
+  [ -z "$(ls -A "$tmp/home")" ] || fail "script cortado em $n bytes criou arquivos em HOME"
+done
+[ "$(tail -n1 "$script")" = 'main "$@"' ] || fail "a última linha do unix.sh deve ser 'main \"\$@\"'"
+
+# 11. política de download: curl só HTTPS (nos testes locais libera http e file), TLS 1.2+
+grep -q -- "--proto \"\$proto\" --proto-redir \"\$proto\" --tlsv1.2" "$script" || fail "curl sem --proto/--tlsv1.2"
+grep -q "proto='=https'" "$script" || fail "política padrão não é só https"
+mkdir "$tmp/curlbin"
+printf '#!/bin/sh\necho "$*" >>"%s/curl.log"\nexec %s "$@"\n' "$tmp" "$(command -v curl)" >"$tmp/curlbin/curl"; chmod +x "$tmp/curlbin/curl"
+: >"$tmp/curl.log"; rm -rf "${tmp:?}/home"; mkdir -p "$tmp/home"
+PATH="$tmp/curlbin:$PATH" HOME="$tmp/home" TOOLKIT_RELEASE_BASE="file://$rel" sh "$script" >"$tmp/out" 2>&1 || fail "instalação com curl espião falhou"
+grep -q -- '--proto =https,http,file' "$tmp/curl.log" || fail "curl sem --proto: $(cat "$tmp/curl.log")"
+
+# 12. SIGINT/SIGTERM durante o download: aborta (não segue para a instalação) e limpa o temporário
+# shellcheck disable=SC2016  # $PPID deve expandir no curl falso, não aqui
+printf '#!/bin/sh\nkill -TERM $PPID\nsleep 5\n' >"$tmp/curlbin/curl"; chmod +x "$tmp/curlbin/curl"
+rm -rf "${tmp:?}/home"; mkdir -p "$tmp/home"
+if PATH="$tmp/curlbin:$PATH" HOME="$tmp/home" TOOLKIT_RELEASE_BASE="file://$rel" sh "$script" >"$tmp/out" 2>&1; then fail "SIGTERM não abortou o bootstrap"; fi
+installed && fail "instalou após SIGTERM"
+
 echo "ok unix_test"

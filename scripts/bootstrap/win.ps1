@@ -72,15 +72,25 @@ function Install-Toolkit {
     }
     Write-Host "toolkit instalado em $dest\toolkit.exe (SHA-256 conferido)"
 
-    # PATH do usuario (nao o da maquina); TOOLKIT_NO_PATH=1 pula (testes).
+    # PATH do usuario (nao o da maquina); TOOLKIT_NO_PATH=1 pula (testes). Le e grava o valor CRU do
+    # registro (HKCU\Environment), sem expandir %VAR%: [Environment]::GetEnvironmentVariable expandiria
+    # e SetEnvironmentVariable gravaria o resultado achatado, estragando entradas como %USERPROFILE%\bin.
+    # O tipo ExpandString e preservado para o Windows continuar expandindo.
     if ($env:TOOLKIT_NO_PATH -ne '1') {
-        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-        if (-not $userPath) { $userPath = '' }
-        $have = @($userPath -split ';' | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') })
-        if ($have -inotcontains $dest.TrimEnd('\')) {
-            $new = if ($userPath) { $userPath.TrimEnd(';') + ';' + $dest } else { $dest }
-            [Environment]::SetEnvironmentVariable('Path', $new, 'User')
-            Write-Host "Adicionado ao PATH do usuario; abra um terminal novo para usar 'toolkit'."
+        $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+        try {
+            $userPath = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+            $have = @($userPath -split ';' | Where-Object { $_ } | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\') })
+            if ($have -inotcontains $dest.TrimEnd('\')) {
+                if ($userPath) { $new = $userPath.TrimEnd(';') + ';' + $dest } else { $new = $dest }
+                $key.SetValue('Path', $new, [Microsoft.Win32.RegistryValueKind]::ExpandString)
+                # Gravar direto no registro nao avisa o Explorer: remover uma variavel de usuario que nao
+                # existe dispara o WM_SETTINGCHANGE, e terminais novos ja enxergam o PATH.
+                [Environment]::SetEnvironmentVariable('TOOLKIT_PATH_REFRESH', $null, 'User')
+                Write-Host "Adicionado ao PATH do usuario; abra um terminal novo para usar 'toolkit'."
+            }
+        } finally {
+            $key.Close()
         }
         if (($env:Path -split ';') -inotcontains $dest) { $env:Path = "$env:Path;$dest" }
     }
