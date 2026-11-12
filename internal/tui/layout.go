@@ -26,6 +26,8 @@ func (m *Model) screen() string {
 	switch {
 	case m.modal == modalHelp:
 		body = m.helpBody()
+	case m.modal == modalUpdate:
+		body = m.updateBody(bodyH)
 	case m.mode == modeReview && m.review != nil:
 		all := m.review.lines(m.w)
 		m.review.scroll = max(min(m.review.scroll, max(len(all)-bodyH, 0)), 0)
@@ -153,6 +155,8 @@ func (m *Model) versionBanner(narrow bool) string {
 func (m *Model) statusLine() string {
 	left := " " + textsafe.Line(m.tabs[m.active].Status())
 	switch {
+	case m.modal == modalUpdate:
+		left = " " + m.updateButtons()
 	case m.modal != modalNone:
 		left = " Ajuda"
 	case m.mode == modeReview && m.review != nil:
@@ -183,6 +187,9 @@ func (m *Model) keyBar() string {
 	switch {
 	case m.modal == modalHelp:
 		hints = []KeyHint{{"Esc", "fechar"}}
+		tail = []KeyHint{{"q", "sair"}}
+	case m.modal == modalUpdate:
+		hints = []KeyHint{{"Tab", "botão"}, {"a", "atualizar"}, {"Enter", "acionar"}, {"Esc", "fechar"}, {"↑↓", "rolar"}}
 		tail = []KeyHint{{"q", "sair"}}
 	case m.mode == modeReview:
 		hints = []KeyHint{{"Tab", "botão"}, {"s", "executar"}, {"Enter", "acionar"}, {"Esc", "voltar"}, {"↑↓", "rolar"}}
@@ -258,4 +265,36 @@ func padRight(s string, w int) string {
 		return s + strings.Repeat(" ", d)
 	}
 	return s
+}
+
+// updateBody: as notas da versão nova no lugar do corpo (modal sem caixa flutuante, como a ajuda).
+func (m *Model) updateBody(h int) string {
+	var all []string
+	all = append(all, " "+m.theme.Title().Render(titleCase(m.theme, "Versão nova")))
+	all = append(all, wrap(" "+textsafe.Line(m.opts.Version)+" "+SymUpdate+" "+textsafe.Line(m.opts.Latest), m.w, 1)...)
+	all = append(all, "")
+	if m.opts.LatestNotes == "" {
+		all = append(all, " Sem notas desta versão.")
+	} else {
+		for _, l := range strings.Split(m.opts.LatestNotes, "\n") {
+			all = append(all, wrap("   "+textsafe.Line(l), m.w, 3)...)
+		}
+	}
+	if m.opts.LatestURL != "" {
+		all = append(all, "", " "+textsafe.Line(m.opts.LatestURL))
+	}
+	all = append(all, "", " Atualizar fecha a TUI e roda: toolkit update (confere o SHA-256).")
+	m.updScroll = max(min(m.updScroll, max(len(all)-h, 0)), 0)
+	return strings.Join(all[m.updScroll:min(m.updScroll+h, len(all))], "\n")
+}
+
+// updateButtons é a linha de estado do modal: o botão em foco leva ">" (nunca só reverso).
+func (m *Model) updateButtons() string {
+	closeBtn, upd := "  [ Fechar ]", "  [ Atualizar ]"
+	if m.updFocus == 0 {
+		closeBtn = "> [ Fechar ]"
+	} else {
+		upd = "> [ Atualizar ]"
+	}
+	return closeBtn + "     " + upd
 }

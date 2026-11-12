@@ -246,13 +246,20 @@ ctx que ele cancela ao sair).
   próximo start). Flags: `--version vX.Y.Z`, `--dry-run`, `--check` (só diz se há versão nova). Recusa
   rodar de um binário que não é o instalado pelo bootstrap quando o destino não é gravável (sem `sudo`).
   Notas da release vêm da API do GitHub e passam por `textsafe`.
-- **Aviso de versão nova** na TUI (`Options.Latest`, faixa `↑ v0.2.0 disponível (u)`, tecla `u` abre as notas e
-  oferece `toolkit update`) e no fim dos comandos: no máximo 1 consulta por dia, cache em `~/.cache/toolkit/`
-  (`XDG_CACHE_HOME`; só versão, data e notas, 0600), desligável por `--no-update-check` e pela variável
-  `TOOLKIT_NO_UPDATE_CHECK=1`, NUNCA bloqueia nem atrasa o comando (consulta em goroutine com timeout curto,
-  resultado só aparece na próxima execução ou quando chegar a tempo), nunca roda sem terminal (não polui
-  `--json`, scripts nem CI) e usa o mesmo `download` (https, host público, sem proxy de ambiente, limite de
-  tamanho).
+- **Aviso de versão nova** (FEITO, PR empilhado no `toolkit update`): faixa `↑ v0.2.0 disponível (u)` na TUI
+  (`Options.Latest`, preenchida pelo cache; uma consulta em andamento chega por `Options.Updates` e preenche a faixa
+  se o cache estava vazio) e UMA linha em stderr no fim dos comandos (nunca em stdout, nunca com `--json`, também
+  quando o comando falha). A tecla `u` abre o modal com as notas (`Options.LatestNotes/LatestURL`, passadas por
+  `textsafe`, rolam com ↑↓): Fechar é o padrão (Enter/Esc), `a` ou Tab+Enter em Atualizar sai da TUI
+  (`tui.ErrUpdateRequested`) e roda `toolkit update`; durante a execução `u` só avisa que está indisponível.
+  No máximo 1 consulta concluída por dia, cache em `os.UserCacheDir()/toolkit/update-check.json` (0600; só versão,
+  data, `retry_after` e notas limpas), desligável por `--no-update-check` e `TOOLKIT_NO_UPDATE_CHECK=1`; também
+  desligado com `CI`, stdout/stderr fora de terminal, build `dev`, `--json` e nos comandos `update`/`help`/
+  `completion`. NUNCA bloqueia: a consulta roda em goroutine (timeout 4 s), o fim do comando a cancela sem esperar.
+  A API sem token limita 60/h por IP (já deu 403): falha também vai para o cache (backoff de 3 h, 6 h no 403/429),
+  usa `GITHUB_TOKEN` quando houver e não insiste. Só leitura e só no host padrão (mesmo `download`: https, host
+  público, limite de tamanho). Texto em `internal/msg` (`UpdateNotice`, `FlagNoUpdateCheck`) e no `tui`, em pt-BR
+  como os demais (a localização em en/es é o PR próprio do roadmap).
 - Menores da fase 5 (PR à parte): lista completa de IPs reservados no `download`; dmg não aceitar EULA
   sozinho; conferir assinatura de pkg/dmg; nomes reservados e ADS no Windows.
 - Release v0.1.0: `scripts/release.sh` pronto; assinatura/notarização macOS e `gh release` só no dia, com o
