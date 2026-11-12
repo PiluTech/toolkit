@@ -5,7 +5,9 @@ Ordem combinada com o Paulo; um PR por vez, com revisão (Lupa/Crivo).
 1. **PR 5c: Planner e Runner reais** (a TUI passa a executar): feito (`docs/tui.md`).
 2. **`toolkit update`**: feito (`CLAUDE.md`, pacote `internal/update`). **Aviso de versão nova** (1 consulta/dia, cache em
    `~/.cache`, desligável, nunca bloqueia; usa `update.Latest`): próximo PR. Detalhes em `docs/tui.md`.
-3. **Ícone** "Porca de comando" (variante A) no README, nas docs e na release, gerado a partir do SVG.
+3. **Ícone** "Porca de comando" (variante A): **feito** (README, `assets/icon/`, PNG gerados do SVG por
+   `scripts/gerar-icone.sh`; PNG do site em `assets/icon/toolkit-site.png`). Ainda não há modelo de notas de release
+   no repositório para levar o ícone. Possível melhoria: `.ico`/`.syso` no exe do Windows (fora desta etapa).
 4. **`toolkit --version`** (hoje só existe `toolkit version`).
 5. **Menores da fase 5**: lista completa de IPs reservados no `download`, dmg sem EULA automático, assinatura de
    pkg/dmg, nomes reservados e ADS no Windows.

@@ -24,7 +24,8 @@ step "gofmt (autoteste do verificador + verificação)"
 step "bootstraps (shellcheck quando existe + testes com release falsa)"
 if command -v shellcheck >/dev/null 2>&1; then
   shellcheck scripts/bootstrap/*.sh scripts/release.sh scripts/release_test.sh scripts/release-checksums.sh \
-    scripts/release-sign-macos.sh scripts/release-sign-macos_test.sh scripts/check-workflows.sh scripts/check-workflows_test.sh
+    scripts/release-sign-macos.sh scripts/release-sign-macos_test.sh scripts/check-workflows.sh scripts/check-workflows_test.sh \
+    scripts/gerar-icone.sh scripts/provisionar-icone.sh scripts/gerar-icone_test.sh
 else
   echo "shellcheck não encontrado: pulando a análise estática dos bootstraps" >&2
 fi
@@ -32,6 +33,7 @@ fi
 ./scripts/bootstrap/win_static_test.sh
 ./scripts/release_test.sh
 ./scripts/release-sign-macos_test.sh
+./scripts/gerar-icone_test.sh
 
 step "workflows do GitHub Actions (actionlint quando existe + regras de supply chain do release.yml)"
 ./scripts/check-workflows_test.sh
