@@ -22,9 +22,17 @@ import (
 func (m *Model) screen() string {
 	bodyH := m.h - 5
 	var body string
-	if m.modal == modalHelp {
+	reviewMore := 0
+	switch {
+	case m.modal == modalHelp:
 		body = m.helpBody()
-	} else {
+	case m.mode == modeReview && m.review != nil:
+		all := m.review.lines(m.w)
+		m.review.scroll = max(min(m.review.scroll, max(len(all)-bodyH, 0)), 0)
+		end := min(m.review.scroll+bodyH, len(all))
+		body = strings.Join(all[m.review.scroll:end], "\n")
+		reviewMore = len(all) - end
+	default:
 		body = m.tabs[m.active].View(m.w, bodyH)
 	}
 	lines := fit(strings.Split(strings.TrimRight(body, "\n"), "\n"), m.w, bodyH)
@@ -32,8 +40,8 @@ func (m *Model) screen() string {
 	rows := make([]string, 0, m.h)
 	rows = append(rows, m.header(), m.rule(0))
 	rows = append(rows, lines...)
-	more := 0
-	if m.modal == modalNone {
+	more := reviewMore
+	if m.modal == modalNone && m.mode != modeReview {
 		more = m.tabs[m.active].More()
 	}
 	rows = append(rows, m.rule(more), m.statusLine(), m.keyBar())
@@ -144,11 +152,18 @@ func (m *Model) versionBanner(narrow bool) string {
 // statusLine: item sob o cursor à esquerda, "Enter revisa N marcados" à direita.
 func (m *Model) statusLine() string {
 	left := " " + textsafe.Line(m.tabs[m.active].Status())
-	if m.modal != modalNone {
+	switch {
+	case m.modal != modalNone:
 		left = " Ajuda"
+	case m.mode == modeReview && m.review != nil:
+		left = " " + m.review.buttons()
+	case m.notice != "":
+		left = " " + textsafe.Line(m.notice)
+	case m.question != "":
+		left = " " + textsafe.Line(m.question) + " [s/N]"
 	}
 	right := ""
-	if n := m.tabs[m.active].Selected(); n > 0 && m.modal == modalNone {
+	if n := m.tabs[m.active].Selected(); n > 0 && m.modal == modalNone && m.mode == modeNav {
 		right = "Enter revisa " + plural(n, "marcado", "marcados") + " "
 	}
 	room := m.w - lipgloss.Width(right) - 1
@@ -165,10 +180,17 @@ func (m *Model) statusLine() string {
 func (m *Model) keyBar() string {
 	tail := []KeyHint{{"?", "ajuda"}, {"q", "sair"}}
 	var hints []KeyHint
-	if m.modal == modalHelp {
+	switch {
+	case m.modal == modalHelp:
 		hints = []KeyHint{{"Esc", "fechar"}}
 		tail = []KeyHint{{"q", "sair"}}
-	} else {
+	case m.mode == modeReview:
+		hints = []KeyHint{{"Tab", "botão"}, {"s", "executar"}, {"Enter", "acionar"}, {"Esc", "voltar"}, {"↑↓", "rolar"}}
+		tail = []KeyHint{{"q", "sair"}}
+	case m.mode == modeRun:
+		hints = []KeyHint{{"Tab", "abas (leitura)"}, {"↑↓", "itens"}, {"f", "seguir o fim"}}
+		tail = []KeyHint{{"q", "interromper"}}
+	default:
 		hints = m.tabs[m.active].Keys()
 	}
 	if m.w < 70 && len(hints) > 3 {

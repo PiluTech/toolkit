@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -35,6 +36,41 @@ type Model struct {
 	modal  modal
 	w, h   int
 	quit   bool
+
+	// revisão e execução
+	mode     appMode
+	review   *reviewScreen
+	planner  Planner
+	runner   Runner
+	ctx      context.Context
+	cancel   context.CancelFunc // cancela a execução em andamento
+	events   <-chan Event
+	question string // pergunta [s/N] da raiz ("Interromper?")
+	notice   string // aviso da linha de estado (espaço bloqueado durante a execução...)
+	reply    chan<- bool
+	asking   askKind
+	// pedido de reinício que chegou com outro diálogo aberto: espera a vez (um diálogo por vez)
+	pending   *rebootAsk
+	reviewSeq int
+	runDone   <-chan struct{} // ctx da execução: encerra as entregas de resposta pendentes
+}
+
+type rebootAsk struct {
+	prompt string
+	reply  chan<- bool
+}
+
+type askKind int
+
+const (
+	askNone askKind = iota
+	askInterrupt
+	askReboot
+)
+
+// SetExec liga o planejador e o executor (a TUI só orquestra: reaproveita o plano do install e a engine).
+func (m *Model) SetExec(ctx context.Context, p Planner, r Runner) {
+	m.ctx, m.planner, m.runner = ctx, p, r
 }
 
 // New monta a raiz com as abas dadas (a ordem é a da barra: 1 Apps, 2 Receitas, 3 Diagnóstico, 4 Log).
@@ -72,7 +108,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.theme.Dark = msg.IsDark()
 		}
 		return m, nil
+	case planReadyMsg:
+		// só o plano DESTA Revisão vale: um plano atrasado de uma Revisão anterior (outra seleção) é ignorado
+		if m.review != nil && m.review.id == msg.id {
+			m.review.loading, m.review.plan, m.review.err = false, msg.plan, msg.err
+		}
+		return m, nil
+	case runEventMsg:
+		return m, m.onRunEvent(msg.ev)
+	case runClosedMsg:
+		m.finishRun()
+		return m, nil
+	case tickMsg:
+		if m.review != nil && m.review.loading {
+			m.review.frame++
+		}
 	case tea.KeyPressMsg:
+		if next, cmd, handled := m.execKey(msg.String()); handled {
+			return next, cmd
+		}
 		// aba digitando ou com modal: as teclas são dela (só Ctrl+C sai sempre)
 		if m.modal == modalNone && m.tabs[m.active].Capturing() && msg.String() != "ctrl+c" {
 			return m, m.toActive(msg)
