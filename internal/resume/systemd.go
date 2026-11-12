@@ -13,14 +13,37 @@ import (
 	"github.com/PiluTech/toolkit/internal/exec"
 )
 
+// RootBinDir é onde a unit instala a cópia do binário que o ROOT executa no boot: um diretório de root
+// (0755 root:root), nunca o ~/.local/bin de quem iniciou a receita (gravável pelo usuário = escalada de
+// privilégio no boot).
+const RootBinDir = "/usr/local/lib/toolkit"
+
+// ErrUnsafeRootPath é devolvido quando o binário, o state ou o log que a unit (root) usaria ficam em
+// um lugar que um usuário comum pode alterar. Nada é executado nesse caso.
+var ErrUnsafeRootPath = errors.New("caminho gravável por não-root na retomada do boot")
+
+// rootOnly diz se p fica numa árvore que só o root escreve por convenção (prefixos); caminho não
+// limpo ou com ".." nunca passa.
+func rootOnly(p string, prefixes ...string) bool {
+	if p == "" || p != path.Clean(p) || !path.IsAbs(p) || slices.Contains(strings.Split(p, "/"), "..") {
+		return false
+	}
+	for _, pre := range prefixes {
+		if strings.HasPrefix(p, pre) {
+			return true
+		}
+	}
+	return false
+}
+
 // Systemd registra a retomada como unit systemd de SISTEMA, oneshot, no boot e depois de
 // network-online.target. Roda como root, sem terminal (`toolkit resume --no-tui`); a saída vai para o
 // journal e para o log. Tudo pelo Runner (sudo -n quando o processo não é root): nada é escrito direto.
 type Systemd struct {
 	Runner    exec.Runner
 	IsRoot    bool
-	BinDir    string // o binário é instalado aqui antes de registrar
-	StatePath string // ConditionPathExists: só roda se o state.json existe
+	BinDir    string // cópia do binário do ROOT; vazio = RootBinDir. Tem de ficar em /usr ou /opt
+	StatePath string // ConditionPathExists: só roda se o state.json existe; tem de ficar em /var/lib
 	UnitDir   string // padrão /etc/systemd/system
 }
 
@@ -37,7 +60,30 @@ func (s Systemd) unitPath() string {
 	return d + "/" + UnitName()
 }
 
-func (s Systemd) exe() string { return s.BinDir + "/" + buildinfo.Name }
+func (s Systemd) binDir() string {
+	if s.BinDir == "" {
+		return RootBinDir
+	}
+	return s.BinDir
+}
+
+func (s Systemd) exe() string { return s.binDir() + "/" + buildinfo.Name }
+
+// checkRootPaths recusa binário, state ou log em lugar gravável por não-root: a unit roda como root,
+// então tudo o que ela executa ou lê tem de ser de root. Um usuário sem privilégio que controle o
+// binário (ou o state) controla o root no boot.
+func (s Systemd) checkRootPaths(sp Spec) error {
+	if !rootOnly(s.binDir(), "/usr/", "/opt/") {
+		return fmt.Errorf("%w: o binário da retomada (%s) deve ficar em /usr ou /opt", ErrUnsafeRootPath, s.binDir())
+	}
+	if !rootOnly(s.StatePath, "/var/lib/") {
+		return fmt.Errorf("%w: o state (%s) deve ficar em /var/lib; receita com reboot no Linux exige rodar com sudo", ErrUnsafeRootPath, s.StatePath)
+	}
+	if sp.LogPath != "" && !rootOnly(sp.LogPath, "/var/log/", "/var/lib/") {
+		return fmt.Errorf("%w: o log (%s) deve ficar em /var/log ou /var/lib", ErrUnsafeRootPath, sp.LogPath)
+	}
+	return nil
+}
 
 func (s Systemd) cmd(name string, readOnly bool, args ...string) exec.Cmd {
 	return exec.Cmd{Name: name, Args: args, Elevate: !s.IsRoot && !readOnly, ReadOnly: readOnly}
@@ -46,6 +92,9 @@ func (s Systemd) cmd(name string, readOnly bool, args ...string) exec.Cmd {
 // UnitFile monta o conteúdo da unit (público para o teste conferir o texto).
 func (s Systemd) UnitFile(sp Spec) (string, error) {
 	if err := ValidArgs(sp.Args); err != nil {
+		return "", err
+	}
+	if err := s.checkRootPaths(sp); err != nil {
 		return "", err
 	}
 	paths := []string{s.exe(), s.StatePath}
@@ -65,7 +114,8 @@ func (s Systemd) UnitFile(sp Spec) (string, error) {
 	fmt.Fprintf(&b, "[Unit]\nDescription=%s: continuar a receita depois do reboot\n", buildinfo.Name)
 	b.WriteString("Wants=network-online.target\nAfter=network-online.target\n")
 	fmt.Fprintf(&b, "ConditionPathExists=%s\n\n", s.StatePath)
-	b.WriteString("[Service]\nType=oneshot\n")
+	// ProtectHome: mesmo por engano, o processo root não lê nem executa nada de /home.
+	b.WriteString("[Service]\nType=oneshot\nProtectHome=true\n")
 	fmt.Fprintf(&b, "ExecStart=%s %s\n", s.exe(), strings.Join(args, " "))
 	if sp.LogPath != "" {
 		fmt.Fprintf(&b, "StandardOutput=append:%s\nStandardError=append:%s\n", sp.LogPath, sp.LogPath)
@@ -86,9 +136,9 @@ func (s Systemd) Register(ctx context.Context, sp Spec) error {
 	if err := validPath(sp.Executable, false); err != nil {
 		return err
 	}
-	steps := []exec.Cmd{s.cmd("install", false, "-d", "-m", "0755", s.BinDir)}
+	steps := []exec.Cmd{s.cmd("install", false, "-d", "-m", "0755", "-o", "root", "-g", "root", s.binDir())}
 	if path.Clean(sp.Executable) != path.Clean(s.exe()) {
-		steps = append(steps, s.cmd("install", false, "-m", "0755", "--", sp.Executable, s.exe()))
+		steps = append(steps, s.cmd("install", false, "-m", "0755", "-o", "root", "-g", "root", "--", sp.Executable, s.exe()))
 	}
 	write := s.cmd("tee", false, "--", s.unitPath())
 	write.Stdin = strings.NewReader(unit)
