@@ -28,6 +28,7 @@ else
   echo "shellcheck não encontrado: pulando a análise estática dos bootstraps" >&2
 fi
 ./scripts/bootstrap/unix_test.sh
+./scripts/bootstrap/win_static_test.sh
 
 step "go vet (linux, windows, darwin)"
 for os in linux windows darwin; do
