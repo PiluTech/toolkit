@@ -4,6 +4,7 @@ import (
 	"context"
 	"io/fs"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -43,19 +44,28 @@ func (d *Detector) findLinux(ctx context.Context, spec catalog.Detect) (Found, b
 	return Found{}, false
 }
 
-func (d *Detector) has(name string) bool {
+// tool resolve o comando para o caminho ABSOLUTO achado agora (LookPath): o que roda é o binário que foi achado,
+// não o que um PATH alterado entre a procura e a execução apontaria. Sem caminho absoluto, devolve o nome.
+func (d *Detector) tool(name string) (string, bool) {
 	if d.rn == nil {
-		return false
+		return "", false
 	}
-	_, err := d.rn.LookPath(name)
-	return err == nil
+	p, err := d.rn.LookPath(name)
+	if err != nil {
+		return "", false
+	}
+	if filepath.IsAbs(p) && !strings.ContainsAny(p, "\x00\n") {
+		return p, true
+	}
+	return name, true
 }
 
 func (d *Detector) findFlatpak(ctx context.Context, id string) (Found, bool) {
-	if !d.has("flatpak") {
+	bin, ok := d.tool("flatpak")
+	if !ok {
 		return Found{}, false
 	}
-	res, err := d.rn.Run(ctx, d.readOnly(exec.Cmd{Name: "flatpak", Args: []string{"list", "--app", "--columns=application,version"},
+	res, err := d.rn.Run(ctx, d.readOnly(exec.Cmd{Name: bin, Args: []string{"list", "--app", "--columns=application,version"},
 		Env: []string{"LC_ALL=C"}, Timeout: time.Minute}))
 	if err != nil || res.ExitCode != 0 {
 		return Found{}, false
@@ -75,10 +85,11 @@ func (d *Detector) findFlatpak(ctx context.Context, id string) (Found, bool) {
 }
 
 func (d *Detector) findSnap(ctx context.Context, name string) (Found, bool) {
-	if !d.has("snap") {
+	bin, ok := d.tool("snap")
+	if !ok {
 		return Found{}, false
 	}
-	res, err := d.rn.Run(ctx, d.readOnly(exec.Cmd{Name: "snap", Args: []string{"list", name}, Env: []string{"LC_ALL=C"}, Timeout: 30 * time.Second}))
+	res, err := d.rn.Run(ctx, d.readOnly(exec.Cmd{Name: bin, Args: []string{"list", name}, Env: []string{"LC_ALL=C"}, Timeout: 30 * time.Second}))
 	if err != nil || res.ExitCode != 0 {
 		return Found{}, false
 	}

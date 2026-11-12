@@ -31,6 +31,7 @@ type installFlags struct {
 	catalog, sha256 string
 	replace, dryRun bool
 	yes             bool
+	force           bool // instala mesmo com o app já instalado fora do gerenciador (com aviso)
 }
 
 func newInstallCmd(deps Deps) *cobra.Command {
@@ -50,6 +51,7 @@ func newInstallCmd(deps Deps) *cobra.Command {
 	fl.BoolVar(&f.replace, "catalog-replace", false, msg.FlagCatalogReplace)
 	fl.BoolVar(&f.dryRun, "dry-run", false, msg.FlagDryRun)
 	fl.BoolVarP(&f.yes, "yes", "y", false, msg.FlagYes)
+	fl.BoolVar(&f.force, "force", false, msg.FlagForce)
 	return cmd
 }
 
@@ -145,6 +147,7 @@ func resolveVersion(app catalog.App, requested string) (map[string]string, strin
 }
 
 func runInstall(ctx context.Context, out, errOut io.Writer, deps Deps, f installFlags, args []string) error {
+	deps.ForceExternal = f.force // vale para o passe do plano e para o real
 	cat, err := loadCatalog(ctx, deps, listFlags{catalog: f.catalog, sha256: f.sha256, replace: f.replace}, errOut)
 	if err != nil {
 		return err
@@ -241,14 +244,26 @@ func printExternal(out io.Writer, ext providers.External) {
 	_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallExternal, printable(ext.Manager), printable(ext.Where), v))
 }
 
-func installOne(ctx context.Context, out io.Writer, reg *providers.Registry, goos string, app catalog.App, vars map[string]string, version string, dryRun bool, ext providers.ExternalFinder) error {
+// printExternalForced avisa que o app já estava instalado fora do gerenciador e que --force instala mesmo assim.
+func printExternalForced(out io.Writer, ext providers.External) {
+	v := ""
+	if ext.Version != "" {
+		v = fmt.Sprintf(msg.InstallExternalVersion, printable(ext.Version))
+	}
+	_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallExternalForced, printable(ext.Manager), printable(ext.Where), v))
+}
+
+func installOne(ctx context.Context, out io.Writer, reg *providers.Registry, goos string, app catalog.App, vars map[string]string, version string, dryRun bool, ext providers.ExternalFinder, forceExternal bool) error {
 	cands, skips := reg.Candidates(ctx, app, goos, vars)
 	if len(cands) == 0 {
 		return providers.NoInstallerError(app, goos, skips)
 	}
-	res, err := providers.InstallAppWith(ctx, cands, version, providers.Options{External: ext})
+	res, err := providers.InstallAppWith(ctx, cands, version, providers.Options{External: ext, ForceExternal: forceExternal})
 	if err != nil {
 		return err
+	}
+	if res.ExternalIgnored != nil {
+		printExternalForced(out, *res.ExternalIgnored)
 	}
 	switch {
 	case res.External != nil:
@@ -327,7 +342,7 @@ func installPass(ctx context.Context, out, errOut io.Writer, deps Deps, targets 
 	var failed []string
 	for _, t := range targets {
 		_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallHeader, printable(t.app.ID), printable(t.app.Name)))
-		if err := installOne(ctx, out, reg, deps.GOOS, t.app, t.vars, t.version, dry, deps.externalFinder(rn, t.app)); err != nil {
+		if err := installOne(ctx, out, reg, deps.GOOS, t.app, t.vars, t.version, dry, deps.externalFinder(rn, t.app), deps.ForceExternal); err != nil {
 			_, _ = fmt.Fprintln(errOut, "erro: "+printable(err.Error()))
 			if errors.Is(err, providers.ErrNeedsAdmin) {
 				_, _ = fmt.Fprintln(errOut, msg.HintNeedsAdmin)

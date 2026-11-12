@@ -357,9 +357,9 @@ func TestLinuxDesktop(t *testing.T) {
 func TestLinuxFlatpakESnap(t *testing.T) {
 	s := &stub{paths: map[string]bool{"flatpak": true, "snap": true}, handle: func(c exec.Cmd) (exec.Result, error) {
 		switch c.Name {
-		case "flatpak":
+		case "/usr/bin/flatpak": // caminho ABSOLUTO achado pelo LookPath, não o nome
 			return ok("org.outro.App\t1.0\ncom.discordapp.Discord\t0.0.60\n")
-		case "snap":
+		case "/usr/bin/snap":
 			return ok("Name     Version  Rev  Tracking       Publisher  Notes\ndiscord  0.0.58   200  latest/stable  snapcrafters  -\n")
 		}
 		return exec.Result{}, errors.New("inesperado")

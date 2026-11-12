@@ -122,3 +122,35 @@ func TestDisplayName(t *testing.T) {
 		}
 	}
 }
+
+// --force: achou o app fora do gerenciador? Instala mesmo assim e leva o que achou para o aviso.
+func TestInstallAppForceExternalInstallsAnywayAndReportsWhatWasFound(t *testing.T) {
+	p := &fakeProvider{name: "brew"}
+	n := 0
+	out, err := InstallAppWith(context.Background(), []Candidate{cand(p)}, "", Options{External: finder(true, nil, &n), ForceExternal: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.External != nil {
+		t.Fatalf("com --force não é 'já instalado': %+v", out.External)
+	}
+	if out.ExternalIgnored == nil || out.ExternalIgnored.Manager != "Homebrew" || out.ExternalIgnored.Where != "/Applications/Discord.app" {
+		t.Fatalf("ExternalIgnored = %+v", out.ExternalIgnored)
+	}
+	if !strings.Contains(strings.Join(p.calls, ","), "install") || n != 1 {
+		t.Fatalf("instalou e consultou o externo uma vez: calls=%v n=%d", p.calls, n)
+	}
+	// nada achado + --force: instala normal, sem aviso
+	p2 := &fakeProvider{name: "brew"}
+	n = 0
+	out, err = InstallAppWith(context.Background(), []Candidate{cand(p2)}, "", Options{External: finder(false, nil, &n), ForceExternal: true})
+	if err != nil || out.ExternalIgnored != nil || out.External != nil {
+		t.Fatalf("%v %+v", err, out)
+	}
+	// versão pedida + externo em outra versão + --force: segue para instalar (a recusa ErrExternalVersion só vale sem --force)
+	p3 := &fakeProvider{name: "brew"}
+	n = 0
+	if _, err := InstallAppWith(context.Background(), []Candidate{cand(p3)}, "9.9", Options{External: finder(true, nil, &n), ForceExternal: true}); errors.Is(err, ErrExternalVersion) {
+		t.Fatalf("--force não recusa por versão: %v", err)
+	}
+}
