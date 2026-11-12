@@ -4,7 +4,10 @@
 #   - toda action ("uses:") fixada por SHA de commit de 40 hex, com a versão em comentário;
 #   - nada de pull_request_target, nem curl|sh / wget|sh;
 #   - todo job com timeout-minutes e persist-credentials: false em todo checkout;
-# e, para o release.yml (o único que vê segredo):
+# runners: só os PADRÃO (ubuntu/windows/macos, gratuitos em repo público), nunca "larger runner" nem self-hosted;
+# pull_request só no ci.yml (que não usa segredo, environment nem permissão de escrita); e, para o release.yml (o único
+# que vê segredo):
+#   - a imagem do macOS é FIXA (macos-NN, nunca macos-latest) e todo setup-go tem "cache: false";
 #   - gatilho SÓ push de tag v*.*.*: sem pull_request, workflow_dispatch, schedule nem push de branch;
 #   - permissions de topo vazias ({}), "contents: write" em exatamente um job e nenhum "write-all";
 #   - concurrency sem cancelar release em andamento;
@@ -36,6 +39,16 @@ for f in "${files[@]}"; do
     printf '%s\n' "$line" | grep -qE 'uses: *[A-Za-z0-9._/-]+@[0-9a-f]{40} +# *v?[0-9]' || bad "$n: action sem SHA de 40 hex + versão em comentário: $line"
   done < <(grep -E '^[[:space:]]*-?[[:space:]]*uses:' "$f" || true)
   grep -qE '^[[:space:]]*(pull_request_target|workflow_run)' "$f" && bad "$n: pull_request_target/workflow_run não é permitido"
+  # runners: padrão hospedado, sem larger runner/self-hosted (o custo e a superfície de ataque seriam outros)
+  while IFS= read -r v; do
+    v="${v#*runs-on:}"; v="${v%%#*}"; v="$(printf '%s' "$v" | tr -d ' "'"'"'')"
+    printf '%s' "$v" | grep -qE '^(ubuntu-(latest|2[0-9]\.[0-9]{2})|windows-(latest|20[0-9]{2})|macos-(latest|[0-9]+)|\$\{\{matrix\.os\}\})$' || bad "$n: runs-on fora da lista de runners padrão: $v"
+  done < <(grep -E '^[[:space:]]*runs-on:' "$f" || true)
+  grep -qiE '(large|xlarge|xl\b|self-hosted|gpu)' <(grep -E '^[[:space:]]*(runs-on:|os:|-[[:space:]]*os:)' "$f" || true) && bad "$n: larger/self-hosted runner não é permitido"
+  # pull_request só no ci.yml
+  if [ "$n" != ci.yml ]; then
+    awk '/^on:/ {o=1; next} o && /^[A-Za-z]/ {exit} o {print}' "$f" | grep -qE '^  pull_request:' && bad "$n: pull_request só é permitido no ci.yml"
+  fi
   grep -qE '(curl|wget)[^#|]*\|[[:space:]]*(sudo )?(ba)?sh' "$f" && bad "$n: curl|sh em workflow"
   jobs="$(awk '/^jobs:/ {j=1; next} j && /^  [A-Za-z0-9_-]+:[[:space:]]*$/ {c++} END {print c+0}' "$f")"
   [ "$(grep -cE '^    timeout-minutes: [0-9]+' "$f")" = "$jobs" ] || bad "$n: todo job precisa de timeout-minutes ($jobs jobs)"
@@ -43,6 +56,23 @@ for f in "${files[@]}"; do
   [ "$(grep -cE 'persist-credentials: false' "$f")" = "$co" ] || bad "$n: todo checkout precisa de persist-credentials: false"
   grep -qE '^permissions:' "$f" || bad "$n: faltam permissions de topo"
 done
+
+# ci.yml: valida PR e push na main SEM segredo, environment nem escrita
+c="$dir/ci.yml"
+if [ -f "$c" ]; then
+  n=ci.yml
+  on="$(awk '/^on:/ {o=1; next} o && /^[A-Za-z]/ {exit} o {print}' "$c")"
+  printf '%s\n' "$on" | grep -qE '^  pull_request:' || bad "$n: deve validar pull_request"
+  printf '%s\n' "$on" | grep -qE '^  push:' || bad "$n: deve validar push na main"
+  printf '%s\n' "$on" | grep -qE '^    branches: \[main\]' || bad "$n: push só na main"
+  grep -qE 'secrets\.' "$c" && bad "$n: o ci.yml não pode usar segredo (PR de fork roda aqui)"
+  grep -qE '^[[:space:]]*environment:' "$c" && bad "$n: o ci.yml não pode usar environment"
+  grep -qE ':[[:space:]]*write' "$c" && bad "$n: o ci.yml não pode ter permissão de escrita"
+  if ! awk '/^permissions:/ {p=1; next} p && /^[A-Za-z]/ {exit} p {print}' "$c" | grep -qE '^  contents: read[[:space:]]*$'; then
+    bad "$n: permissions de topo deve ser contents: read"
+  fi
+  grep -qE '^concurrency:' "$c" || bad "$n: falta concurrency (cancelar a validação antiga do mesmo PR)"
+fi
 
 r="$dir/release.yml"
 if [ -f "$r" ]; then
@@ -67,6 +97,10 @@ if [ -f "$r" ]; then
   grep -qE 'toolkit version|version \| grep' "$r" || bad "$n: falta a conferência de 'toolkit version'"
   grep -qE 'gh release create .*--draft' "$r" || grep -qE -- '--draft' "$r" || bad "$n: o release tem de sair como rascunho (--draft)"
   grep -qE -- '--verify-tag' "$r" || bad "$n: gh release create sem --verify-tag"
+  grep -qE '^[[:space:]]*runs-on: *macos-latest' "$r" && bad "$n: a imagem do macOS do release deve ser FIXA (macos-NN), não macos-latest"
+  grep -qE '^[[:space:]]*runs-on: *macos-[0-9]+' "$r" || bad "$n: falta o job macOS com imagem fixa (macos-NN)"
+  sg="$(grep -cE 'uses: *actions/setup-go@' "$r" || true)"
+  [ "$(grep -cE '^[[:space:]]+cache: false' "$r")" = "$sg" ] || bad "$n: todo setup-go do release precisa de cache: false ($sg)"
 fi
 
 if [ "$errs" -gt 0 ]; then echo "check-workflows: $errs problema(s)" >&2; exit 1; fi

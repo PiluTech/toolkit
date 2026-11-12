@@ -1,0 +1,6 @@
+# Quem revisa o que mexe na cadeia de release e nas proteções (precisa estar ligado "Require review from Code Owners"
+# na proteção do branch main para valer; ver docs/release.md).
+/.github/workflows/   @PiluVitu
+/.github/CODEOWNERS   @PiluVitu
+/scripts/release*.sh  @PiluVitu
+/docs/release.md      @PiluVitu

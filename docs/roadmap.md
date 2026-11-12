@@ -28,6 +28,11 @@ Feito: bloco `detect` no catálogo, `internal/detect`, install pulando, aba Apps
 - Detecção de CLI no PATH (git, 7zip no macOS/Linux) não existe: só app com bundle, entrada do registro, .desktop,
   flatpak ou snap.
 
+## Menores da revisão do #48 (registro)
+
+- (c) Registro do Crivo: sem ação neste PR. O `realDetector` é um singleton por processo (o Runner da 1ª chamada
+  vale); se um dia houver Runners com semântica diferente, passar o Runner a cada `Find`.
+
 ## Menores da revisão do `toolkit update` (#42, não bloqueiam)
 
 - Assinatura/attestation dos artefatos: GitHub artifact attestations (provenance) no `release.yml` para os binários e o
