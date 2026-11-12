@@ -2,6 +2,7 @@ package resume_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -31,6 +32,7 @@ ConditionPathExists=/var/lib/toolkit/state.json
 
 [Service]
 Type=oneshot
+ProtectHome=true
 ExecStart=/usr/local/bin/toolkit resume --yes --no-tui
 StandardOutput=append:/var/lib/toolkit/logs/resume.log
 StandardError=append:/var/lib/toolkit/logs/resume.log
@@ -77,8 +79,8 @@ func TestSystemdRegisterAsRootAndNonRoot(t *testing.T) {
 				r.OnElevated(line, exectest.Exit(0, ""))
 			}
 		}
-		script("install -d -m 0755 /usr/local/bin")
-		script("install -m 0755 -- /home/ana/dl/toolkit /usr/local/bin/toolkit")
+		script("install -d -m 0755 -o root -g root /usr/local/bin")
+		script("install -m 0755 -o root -g root -- /home/ana/dl/toolkit /usr/local/bin/toolkit")
 		script("tee -- " + unitPath)
 		script("chmod 0644 -- " + unitPath)
 		script("systemctl daemon-reload")
@@ -112,7 +114,7 @@ func TestSystemdRegisterAsRootAndNonRoot(t *testing.T) {
 func TestSystemdRegisterSkipsCopyWhenAlreadyInBinDir(t *testing.T) {
 	r := exectest.New(t)
 	s := newSystemd(r, true)
-	for _, l := range []string{"install -d -m 0755 /usr/local/bin", "tee -- " + unitPath, "chmod 0644 -- " + unitPath, "systemctl daemon-reload", "systemctl enable -- toolkit-resume.service"} {
+	for _, l := range []string{"install -d -m 0755 -o root -g root /usr/local/bin", "tee -- " + unitPath, "chmod 0644 -- " + unitPath, "systemctl daemon-reload", "systemctl enable -- toolkit-resume.service"} {
 		r.On(l, exectest.Exit(0, ""))
 	}
 	if err := s.Register(context.Background(), resume.Spec{Executable: "/usr/local/bin/toolkit", Args: []string{"resume"}}); err != nil {
@@ -128,7 +130,7 @@ func TestSystemdRegisterSkipsCopyWhenAlreadyInBinDir(t *testing.T) {
 func TestSystemdRegisterErrorStops(t *testing.T) {
 	r := exectest.New(t)
 	s := newSystemd(r, true)
-	r.On("install -d -m 0755 /usr/local/bin", exectest.Exit(1, ""))
+	r.On("install -d -m 0755 -o root -g root /usr/local/bin", exectest.Exit(1, ""))
 	if err := s.Register(context.Background(), resume.Spec{Executable: "/usr/local/bin/toolkit", Args: []string{"resume"}}); err == nil {
 		t.Fatal("falha do install deve parar o registro")
 	}
@@ -292,5 +294,85 @@ func TestOSFS(t *testing.T) {
 	}
 	if err := f.CopyFile(dir+"/nao", dir+"/x", 0o755); err == nil {
 		t.Fatal("copiar inexistente")
+	}
+}
+
+// A unit roda como ROOT: binário, state e log que um usuário comum pode alterar são escalada de
+// privilégio no boot. Tudo é recusado ANTES de qualquer comando.
+func TestSystemdRefusesUserWritablePaths(t *testing.T) {
+	spec := resume.Spec{Executable: "/home/ana/dl/toolkit", Args: []string{"resume"}, LogPath: "/var/lib/toolkit/logs/r.log"}
+	cases := map[string]resume.Systemd{
+		"BinDir do usuário":      {BinDir: "/home/ana/.local/bin", StatePath: "/var/lib/toolkit/state.json"},
+		"BinDir em /tmp":         {BinDir: "/tmp/bin", StatePath: "/var/lib/toolkit/state.json"},
+		"BinDir com ..":          {BinDir: "/usr/local/../../home/ana/bin", StatePath: "/var/lib/toolkit/state.json"},
+		"BinDir relativo":        {BinDir: "usr/local/bin", StatePath: "/var/lib/toolkit/state.json"},
+		"state na home":          {BinDir: "/usr/local/lib/toolkit", StatePath: "/home/ana/.local/state/toolkit/state.json"},
+		"state em /var/lib/..":   {BinDir: "/usr/local/lib/toolkit", StatePath: "/var/lib/../../home/ana/state.json"},
+		"state em /var/tmp":      {BinDir: "/usr/local/lib/toolkit", StatePath: "/var/tmp/state.json"},
+		"state vazio":            {BinDir: "/usr/local/lib/toolkit"},
+		"BinDir vizinho de /usr": {BinDir: "/usrx/bin", StatePath: "/var/lib/toolkit/state.json"},
+	}
+	for name, s := range cases {
+		r := exectest.New(t) // qualquer comando inesperado falha o teste
+		s.Runner, s.IsRoot = r, true
+		err := s.Register(context.Background(), spec)
+		if !errors.Is(err, resume.ErrUnsafeRootPath) {
+			t.Errorf("%s: err = %v, quero ErrUnsafeRootPath", name, err)
+		}
+		if len(r.Calls()) != 0 {
+			t.Errorf("%s: executou comando antes de recusar: %v", name, r.Calls())
+		}
+	}
+	// log gravável por usuário
+	s := newSystemd(exectest.New(t), true)
+	for _, lp := range []string{"/home/ana/.local/state/toolkit/logs/r.log", "/tmp/r.log", "/var/logx/r.log"} {
+		sp := spec
+		sp.LogPath = lp
+		if _, err := s.UnitFile(sp); !errors.Is(err, resume.ErrUnsafeRootPath) {
+			t.Errorf("log %s: err = %v", lp, err)
+		}
+	}
+}
+
+// Sem BinDir, o root executa a cópia em /usr/local/lib/toolkit (root:root 0755), e a unit bloqueia /home.
+func TestSystemdDefaultsToRootOwnedBinDir(t *testing.T) {
+	r := exectest.New(t)
+	s := resume.Systemd{Runner: r, IsRoot: true, StatePath: "/var/lib/toolkit/state.json"}
+	unit, err := s.UnitFile(resume.Spec{Args: []string{"resume"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(unit, "ExecStart=/usr/local/lib/toolkit/toolkit resume --no-tui\n") || !strings.Contains(unit, "ProtectHome=true\n") {
+		t.Fatalf("unit:\n%s", unit)
+	}
+	if resume.RootBinDir != "/usr/local/lib/toolkit" {
+		t.Fatal(resume.RootBinDir)
+	}
+	for _, line := range []string{
+		"install -d -m 0755 -o root -g root /usr/local/lib/toolkit",
+		"install -m 0755 -o root -g root -- /home/ana/.local/bin/toolkit /usr/local/lib/toolkit/toolkit",
+		"tee -- " + unitPath, "chmod 0644 -- " + unitPath, "systemctl daemon-reload", "systemctl enable -- toolkit-resume.service",
+	} {
+		r.On(line, exectest.Exit(0, ""))
+	}
+	if err := s.Register(context.Background(), resume.Spec{Executable: "/home/ana/.local/bin/toolkit", Args: []string{"resume"}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// New nunca repassa o BinDir do usuário ao systemd (o de quem não é root é ~/.local/bin).
+func TestNewLinuxIgnoresUserBinDir(t *testing.T) {
+	reg, err := resume.New(resume.Config{
+		Info:      platform.Info{OS: platform.Linux},
+		Paths:     platform.Paths{BinDir: "/home/ana/.local/bin"},
+		Runner:    exectest.New(t),
+		StatePath: "/var/lib/toolkit/state.json",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sd := reg.(resume.Systemd)
+	if sd.BinDir != "" {
+		t.Fatalf("BinDir do usuário vazou para o systemd: %q", sd.BinDir)
 	}
 }

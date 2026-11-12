@@ -28,7 +28,8 @@ func New(c Config) (Registrar, error) {
 	case platform.Windows:
 		return SchTask{Runner: c.Runner, FS: fsys, BinDir: c.Paths.BinDir}, nil
 	case platform.Linux:
-		return Systemd{Runner: c.Runner, IsRoot: c.Info.IsAdmin, BinDir: c.Paths.BinDir, StatePath: c.StatePath}, nil
+		// BinDir fica vazio de propósito: o root executa a cópia em RootBinDir, nunca o diretório do usuário.
+		return Systemd{Runner: c.Runner, IsRoot: c.Info.IsAdmin, StatePath: c.StatePath}, nil
 	case platform.Darwin:
 		return Launchd{Runner: c.Runner, FS: fsys, Home: c.Home, UID: c.UID, BinDir: c.Paths.BinDir}, nil
 	}
