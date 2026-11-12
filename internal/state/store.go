@@ -89,7 +89,7 @@ func (s *FileStore) load() (*File, error) {
 		SchemaVersion int `json:"schema_version"`
 	}
 	if err := json.Unmarshal(data, &head); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrCorrupt, err)
+		return nil, fmt.Errorf("%w: %w", ErrCorrupt, err)
 	}
 	if head.SchemaVersion > SchemaVersion {
 		return nil, fmt.Errorf("%w (schema %d, este binário entende até %d)", ErrNewerSchema, head.SchemaVersion, SchemaVersion)
@@ -101,7 +101,7 @@ func (s *FileStore) load() (*File, error) {
 	dec.DisallowUnknownFields()
 	var f File
 	if err := dec.Decode(&f); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrCorrupt, err)
+		return nil, fmt.Errorf("%w: %w", ErrCorrupt, err)
 	}
 	if dec.More() {
 		return nil, fmt.Errorf("%w: conteúdo depois do JSON", ErrCorrupt)
