@@ -10,7 +10,7 @@ correções de segurança.
 Não abra issue pública para falha de segurança.
 
 Use o reporte privado do GitHub: aba **Security** do repositório → **Report a vulnerability**
-(<https://github.com/PiluVitu/toolkit/security/advisories/new>). Inclua:
+(<https://github.com/PiluTech/toolkit/security/advisories/new>). Inclua:
 
 - a versão ou o commit afetado e o SO;
 - os passos para reproduzir, o resultado esperado e o obtido;
@@ -30,7 +30,10 @@ Qualquer caso em que uma destas regras não se cumpra é uma vulnerabilidade:
    - `url`: `sha256` obrigatório no catálogo.
    - `github-release`: `checksums.txt` da release, ou o `digest` publicado pelo GitHub, ou `sha256`
      fixado no catálogo.
-   - Bootstraps: `checksums.txt` da mesma release do binário.
+   - Bootstraps (`scripts/bootstrap/unix.sh`, `win.ps1`): `checksums.txt` da mesma release do binário;
+     se o hash divergir ou o binário não constar no arquivo, abortam sem instalar. Instalam só no PATH
+     do usuário, sem `sudo` nem administrador. O `unix.sh` é testado com release falsa e checksums
+     adulterados (`scripts/bootstrap/unix_test.sh`).
    - O arquivo baixado fica num diretório temporário e só é usado depois que o hash confere.
 2. **Nenhum `curl | bash` de terceiros** dentro de receitas.
 3. **Extração segura**: arquivos zip e tar com caminho absoluto, `..` ou link simbólico para fora do
