@@ -91,8 +91,12 @@ func (c Config) rename() func(string, string) error {
 	return os.Rename
 }
 
-// DefaultAllowedHosts são os hosts que o update aceita (a release e para onde o GitHub redireciona os assets).
-var DefaultAllowedHosts = []string{"github.com", "api.github.com", "*.githubusercontent.com"}
+// bootstrapCmd é o instalador oficial (instala em ~/.local/bin, sem sudo): a forma de reinstalar à mão.
+const bootstrapCmd = "curl -fsSL https://github.com/PiluTech/toolkit/releases/latest/download/unix.sh | sh"
+
+// DefaultAllowedHosts são os hosts que o update aceita: a release e SÓ os hosts para onde o GitHub redireciona os
+// assets (objects e release-assets). raw/gist/avatars e o resto do *.githubusercontent.com NÃO passam.
+var DefaultAllowedHosts = []string{"github.com", "api.github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"}
 
 // ErrHostNotAllowed indica que a URL (ou um redirecionamento) aponta para fora dos hosts permitidos do update.
 var ErrHostNotAllowed = errors.New("host fora da lista permitida do update")
@@ -339,13 +343,16 @@ func Apply(ctx context.Context, c Config, p Plan) error {
 }
 
 // managedMarkers: caminhos de instalação feita por gerenciador de pacotes (o update não mexe neles).
-var managedMarkers = []struct{ marker, hint string }{
-	{"/Cellar/", "atualize com: brew upgrade toolkit"},
-	{"/Homebrew/", "atualize com: brew upgrade toolkit"},
-	{"/.linuxbrew/", "atualize com: brew upgrade toolkit"},
-	{"/nix/store/", "atualize pelo Nix (nix profile upgrade / home-manager)"},
-	{"/snap/", "atualize com: snap refresh"},
-	{"/WindowsApps/", "atualize pela Microsoft Store"},
+var managedMarkers = []struct {
+	marker, hint string
+	fold         bool // caminho sem diferença de maiúsculas (Windows)
+}{
+	{marker: "/Cellar/", hint: "atualize com: brew upgrade toolkit"},
+	{marker: "/Homebrew/", hint: "atualize com: brew upgrade toolkit"},
+	{marker: "/.linuxbrew/", hint: "atualize com: brew upgrade toolkit"},
+	{marker: "/nix/store/", hint: "atualize pelo Nix (nix profile upgrade / home-manager)"},
+	{marker: "/snap/", hint: "atualize com: snap refresh"},
+	{marker: "/windowsapps/", hint: "atualize pela Microsoft Store", fold: true},
 }
 
 // CheckInstall recusa uma instalação de gerenciador de pacotes: (1) o caminho real ou o usado para chamar o
@@ -353,14 +360,22 @@ var managedMarkers = []struct{ marker, hint string }{
 // FORA do próprio diretório (Linuxbrew, ln -s para outro lugar). Necessário porque no Linux os.Executable()
 // devolve o caminho já resolvido e o Lstat do binário real nunca veria o link.
 func CheckInstall(invoked, resolved string) error {
-	norm := func(p string) string { return strings.ReplaceAll(filepath.ToSlash(p), "//", "/") + "/" }
+	// "\\" vira "/" mesmo fora do Windows (caminho do Windows visto de /mnt/c, ou o teste em outro SO)
+	norm := func(p string) string {
+		return strings.ReplaceAll(strings.ReplaceAll(filepath.ToSlash(p), `\`, "/"), "//", "/") + "/"
+	}
 	for _, p := range []string{invoked, resolved} {
 		if p == "" {
 			continue
 		}
 		n := norm(p)
+		lower := strings.ToLower(n)
 		for _, m := range managedMarkers {
-			if strings.Contains(n, m.marker) {
+			hay := n
+			if m.fold {
+				hay = lower
+			}
+			if strings.Contains(hay, m.marker) {
 				return fmt.Errorf("%w: %s (%s)", ErrManagedInstall, textsafe.Printable(p), m.hint)
 			}
 		}
@@ -382,7 +397,8 @@ func CheckInstall(invoked, resolved string) error {
 		invDir = r
 	}
 	if filepath.Dir(target) != invDir {
-		return fmt.Errorf("%w: %s aponta para %s (atualize pelo gerenciador que criou o link)", ErrManagedInstall, textsafe.Printable(invoked), textsafe.Printable(target))
+		return fmt.Errorf("%w: %s aponta para %s. Atualize pelo gerenciador que criou o link; para instalar uma cópia própria do toolkit no PATH do usuário, rode o instalador: %s",
+			ErrManagedInstall, textsafe.Printable(invoked), textsafe.Printable(target), bootstrapCmd)
 	}
 	return nil
 }
