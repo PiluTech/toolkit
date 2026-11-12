@@ -17,7 +17,11 @@ const (
 type Options struct {
 	Version string // versão em execução ("v0.1.0")
 	Latest  string // versão nova disponível, vazia = nenhuma (faixa "↑ v0.2.0 disponível (u)")
-	Mono    bool   // sem cor, negrito nem reverso (NO_COLOR)
+	// LatestNotes e LatestURL são as notas e a página da versão nova (a tecla u as mostra).
+	LatestNotes, LatestURL string
+	// Updates entrega a versão nova que a consulta em segundo plano achar DEPOIS da abertura (nil = sem consulta).
+	Updates <-chan UpdateInfo
+	Mono    bool // sem cor, negrito nem reverso (NO_COLOR)
 	// Planner e Runner ligam a Revisão e a execução (nil: Enter só avisa que a execução não está ligada).
 	Planner Planner
 	Runner  Runner
@@ -28,6 +32,7 @@ type modal int
 const (
 	modalNone modal = iota
 	modalHelp
+	modalUpdate // notas da versão nova, com Fechar e Atualizar
 )
 
 // Model é a raiz: guarda tamanho, aba ativa e modal, e repassa o resto à aba ativa.
@@ -56,7 +61,20 @@ type Model struct {
 	pending   *rebootAsk
 	reviewSeq int
 	runDone   <-chan struct{} // ctx da execução: encerra as entregas de resposta pendentes
+
+	updFocus   int  // botão do modal de versão nova: 0 Fechar (padrão), 1 Atualizar
+	wantUpdate bool // o usuário escolheu Atualizar: o Run devolve ErrUpdateRequested
+	updScroll  int
 }
+
+// UpdateInfo é uma versão nova (tag, notas já limpas, página da release).
+type UpdateInfo struct{ Tag, Notes, URL string }
+
+// UpdateInfoMsg entrega uma versão nova achada depois da abertura (o Run a envia a partir de Options.Updates).
+type UpdateInfoMsg UpdateInfo
+
+// UpdateRequested diz se o usuário escolheu Atualizar no modal de versão nova.
+func (m *Model) UpdateRequested() bool { return m.wantUpdate }
 
 type rebootAsk struct {
 	prompt string
@@ -109,6 +127,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		if !m.opts.Mono {
 			m.theme.Dark = msg.IsDark()
+		}
+		return m, nil
+	case UpdateInfoMsg:
+		if m.opts.Latest == "" { // o cache vem primeiro; a consulta só preenche quando não havia nada
+			m.opts.Latest, m.opts.LatestNotes, m.opts.LatestURL = msg.Tag, msg.Notes, msg.URL
 		}
 		return m, nil
 	case planReadyMsg:
@@ -165,6 +188,9 @@ func (m *Model) toActive(msg tea.Msg) tea.Cmd {
 
 // global trata as teclas da raiz: abas, ajuda, voltar e sair.
 func (m *Model) global(k string) (tea.Model, tea.Cmd, bool) {
+	if m.modal == modalUpdate {
+		return m.updateModalKey(k)
+	}
 	// o modal consome tudo, menos sair
 	if m.modal != modalNone {
 		switch k {
@@ -182,6 +208,12 @@ func (m *Model) global(k string) (tea.Model, tea.Cmd, bool) {
 		return m, tea.Quit, true
 	case "?":
 		m.modal = modalHelp
+		return m, nil, true
+	case "u":
+		if m.opts.Latest == "" {
+			return m, nil, false // sem versão nova a tecla é da aba
+		}
+		m.modal, m.updFocus, m.updScroll = modalUpdate, 0, 0
 		return m, nil, true
 	case "tab":
 		m.active = (m.active + 1) % len(m.tabs)
@@ -211,4 +243,35 @@ func (m *Model) render() string {
 		return strings.TrimRight(m.tooSmall(), "\n")
 	}
 	return m.screen()
+}
+
+// updateModalKey: o modal de versão nova. Fechar é o padrão (Enter e Esc fecham); Atualizar sai da TUI e o
+// chamador roda `toolkit update` (nunca atualiza por dentro da tela).
+func (m *Model) updateModalKey(k string) (tea.Model, tea.Cmd, bool) {
+	switch k {
+	case "ctrl+c", "q":
+		m.quit = true
+		return m, tea.Quit, true
+	case "esc", "u":
+		m.modal = modalNone
+	case "tab", "shift+tab", "left", "right", "h", "l":
+		m.updFocus = 1 - m.updFocus
+	case "up", "k":
+		m.updScroll = max(m.updScroll-1, 0)
+	case "down", "j":
+		m.updScroll++
+	case "a":
+		return m.requestUpdate()
+	case "enter":
+		if m.updFocus == 1 {
+			return m.requestUpdate()
+		}
+		m.modal = modalNone
+	}
+	return m, nil, true
+}
+
+func (m *Model) requestUpdate() (tea.Model, tea.Cmd, bool) {
+	m.wantUpdate, m.quit = true, true
+	return m, tea.Quit, true
 }

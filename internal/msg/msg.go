@@ -70,6 +70,7 @@ const (
 	UpdateFlagVersion    = "instala esta versão (vX.Y.Z), inclusive mais antiga que a atual"
 	UpdateUpToDate       = "toolkit %s já é a última versão."
 	UpdateAvailable      = "toolkit %s → %s disponível."
+	UpdateNotice         = "aviso: toolkit %s disponível (você usa %s). Para atualizar: toolkit update (desligar este aviso: --no-update-check)"
 	UpdateNotes          = "Notas da release:"
 	UpdateHowTo          = "Para atualizar: toolkit update"
 	UpdateDevBuild       = "toolkit %s é um build de desenvolvimento: não há versão para comparar. Use: toolkit update --version vX.Y.Z"
@@ -100,4 +101,5 @@ const (
 	ErrInstallNeedsYes     = "sem terminal para confirmar: confira o plano com --dry-run e rode de novo com --yes"
 	WarnPlanSudo           = "aviso: este plano usa sudo -n (nunca pede senha): rode \"sudo -v\" antes ou a execução real falhará com a dica de sudo"
 	InstallFlatpakNote     = "aviso: o flatpak baixa também os runtimes e as dependências do app (podem ser GB) e só instala no sistema (--system); \"já instalado\" vale também para a instalação --user"
+	FlagNoUpdateCheck      = "não consulta nem avisa de versão nova (também: TOOLKIT_NO_UPDATE_CHECK=1)"
 )
