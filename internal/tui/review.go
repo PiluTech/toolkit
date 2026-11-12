@@ -17,6 +17,7 @@ const (
 )
 
 type planReadyMsg struct {
+	id   int // da Revisão que pediu o plano: plano de outra Revisão é ignorado
 	plan Plan
 	err  error
 }
@@ -28,6 +29,8 @@ type runClosedMsg struct{}
 // reviewScreen é a "Revisão do plano": a seleção, os avisos, o que muda e os comandos exatamente como
 // serão executados. Foco inicial em Voltar (decisão 2); `s` executa.
 type reviewScreen struct {
+	id      int       // identifica esta Revisão (um plano atrasado de outra nunca a preenche)
+	sel     Selection // a seleção que foi planejada: é ESSA que Executar entrega ao executor
 	theme   Theme
 	loading bool
 	err     error
@@ -37,7 +40,9 @@ type reviewScreen struct {
 	frame   int
 }
 
-func newReview(th Theme) *reviewScreen { return &reviewScreen{theme: th, loading: true} }
+func newReview(th Theme, id int, sel Selection) *reviewScreen {
+	return &reviewScreen{theme: th, loading: true, id: id, sel: sel}
+}
 
 // canRun: Executar só existe com plano pronto, sem problemas e com algo a fazer.
 func (r *reviewScreen) canRun() bool {
@@ -103,14 +108,13 @@ func wrap(s string, w, indent int) []string {
 	cur := ""
 	for _, word := range strings.Split(s, " ") {
 		for lipgloss.Width(word) > w-indent {
-			room := w - indent - 1
-			if cur != "" {
+			room := w - indent - 1 // sobra a coluna da "\\" do fim
+			if cur != "" && cur != pad {
 				out, cur = append(out, cur), pad
 			}
-			r := []rune(word)
-			n := min(room, len(r))
-			out = append(out, cur+string(r[:n])+"\\")
-			cur, word = pad, string(r[n:])
+			head, rest := splitCells(word, room)
+			out = append(out, cur+head+"\\")
+			cur, word = pad, rest
 		}
 		switch {
 		case cur == "" || cur == pad:
@@ -139,4 +143,18 @@ func (r *reviewScreen) buttons() string {
 		return back
 	}
 	return back + "     " + run
+}
+
+// splitCells corta s em (início, resto) com o início ocupando no máximo n CÉLULAS (caractere largo = 2,
+// combinante = 0), sem nunca separar um caractere ao meio; pelo menos um caractere sai por chamada.
+func splitCells(s string, n int) (string, string) {
+	used := 0
+	for i, r := range s {
+		w := lipgloss.Width(string(r))
+		if used+w > n && i > 0 {
+			return s[:i], s[i:]
+		}
+		used += w
+	}
+	return s, ""
 }

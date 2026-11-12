@@ -31,23 +31,14 @@ func (m *Model) logTab() (*LogTab, int) {
 
 // execKey trata as teclas da Revisão, da execução e das perguntas [s/N]; false = segue o fluxo normal.
 func (m *Model) execKey(k string) (tea.Model, tea.Cmd, bool) {
-	// pergunta [s/N] pendente: só s confirma (padrão N); qualquer outra tecla responde não
+	// pergunta [s/N] aberta: só s/S (sim) e n/N/Esc (não) respondem; qualquer outra tecla é ignorada, nunca
+	// vira "não" por acidente nem abre outro diálogo por cima (um diálogo por vez).
 	if m.asking != askNone {
-		yes := k == "s" || k == "S"
-		kind, reply := m.asking, m.reply
-		m.asking, m.question, m.reply = askNone, "", nil
-		if l, _ := m.logTab(); l != nil {
-			l.Ask("")
-		}
-		switch kind {
-		case askInterrupt:
-			if yes && m.cancel != nil {
-				m.cancel() // encerra o item atual e descarta a fila
-			}
-		case askReboot:
-			if reply != nil {
-				reply <- yes
-			}
+		switch k {
+		case "s", "S":
+			m.answer(true)
+		case "n", "N", "esc":
+			m.answer(false)
 		}
 		return m, nil, true
 	}
@@ -57,10 +48,7 @@ func (m *Model) execKey(k string) (tea.Model, tea.Cmd, bool) {
 	case modeRun:
 		switch k {
 		case "ctrl+c", "q":
-			m.asking, m.question = askInterrupt, "Interromper? O item atual é encerrado e a fila é descartada."
-			if l, _ := m.logTab(); l != nil {
-				l.Ask(m.question)
-			}
+			m.open(askInterrupt, "Interromper? O item atual é encerrado e a fila é descartada.", nil)
 			return m, nil, true
 		case "space", "enter", "v", "/":
 			m.notice = "bloqueado durante a execução: espere terminar ou interrompa (q)"
@@ -82,14 +70,16 @@ func (m *Model) startReview() tea.Cmd {
 		return nil
 	}
 	m.notice = ""
-	m.mode, m.review = modeReview, newReview(m.theme)
+	m.reviewSeq++
+	id := m.reviewSeq
+	m.mode, m.review = modeReview, newReview(m.theme, id, sel)
 	p, ctx := m.planner, m.ctx
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	return tea.Batch(func() tea.Msg {
 		plan, err := p.Plan(ctx, sel)
-		return planReadyMsg{plan: plan, err: err}
+		return planReadyMsg{id: id, plan: plan, err: err}
 	}, tick())
 }
 
@@ -134,14 +124,15 @@ func (m *Model) reviewKey(k string) (tea.Model, tea.Cmd, bool) {
 
 // execute dispara a execução: o executor roda em goroutine própria e conta por canal; a TUI só lê.
 func (m *Model) execute() tea.Cmd {
-	sel := m.selection()
+	// Executar vale só para o plano EXIBIDO: a seleção é a que foi planejada, não a das abas agora
+	sel := m.review.sel
 	parent := m.ctx
 	if parent == nil {
 		parent = context.Background()
 	}
 	ctx, cancel := context.WithCancel(parent)
 	ch := make(chan Event, 64)
-	m.cancel, m.events, m.mode, m.review = cancel, ch, modeRun, nil
+	m.cancel, m.events, m.mode, m.review, m.runDone = cancel, ch, modeRun, nil, ctx.Done()
 	if _, i := m.logTab(); i >= 0 {
 		m.active = i
 	}
@@ -165,8 +156,11 @@ func (m *Model) onRunEvent(ev Event) tea.Cmd {
 	if l != nil {
 		switch ev.Kind {
 		case EventRebootPrompt:
-			m.asking, m.reply, m.question = askReboot, ev.Reply, ev.Prompt
-			l.Ask(ev.Prompt)
+			if m.asking != askNone { // outro diálogo aberto: este espera a vez
+				m.pending = &rebootAsk{prompt: ev.Prompt, reply: ev.Reply}
+			} else {
+				m.open(askReboot, ev.Prompt, ev.Reply)
+			}
 		default:
 			l.Apply(ev)
 		}
@@ -174,10 +168,65 @@ func (m *Model) onRunEvent(ev Event) tea.Cmd {
 	return waitEvent(m.events)
 }
 
+// open abre UM diálogo [s/N] (só um por vez).
+func (m *Model) open(k askKind, q string, reply chan<- bool) {
+	m.asking, m.question, m.reply = k, q, reply
+	if l, _ := m.logTab(); l != nil {
+		l.Ask(q)
+	}
+}
+
+// answer fecha o diálogo aberto com a resposta e abre o pedido de reinício que esperava a vez, se houver.
+func (m *Model) answer(yes bool) {
+	kind, reply := m.asking, m.reply
+	m.asking, m.question, m.reply = askNone, "", nil
+	if l, _ := m.logTab(); l != nil {
+		l.Ask("")
+	}
+	switch kind {
+	case askInterrupt:
+		if yes && m.cancel != nil {
+			m.cancel()            // encerra o item atual e descarta a fila
+			if m.pending != nil { // a execução acabou: o reinício pendente recebe "não"
+				m.deliver(m.pending.reply, false)
+				m.pending = nil
+			}
+		}
+	case askReboot:
+		m.deliver(reply, yes)
+	}
+	if m.asking == askNone && m.pending != nil {
+		p := m.pending
+		m.pending = nil
+		m.open(askReboot, p.prompt, p.reply)
+	}
+}
+
+// deliver entrega a resposta SEM bloquear o loop da TUI: se o executor já saiu (ou o Reply não tem leitor),
+// a goroutine desiste quando a execução termina (ctx cancelado em finishRun).
+func (m *Model) deliver(reply chan<- bool, v bool) {
+	if reply == nil {
+		return
+	}
+	select { // com leitor esperando (ou buffer livre) entrega na hora, sem depender de sorteio com o cancelamento
+	case reply <- v:
+		return
+	default:
+	}
+	done := m.runDone
+	go func() {
+		select {
+		case reply <- v:
+		case <-done:
+		}
+	}()
+}
+
 func (m *Model) finishRun() {
 	if m.cancel != nil {
 		m.cancel()
 	}
+	m.asking, m.question, m.reply, m.pending = askNone, "", nil, nil
 	m.cancel, m.events, m.mode = nil, nil, modeNav
 	if l, _ := m.logTab(); l != nil && l.Running() {
 		l.Apply(Event{Kind: EventDone}) // o executor fechou o canal sem EventDone: fecha o resumo

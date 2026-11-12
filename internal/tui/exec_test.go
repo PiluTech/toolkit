@@ -314,9 +314,13 @@ func TestInterruptAsksAndCancels(t *testing.T) {
 	if !strings.Contains(m.render(), "Interromper? O item atual é encerrado e a fila é descartada. [s/N]") || m.Quitting() {
 		t.Fatalf("pergunta:\n%s", m.render())
 	}
-	mkey(m, "x")
+	mkey(m, "x") // tecla qualquer é ignorada: o diálogo continua aberto
+	if m.asking != askInterrupt {
+		t.Fatal("tecla qualquer não fecha o diálogo")
+	}
+	mkey(m, "n")
 	if m.asking != askNone || m.cancel == nil {
-		t.Fatal("qualquer tecla que não seja s é não")
+		t.Fatal("n responde não")
 	}
 	select {
 	case <-m.ctxDone():
@@ -472,5 +476,189 @@ func TestReviewAndRunScreensFitTheWindow(t *testing.T) {
 		mkey(m, "s")
 		pump(t, m)
 		check("resumo")
+	}
+}
+
+// --- Lupa no #37: regressões ---
+
+// (1) Um plano atrasado (de uma Revisão anterior) nunca preenche a Revisão nova, e Executar só vale para o
+// plano EXIBIDO: o executor recebe a seleção que foi planejada.
+func TestStalePlanNeverAuthorizesNewSelection(t *testing.T) {
+	p := &fakePlanner{plan: okPlan()}
+	r := &fakeRunner{script: scriptOK}
+	m, apps, _ := rootWithExec(t, p, r)
+	mkey(m, "space") // marca Git
+	cmd1 := mkey(m, "enter")
+	oldPlan := cmd1().(tea.BatchMsg)[0]() // o plano do Git ainda está "no ar"
+	mkey(m, "esc")                        // volta antes de o plano chegar
+	mkey(m, "down")                       // python
+	mkey(m, "space")                      // python tem lista de versões: abre o modal
+	mkey(m, "enter")                      // confirma latest: marca Python também (seleção nova)
+	if apps.Selected() != 2 {
+		t.Fatalf("seleção nova: %d", apps.Selected())
+	}
+	cmd2 := mkey(m, "enter")
+	m.Update(oldPlan) // chega o plano ANTIGO, depois de a Revisão nova abrir
+	if m.review == nil || !m.review.loading {
+		t.Fatal("o plano antigo não pode preencher a Revisão nova (ela continua carregando)")
+	}
+	mkey(m, "s")
+	if m.mode == modeRun {
+		t.Fatal("o plano antigo autorizou a seleção nova")
+	}
+	m.Update(cmd2().(tea.BatchMsg)[0]()) // o plano certo chega
+	if m.review.loading || len(p.got.Apps) != 2 {
+		t.Fatalf("plano da seleção nova: loading=%v planejado=%+v", m.review.loading, p.got.Apps)
+	}
+	mkey(m, "s")
+	pump(t, m)
+	if len(r.gotSel.Apps) != 2 {
+		t.Fatalf("o executor recebeu %d apps, a seleção planejada tinha 2", len(r.gotSel.Apps))
+	}
+}
+
+// O executor recebe a seleção do plano exibido, mesmo que a das abas mude por baixo (defesa em profundidade).
+func TestExecuteUsesThePlannedSelectionSnapshot(t *testing.T) {
+	r := &fakeRunner{script: scriptOK}
+	m, apps, _ := rootWithExec(t, &fakePlanner{plan: okPlan()}, r)
+	mkey(m, "space")
+	cmd := mkey(m, "enter")
+	m.Update(cmd().(tea.BatchMsg)[0]())
+	apps.marks["python"] = "" // a seleção das abas muda sem passar pela Revisão
+	apps.order = append(apps.order, "python")
+	mkey(m, "s")
+	pump(t, m)
+	if len(r.gotSel.Apps) != 1 || r.gotSel.Apps[0].ID != "git" {
+		t.Fatalf("o executor recebeu %+v, o plano exibido era só o git", r.gotSel.Apps)
+	}
+}
+
+// (2) Os diálogos não se sobrepõem nem trocam de significado sob a mesma tecla.
+func TestRebootPromptDoesNotOverwriteInterruptDialog(t *testing.T) {
+	reply := make(chan bool, 1)
+	ready := make(chan struct{})
+	r := &fakeRunner{script: func(ctx context.Context, _ Selection, ch chan<- Event) {
+		ch <- Event{Kind: EventItems, Items: []string{"Receita wsl-dev"}}
+		ch <- Event{Kind: EventItemStarted, Index: 0}
+		<-ready
+		ch <- Event{Kind: EventRebootPrompt, Prompt: "Reiniciar agora para continuar a receita wsl-dev?", Reply: reply}
+		<-ctx.Done() // "s" no diálogo de interrupção cancela: o executor vê o cancelamento
+		ch <- Event{Kind: EventItemDone, Index: 0, Status: ItemCanceled}
+		ch <- Event{Kind: EventDone}
+	}}
+	m, _, _ := rootWithExec(t, &fakePlanner{plan: okPlan()}, r)
+	mkey(m, "space")
+	cmd := mkey(m, "enter")
+	m.Update(cmd().(tea.BatchMsg)[0]())
+	mkey(m, "s")
+	m.Update(waitEvent(m.events)())
+	m.Update(waitEvent(m.events)())
+	mkey(m, "q") // abre "Interromper?"
+	close(ready)
+	m.Update(waitEvent(m.events)()) // chega o pedido de reinício com o diálogo de interrupção aberto
+	out := m.render()
+	if !strings.Contains(out, "Interromper?") || strings.Contains(out, "Reiniciar agora") {
+		t.Fatalf("o diálogo de interrupção continua e o reinício espera:\n%s", out)
+	}
+	mkey(m, "s") // significa INTERROMPER, e só isso
+	select {
+	case v := <-reply:
+		if v {
+			t.Fatal("o 's' do diálogo de interrupção confirmou o reinício")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("o reinício pendente deve receber 'não' quando a execução é interrompida")
+	}
+	pump(t, m)
+}
+
+func TestInterruptDoesNotReplaceAnOpenRebootPrompt(t *testing.T) {
+	reply := make(chan bool, 1)
+	got := make(chan bool, 1)
+	r := &fakeRunner{script: func(_ context.Context, _ Selection, ch chan<- Event) {
+		ch <- Event{Kind: EventItems, Items: []string{"Receita"}}
+		ch <- Event{Kind: EventRebootPrompt, Prompt: "Reiniciar agora?", Reply: reply}
+		got <- <-reply // o executor é quem lê a resposta
+		ch <- Event{Kind: EventItemDone, Index: 0, Status: ItemReboot}
+		ch <- Event{Kind: EventDone}
+	}}
+	m, _, _ := rootWithExec(t, &fakePlanner{plan: okPlan()}, r)
+	mkey(m, "space")
+	cmd := mkey(m, "enter")
+	m.Update(cmd().(tea.BatchMsg)[0]())
+	mkey(m, "s")
+	m.Update(waitEvent(m.events)())
+	m.Update(waitEvent(m.events)())
+	mkey(m, "q") // não pode trocar a pergunta aberta
+	if out := m.render(); !strings.Contains(out, "Reiniciar agora? [s/N]") || strings.Contains(out, "Interromper?") {
+		t.Fatalf("a pergunta de reinício continua:\n%s", out)
+	}
+	mkey(m, "x") // tecla qualquer não responde nada
+	select {
+	case v := <-got:
+		t.Fatalf("uma tecla qualquer respondeu %v", v)
+	case <-time.After(100 * time.Millisecond):
+	}
+	mkey(m, "n")
+	select {
+	case v := <-got:
+		if v {
+			t.Fatal("n é não")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("o executor não recebeu a resposta")
+	}
+	pump(t, m)
+}
+
+// (3) Responder depois de o Runner ter saído (ou com Reply sem leitor) nunca trava o loop da TUI.
+func TestReplyNeverBlocksTheTUILoop(t *testing.T) {
+	for _, reply := range []chan bool{make(chan bool), make(chan bool, 1)} { // sem buffer e com
+		gone := make(chan struct{})
+		r := &fakeRunner{script: func(_ context.Context, _ Selection, ch chan<- Event) {
+			ch <- Event{Kind: EventItems, Items: []string{"R"}}
+			ch <- Event{Kind: EventRebootPrompt, Prompt: "Reiniciar?", Reply: reply}
+			<-gone // o executor foi embora sem ler o Reply
+		}}
+		m, _, _ := rootWithExec(t, &fakePlanner{plan: okPlan()}, r)
+		mkey(m, "space")
+		cmd := mkey(m, "enter")
+		m.Update(cmd().(tea.BatchMsg)[0]())
+		mkey(m, "s")
+		m.Update(waitEvent(m.events)())
+		m.Update(waitEvent(m.events)())
+		done := make(chan struct{})
+		go func() { mkey(m, "s"); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("responder travou o loop da TUI")
+		}
+		close(gone)
+		pump(t, m)
+	}
+}
+
+// (4) Comando com Unicode largo quebra por LARGURA DE CÉLULA e nunca é cortado.
+func TestReviewWrapsWideUnicodeByCellWidth(t *testing.T) {
+	wide := strings.Repeat("日本語のコマンド", 12) // 2 células por caractere
+	p := okPlan()
+	p.Commands = []string{"echo " + wide, "sudo -n -- apt-get install -y " + strings.Repeat("ação-útil-", 20)}
+	for _, w := range []int{60, 80} {
+		m, _, _ := rootWithExec(t, &fakePlanner{plan: p}, &fakeRunner{script: scriptOK})
+		m.Update(tea.WindowSizeMsg{Width: w, Height: 40})
+		mkey(m, "space")
+		cmd := mkey(m, "enter")
+		m.Update(cmd().(tea.BatchMsg)[0]())
+		out := m.render()
+		for i, l := range strings.Split(out, "\n") {
+			if lipgloss.Width(l) > w {
+				t.Fatalf("w=%d linha %d com %d células: %q", w, i+1, lipgloss.Width(l), l)
+			}
+		}
+		flat := strings.Join(strings.Fields(strings.NewReplacer("\\\n", "", "\n", "").Replace(out)), "")
+		if !strings.Contains(flat, wide) || !strings.Contains(flat, strings.Repeat("ação-útil-", 20)) {
+			t.Fatalf("w=%d: o comando foi cortado:\n%s", w, out)
+		}
 	}
 }

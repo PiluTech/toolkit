@@ -49,6 +49,15 @@ type Model struct {
 	notice   string // aviso da linha de estado (espaço bloqueado durante a execução...)
 	reply    chan<- bool
 	asking   askKind
+	// pedido de reinício que chegou com outro diálogo aberto: espera a vez (um diálogo por vez)
+	pending   *rebootAsk
+	reviewSeq int
+	runDone   <-chan struct{} // ctx da execução: encerra as entregas de resposta pendentes
+}
+
+type rebootAsk struct {
+	prompt string
+	reply  chan<- bool
 }
 
 type askKind int
@@ -100,7 +109,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case planReadyMsg:
-		if m.review != nil {
+		// só o plano DESTA Revisão vale: um plano atrasado de uma Revisão anterior (outra seleção) é ignorado
+		if m.review != nil && m.review.id == msg.id {
 			m.review.loading, m.review.plan, m.review.err = false, msg.plan, msg.err
 		}
 		return m, nil
