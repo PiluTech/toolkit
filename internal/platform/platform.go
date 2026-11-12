@@ -12,7 +12,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/PiluVitu/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/exec"
 )
 
 // OS é o sistema operacional.

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/exec/exectest"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/exec/exectest"
 )
 
 func TestReadOnlyRunnerSoAceitaLeitura(t *testing.T) {
