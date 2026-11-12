@@ -11,16 +11,16 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/PiluVitu/toolkit/internal/catalog"
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/msg"
-	"github.com/PiluVitu/toolkit/internal/providers"
-	"github.com/PiluVitu/toolkit/internal/providers/apt"
-	"github.com/PiluVitu/toolkit/internal/providers/brew"
-	"github.com/PiluVitu/toolkit/internal/providers/dnf"
-	"github.com/PiluVitu/toolkit/internal/providers/flatpak"
-	"github.com/PiluVitu/toolkit/internal/providers/pacman"
-	"github.com/PiluVitu/toolkit/internal/providers/winget"
+	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/msg"
+	"github.com/PiluTech/toolkit/internal/providers"
+	"github.com/PiluTech/toolkit/internal/providers/apt"
+	"github.com/PiluTech/toolkit/internal/providers/brew"
+	"github.com/PiluTech/toolkit/internal/providers/dnf"
+	"github.com/PiluTech/toolkit/internal/providers/flatpak"
+	"github.com/PiluTech/toolkit/internal/providers/pacman"
+	"github.com/PiluTech/toolkit/internal/providers/winget"
 )
 
 type installFlags struct {

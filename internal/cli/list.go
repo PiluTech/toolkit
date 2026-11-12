@@ -12,11 +12,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	toolkit "github.com/PiluVitu/toolkit"
-	"github.com/PiluVitu/toolkit/internal/catalog"
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/msg"
-	"github.com/PiluVitu/toolkit/internal/providers"
+	toolkit "github.com/PiluTech/toolkit"
+	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/msg"
+	"github.com/PiluTech/toolkit/internal/providers"
 )
 
 // Deps são as dependências injetáveis do CLI.

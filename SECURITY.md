@@ -10,7 +10,7 @@ correções de segurança.
 Não abra issue pública para falha de segurança.
 
 Use o reporte privado do GitHub: aba **Security** do repositório → **Report a vulnerability**
-(<https://github.com/PiluVitu/toolkit/security/advisories/new>). Inclua:
+(<https://github.com/PiluTech/toolkit/security/advisories/new>). Inclua:
 
 - a versão ou o commit afetado e o SO;
 - os passos para reproduzir, o resultado esperado e o obtido;

@@ -17,8 +17,8 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/PiluVitu/toolkit/internal/catalog"
-	"github.com/PiluVitu/toolkit/internal/platform"
+	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/platform"
 )
 
 // Limites da carga.
