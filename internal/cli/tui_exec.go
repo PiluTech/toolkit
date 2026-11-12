@@ -550,8 +550,9 @@ func (r *tuiRunner) buildQueue(ctx context.Context, sel tui.Selection) (items []
 
 func (r *tuiRunner) runApp(ctx context.Context, w io.Writer, t installTarget) (tui.ItemStatus, string, string) {
 	_, _ = fmt.Fprintln(w, fmt.Sprintf(msg.InstallHeader, t.app.ID, t.app.Name))
-	reg := providers.NewRegistry(r.deps.providerList(r.approved(r.deps.runner()))...)
-	if err := installOne(ctx, w, reg, r.deps.GOOS, t.app, t.vars, t.version, false); err != nil {
+	rn := r.approved(r.deps.runner())
+	reg := providers.NewRegistry(r.deps.providerList(rn)...)
+	if err := installOne(ctx, w, reg, r.deps.GOOS, t.app, t.vars, t.version, false, r.deps.externalFinder(rn, t.app)); err != nil {
 		if errors.Is(err, providers.ErrNeedsAdmin) {
 			_, _ = fmt.Fprintln(w, msg.HintNeedsAdmin)
 		}

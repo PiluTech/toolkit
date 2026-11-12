@@ -216,16 +216,44 @@ type installTarget struct {
 	version string
 }
 
-func installOne(ctx context.Context, out io.Writer, reg *providers.Registry, goos string, app catalog.App, vars map[string]string, version string, dryRun bool) error {
+// externalFinder monta a busca por instalação FORA do gerenciador para o app (nil = detecção desligada: Deps.Detector
+// nulo). rn é o Runner do passe (no plano, o DryRunRunner: as leituras são reais).
+func (d Deps) externalFinder(rn exec.Runner, app catalog.App) providers.ExternalFinder {
+	if d.Detector == nil {
+		return nil
+	}
+	det := d.Detector(rn)
+	if det == nil {
+		return nil
+	}
+	return func(ctx context.Context) (providers.External, bool, error) {
+		f, ok, err := det.Find(ctx, app)
+		return providers.External{Where: f.Where, Version: f.Version}, ok, err
+	}
+}
+
+// printExternal diz que o app já está instalado fora do gerenciador e que nada será feito.
+func printExternal(out io.Writer, ext providers.External) {
+	v := ""
+	if ext.Version != "" {
+		v = fmt.Sprintf(msg.InstallExternalVersion, printable(ext.Version))
+	}
+	_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallExternal, printable(ext.Manager), printable(ext.Where), v))
+}
+
+func installOne(ctx context.Context, out io.Writer, reg *providers.Registry, goos string, app catalog.App, vars map[string]string, version string, dryRun bool, ext providers.ExternalFinder) error {
 	cands, skips := reg.Candidates(ctx, app, goos, vars)
 	if len(cands) == 0 {
 		return providers.NoInstallerError(app, goos, skips)
 	}
-	res, err := providers.InstallApp(ctx, cands, version)
+	res, err := providers.InstallAppWith(ctx, cands, version, providers.Options{External: ext})
 	if err != nil {
 		return err
 	}
 	switch {
+	case res.External != nil:
+		printExternal(out, *res.External)
+		return nil
 	case res.Result.AlreadyInstalled:
 		v := ""
 		if res.Result.Version != "" {
@@ -299,7 +327,7 @@ func installPass(ctx context.Context, out, errOut io.Writer, deps Deps, targets 
 	var failed []string
 	for _, t := range targets {
 		_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallHeader, printable(t.app.ID), printable(t.app.Name)))
-		if err := installOne(ctx, out, reg, deps.GOOS, t.app, t.vars, t.version, dry); err != nil {
+		if err := installOne(ctx, out, reg, deps.GOOS, t.app, t.vars, t.version, dry, deps.externalFinder(rn, t.app)); err != nil {
 			_, _ = fmt.Fprintln(errOut, "erro: "+printable(err.Error()))
 			if errors.Is(err, providers.ErrNeedsAdmin) {
 				_, _ = fmt.Fprintln(errOut, msg.HintNeedsAdmin)

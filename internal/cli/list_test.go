@@ -190,7 +190,7 @@ func TestListAvisaQuandoCatalogoLocalSubstituiAppEmbutido(t *testing.T) {
 func TestWriteTableEscapaNaoImprimivel(t *testing.T) {
 	var out bytes.Buffer
 	items := []listItem{{ID: "g", Name: "Git\x1b[2J\x1b]0;pwned\x07\nFALSO", Category: "dev\r", Providers: []string{"apt\x7f"}, Versions: []string{"1\u009b2J", "2\u2028x"}}}
-	if err := writeTable(&out, items); err != nil {
+	if err := writeTable(&out, items, false); err != nil {
 		t.Fatal(err)
 	}
 	for _, r := range out.String() {

@@ -73,7 +73,7 @@ canal e devolve o próximo lote.
 |---|---|
 | `tea.WindowSizeMsg` | raiz: recalcula e repassa |
 | `catalogLoadedMsg{apps, err}` | apps |
-| `appStateMsg{id, instalado, versão, err}` | apps; uma por app, concorrência limitada |
+| `appStateMsg{id, instalado, versão, fora do gerenciador, err}` | apps; uma por app, concorrência limitada |
 | `versionsLoadedMsg{id, versões, err}` | versions |
 | `recipesLoadedMsg{receitas, estados, err}` | recipes e diag (separa por `kind`) |
 | `diagReportMsg{id, etapas}` | diag |
@@ -107,7 +107,7 @@ Três regras: cor só no símbolo e na palavra de estado, nunca na frase; nenhum
 nada depende de negrito, reverso ou cor para ser entendido. Com `NO_COLOR` (`Options.Mono`) **nenhuma**
 sequência de estilo sai e o layout é idêntico ao colorido (teste `TestMonoHasNoStyleAndSameLayoutAsColor`).
 
-Símbolos (sempre com a palavra do estado): `✓` instalado/feito, `✗` falhou, `!` aviso/aguardando
+Símbolos (sempre com a palavra do estado): `✓` instalado/feito (`✓ instalado (fora do Homebrew)` quando o app já veio de fora do gerenciador, como o .dmg no macOS; em coluna estreita vira `✓ instalado (fora)`), `✗` falhou, `!` aviso/aguardando
 reinício, `○` pendente/não instalado/na fila, `-` pulado/sem instalador, `| / - \` verificando/executando,
 `[x] [ ]` marca, `(•) ( )` escolha única, `▾` tem lista, `↑` versão nova, `↓` há mais. Conjunto ASCII
 atrás de `--ascii`: depois.
@@ -151,6 +151,7 @@ spinner (4 quadros, 100 ms). Troca de aba, modal e cursor são instantâneos; o 
 
 | Tamanho | O que muda |
 |---|---|
+| 100 ou mais | como 80, com a coluna de estado em 32: cabe `✓ instalado (fora do Homebrew)` |
 | 80 ou mais | layout completo; acima de 80 só o nome e as linhas de comando crescem |
 | 70 a 79 | some a coluna VIA (vai para a linha de estado); o nome encolhe até 12 |
 | 60 a 69 | abas `2 Rec` e `3 Diag`; VERSÃO junta ao nome (`Python 3.12`) ou ao estado (`✓ 2.43.0 → latest`); faixa `↑ v0.2.0 (u)`; barra de teclas só com mover, marcar, buscar, ajuda, sair |

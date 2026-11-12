@@ -64,6 +64,24 @@ type Installer struct {
 	Col      int
 }
 
+// Detect diz como achar o app JÁ instalado fora do gerenciador do catálogo (só leitura; bloco opcional
+// `detect:` do app, um por SO). Cada campo só vale no SO dele; vazio = não usado.
+type Detect struct {
+	AppBundle   string // macos: nome do bundle em /Applications ou ~/Applications ("Discord.app")
+	BundleID    string // macos: CFBundleIdentifier ("com.hnc.Discord")
+	DisplayName string // windows: DisplayName do registro Uninstall
+	DesktopID   string // linux: arquivo .desktop ("discord.desktop")
+	FlatpakID   string // linux: id do flatpak
+	Snap        string // linux: nome do snap
+	Line        int
+	Col         int
+}
+
+// Empty diz se nenhum campo está preenchido.
+func (d Detect) Empty() bool {
+	return d.AppBundle == "" && d.BundleID == "" && d.DisplayName == "" && d.DesktopID == "" && d.FlatpakID == "" && d.Snap == ""
+}
+
 // App é um item do catálogo.
 type App struct {
 	ID         string
@@ -71,7 +89,18 @@ type App struct {
 	Category   string
 	Versions   Versions
 	Installers map[string][]Installer // chaves: windows, macos, linux, any
+	Detect     map[string]Detect      // chaves: windows, macos, linux (opcional)
 	Line       int
+}
+
+// DetectFor devolve o bloco detect do SO ("windows", "darwin", "linux"); ok é false quando não há.
+func (a App) DetectFor(goos string) (Detect, bool) {
+	key := goos
+	if goos == "darwin" {
+		key = KeyMacOS
+	}
+	d, ok := a.Detect[key]
+	return d, ok && !d.Empty()
 }
 
 // InstallersFor devolve a lista do SO ("windows", "darwin", "linux"), com fallback para any.
@@ -119,6 +148,12 @@ func (a App) clone() App {
 			cp[i] = in
 		}
 		out.Installers[k] = cp
+	}
+	if a.Detect != nil {
+		out.Detect = make(map[string]Detect, len(a.Detect))
+		for k, d := range a.Detect {
+			out.Detect[k] = d
+		}
 	}
 	return out
 }

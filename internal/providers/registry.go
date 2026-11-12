@@ -87,6 +87,9 @@ type Outcome struct {
 	Provider string
 	Ref      PackageRef
 	Result   InstallResult
+	// External não é nil quando o app JÁ está instalado fora do gerenciador (o .dmg no macOS, o instalador no
+	// Windows): nada foi preparado nem instalado, Result fica zerado.
+	External *External
 	// Tried lista os providers que recusaram (não aplicável, não encontrado, versão não suportada) antes do que deu certo.
 	Tried []string
 }
@@ -105,6 +108,42 @@ type Outcome struct {
 // passam para o próximo candidato (se todos recusarem, o último erro é o resultado); qualquer outro erro
 // encerra.
 func InstallApp(ctx context.Context, cands []Candidate, version string) (Outcome, error) {
+	return InstallAppWith(ctx, cands, version, Options{})
+}
+
+// External é a instalação de um app FORA do gerenciador do catálogo (achada só por leitura).
+type External struct {
+	Manager string // nome para o usuário do gerenciador esperado ("Homebrew")
+	Where   string // onde está ("/Applications/Discord.app")
+	Version string // versão lida, se houver
+}
+
+// ExternalFinder procura o app fora do gerenciador (leitura). O segundo valor é false quando não há. Um erro
+// (só o cancelamento do contexto, na prática) encerra a instalação.
+type ExternalFinder func(ctx context.Context) (External, bool, error)
+
+// Options ajusta InstallAppWith. O zero é o comportamento de InstallApp.
+type Options struct {
+	// External, quando não nil, é consultado UMA vez, depois que o gerenciador diz "não instalado" e antes de
+	// SupportsVersion/Prepare/Install: achou = o app já está lá, nada é preparado nem instalado.
+	External ExternalFinder
+}
+
+// DisplayName é o nome do gerenciador para o usuário ("brew" vira "Homebrew"); desconhecido volta como veio.
+func DisplayName(provider string) string {
+	switch provider {
+	case "brew":
+		return "Homebrew"
+	case "flatpak":
+		return "Flatpak"
+	case "url", "github-release":
+		return "toolkit"
+	}
+	return provider
+}
+
+// InstallAppWith é InstallApp com opções (instalação fora do gerenciador).
+func InstallAppWith(ctx context.Context, cands []Candidate, version string, opts Options) (Outcome, error) {
 	if err := CheckVersionArg(version); err != nil {
 		return Outcome{}, err
 	}
@@ -119,6 +158,7 @@ func InstallApp(ctx context.Context, cands []Candidate, version string) (Outcome
 	}
 	var out Outcome
 	var lastErr error
+	externalChecked := false
 	for _, c := range cands {
 		if err := ctx.Err(); err != nil {
 			return out, err
@@ -137,6 +177,23 @@ func InstallApp(ctx context.Context, cands []Candidate, version string) (Outcome
 			out.Provider, out.Ref = c.Provider.Name(), c.Ref
 			out.Result = InstallResult{AlreadyInstalled: true, Version: have}
 			return out, nil
+		}
+		// Só quando o gerenciador NÃO tem o app: se ele tem (em outra versão que a pedida), o .app que existe é
+		// dele, não "de fora".
+		if opts.External != nil && !externalChecked && (err != nil || !installed) {
+			externalChecked = true
+			ext, found, err := opts.External(ctx)
+			if err != nil {
+				return out, fmt.Errorf("%s: %w", c.Provider.Name(), err)
+			}
+			if found {
+				if pinned && (ext.Version == "" || !SameVersion(ext.Version, ver)) {
+					return out, fmt.Errorf("%w: já instalado fora do %s (versão %q), mas %q foi pedida; remova o app antes", ErrExternalVersion, DisplayName(c.Provider.Name()), ext.Version, ver)
+				}
+				ext.Manager = DisplayName(c.Provider.Name())
+				out.Provider, out.Ref, out.External = c.Provider.Name(), c.Ref, &ext
+				return out, nil
+			}
 		}
 		if pinned {
 			if err := c.Provider.SupportsVersion(c.Ref, ver); err != nil {

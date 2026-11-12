@@ -42,7 +42,8 @@ Depois de instalado:
 
 ```sh
 toolkit                         # abre a TUI (abas Apps, Receitas, Diagnóstico, Log)
-toolkit list                    # lista o catálogo e o que já está instalado
+toolkit list                    # lista o catálogo
+toolkit list --installed        # e o que já está instalado (inclusive fora do gerenciador)
 toolkit install python@3.12 discord git
 toolkit install --dry-run vscode   # mostra o que faria, sem alterar nada
 toolkit recipe list
