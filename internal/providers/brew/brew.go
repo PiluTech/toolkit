@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PiluVitu/toolkit/internal/catalog"
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/providers"
+	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/providers"
 )
 
 // ErrRoot indica que o Homebrew não roda como root.

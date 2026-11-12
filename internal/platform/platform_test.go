@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/PiluVitu/toolkit/internal/exec/exectest"
+	"github.com/PiluTech/toolkit/internal/exec/exectest"
 )
 
 const ubuntuRelease = `PRETTY_NAME="Ubuntu 24.04 LTS"

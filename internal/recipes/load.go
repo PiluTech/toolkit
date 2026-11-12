@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/PiluVitu/toolkit/internal/catalog"
-	"github.com/PiluVitu/toolkit/internal/platform"
+	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/platform"
 )
 
 // dirOS mapeia a pasta recipes/<so> para o SO da receita.
