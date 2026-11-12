@@ -55,6 +55,7 @@ const (
 	ErrInstallFailed     = "falhou: %s"
 	HintNeedsAdmin       = "dica: rode \"sudo -v\" e tente de novo (o toolkit usa sudo -n e nunca pede senha)"
 
+	RootNoTUI             = "não abre a interface de terminal (mostra a ajuda)"
 	InstallHeader         = "==> %s (%s)"
 	InstallAlready        = "já instalado (%s%s)"
 	InstallDone           = "instalado com %s"
