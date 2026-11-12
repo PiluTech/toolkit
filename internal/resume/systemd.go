@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -147,7 +149,7 @@ func (s Systemd) Register(ctx context.Context, sp Spec) error {
 	}
 	read := s.ReadFile
 	if read == nil {
-		read = os.ReadFile
+		read = readOwnExecutable
 	}
 	bin, err := read(sp.Executable)
 	if err != nil {
@@ -199,6 +201,29 @@ func (s Systemd) Register(ctx context.Context, sp Spec) error {
 		return err
 	}
 	return runOK(ctx, s.Runner, s.cmd("systemctl", false, "enable", "--", UnitName()), "registrar a retomada (systemctl)")
+}
+
+// ErrNotOwnExecutable indica que só o próprio binário em execução pode virar o binário do root no boot.
+var ErrNotOwnExecutable = errors.New("só o próprio binário em execução pode ser registrado para o boot")
+
+// readOwnExecutable lê o binário que está rodando, NÃO um caminho qualquer: sp.Executable tem de ser o
+// próprio executável (os.Executable) e a leitura vai por /proc/self/exe no Linux (o inode do processo,
+// que o usuário não consegue trocar por outro arquivo depois do início). Um caminho de usuário que não é
+// o binário em execução seria código arbitrário rodando como root.
+func readOwnExecutable(p string) ([]byte, error) {
+	self, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	a, errA := filepath.EvalSymlinks(p)
+	b, errB := filepath.EvalSymlinks(self)
+	if errA != nil || errB != nil || a != b {
+		return nil, fmt.Errorf("%w: %s", ErrNotOwnExecutable, p)
+	}
+	if runtime.GOOS == "linux" {
+		return os.ReadFile("/proc/self/exe")
+	}
+	return os.ReadFile(self)
 }
 
 // ErrBinaryMismatch indica que o binário que ficou em RootBinDir não tem o SHA-256 do que foi lido.
