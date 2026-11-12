@@ -25,7 +25,10 @@ import (
 
 // Deps são as dependências injetáveis do CLI.
 type Deps struct {
-	GOOS        string // sistema padrão para consultas
+	GOOS string // sistema padrão para consultas
+	// Euid é o uid efetivo (nil: os.Geteuid). O plano do install mostra o comando como o runner real o executa:
+	// como root, sem sudo.
+	Euid        func() int
 	EmbeddedYML []byte // catálogo embutido
 	// NewRunner devolve o Runner que executa os comandos do install (nil = exec.OSRunner). Os testes injetam o
 	// exectest.FakeRunner: nenhum teste chega a um gerenciador de verdade.

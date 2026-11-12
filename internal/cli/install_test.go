@@ -368,3 +368,55 @@ func TestPlanoSemSudoNaoAvisaEMostraEnvDoBrew(t *testing.T) {
 		t.Errorf("o plano devia mostrar o Env do brew:\n%s", out)
 	}
 }
+
+// --- pendências do printPlan: o plano usa o mesmo GOOS/euid do runner real, e o install real não repete cabeçalhos ---
+
+func runInstallAs(t *testing.T, euid int, args ...string) (out string, f *exectest.FakeRunner) {
+	t.Helper()
+	f = aptFake(t).On(statusGit, notInstalled())
+	var o, e bytes.Buffer
+	deps := Deps{GOOS: "linux", Euid: func() int { return euid }, EmbeddedYML: []byte(embedded),
+		NewRunner: func() exec.Runner { return f }, CheckElevation: func(exec.Cmd) error { return nil }, Interactive: func() bool { return false }}
+	cmd := NewRootCmdWith(&o, &e, deps)
+	cmd.SetArgs(append([]string{"install"}, args...))
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("%v\n%s\n%s", err, o.String(), e.String())
+	}
+	return o.String(), f
+}
+
+// Como root o runner real NÃO usa sudo (OSRunner.argv); o plano não pode mostrar `sudo -n --` nem avisar dele.
+func TestInstallPlanAsRootShowsNoSudo(t *testing.T) {
+	out, _ := runInstallAs(t, 0, "git", "--dry-run")
+	if strings.Contains(out, "sudo") {
+		t.Fatalf("como root o plano não mostra sudo:\n%s", out)
+	}
+	if !strings.Contains(out, "DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get install -y --no-remove git") {
+		t.Fatalf("o comando continua no plano (VAR=... cmd, sem sudo):\n%s", out)
+	}
+}
+
+// Fora de root o plano continua mostrando sudo -n e o aviso.
+func TestInstallPlanAsUserShowsSudo(t *testing.T) {
+	out, _ := runInstallAs(t, 1000, "git", "--dry-run")
+	if !strings.Contains(out, "sudo -n -- env DEBIAN_FRONTEND=noninteractive") || !strings.Contains(out, "sudo -v") {
+		t.Fatalf("como usuário o plano mostra sudo -n e o aviso:\n%s", out)
+	}
+}
+
+// O install real imprime o cabeçalho de cada app UMA vez (o passe do plano não repete o que o passe real mostra).
+func TestInstallRealDoesNotRepeatAppHeaders(t *testing.T) {
+	f := aptFake(t).On(statusGit, notInstalled())
+	f.OnElevated("apt-get update", exectest.Exit(0, "")).OnElevated("apt-get install -y --no-remove git", exectest.Exit(0, ""))
+	var o, e bytes.Buffer
+	deps := Deps{GOOS: "linux", Euid: func() int { return 1000 }, EmbeddedYML: []byte(embedded),
+		NewRunner: func() exec.Runner { return f }, CheckElevation: func(exec.Cmd) error { return nil }, Interactive: func() bool { return false }}
+	cmd := NewRootCmdWith(&o, &e, deps)
+	cmd.SetArgs([]string{"install", "git", "--yes"})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("%v\n%s", err, o.String())
+	}
+	if n := strings.Count(o.String(), "==> git (Git)"); n != 1 {
+		t.Fatalf("o cabeçalho do app saiu %d vezes:\n%s", n, o.String())
+	}
+}

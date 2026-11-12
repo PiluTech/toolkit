@@ -31,6 +31,9 @@ type OSRunner struct {
 	// Zero values: runtime.GOOS e "não elevado".
 	GOOS       string
 	IsElevated func() bool
+	// Euid devolve o uid efetivo (nil: os.Geteuid; com GOOS injetado e Euid nil, "não é root"). Como root o
+	// Elevate NÃO usa sudo; quem mostra o plano usa o mesmo Euid do runner real.
+	Euid func() int
 	// MaxOutput: teto, em bytes, de cada stream guardado em Result. 0 = 8 MiB.
 	MaxOutput int
 }
@@ -40,6 +43,16 @@ func (r OSRunner) goos() string {
 		return r.GOOS
 	}
 	return runtime.GOOS
+}
+
+func (r OSRunner) euid() int {
+	switch {
+	case r.Euid != nil:
+		return r.Euid()
+	case r.GOOS != "":
+		return -1 // SO injetado nos testes e sem Euid: não é root
+	}
+	return os.Geteuid()
 }
 
 func (r OSRunner) maxOutput() int {
@@ -67,7 +80,7 @@ func (r OSRunner) argv(c Cmd) (name string, args []string, viaSudo bool, err err
 	if err := r.CheckElevation(c); err != nil {
 		return "", nil, false, err
 	}
-	if r.goos() == "windows" || (os.Geteuid() == 0 && r.GOOS == "") {
+	if r.goos() == "windows" || r.euid() == 0 {
 		return c.Name, c.Args, false, nil
 	}
 	args = []string{"-n", "--"}
