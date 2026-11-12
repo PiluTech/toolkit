@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +17,7 @@ import (
 	"github.com/PiluTech/toolkit/internal/exec/exectest"
 	"github.com/PiluTech/toolkit/internal/msg"
 	"github.com/PiluTech/toolkit/internal/platform"
+	"github.com/PiluTech/toolkit/internal/providers"
 	"github.com/PiluTech/toolkit/internal/recipes"
 	"github.com/PiluTech/toolkit/internal/resume"
 	"github.com/PiluTech/toolkit/internal/resume/resumetest"
@@ -75,6 +78,17 @@ func (e *tuiEnv) runner(logDir string) *tuiRunner {
 		r.logDir = func() string { return logDir }
 	}
 	return r
+}
+
+// approve calcula o plano da seleção e a devolve com Approved preenchido, como a raiz da TUI faz ao executar.
+func (e *tuiEnv) approve(sel tui.Selection) tui.Selection {
+	e.t.Helper()
+	plan, err := e.planner().Plan(context.Background(), sel)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	sel.Approved = plan.Approved
+	return sel
 }
 
 func gitMark() tui.Mark { return tui.Mark{ID: "git", Name: "Git"} }
@@ -314,10 +328,10 @@ func logText(evs []tui.Event) string {
 
 func TestRunnerInstallsAppAndCountsEverythingByEvents(t *testing.T) {
 	e := newTUIEnv(t)
-	e.run.On(statusGit, notInstalled()).
+	e.run.On(statusGit, notInstalled(), notInstalled()).
 		OnElevated("apt-get update", exectest.Exit(0, "")).
 		OnElevated("apt-get install -y --no-remove git", exectest.Exit(0, ""))
-	evs := runAll(context.Background(), t, e.runner(""), tui.Selection{Apps: []tui.Mark{gitMark()}})
+	evs := runAll(context.Background(), t, e.runner(""), e.approve(tui.Selection{Apps: []tui.Mark{gitMark()}}))
 	if evs[0].Kind != tui.EventItems || len(evs[0].Items) != 1 || evs[0].Items[0] != "Git" {
 		t.Fatalf("a fila primeiro: %+v", evs[0])
 	}
@@ -340,12 +354,12 @@ func TestRunnerInstallsAppAndCountsEverythingByEvents(t *testing.T) {
 
 func TestRunnerFailureOfOneAppDoesNotStopTheNext(t *testing.T) {
 	e := newTUIEnv(t)
-	e.run.On(statusGit, notInstalled()).
+	e.run.On(statusGit, notInstalled(), notInstalled()).
 		OnElevated("apt-get update", exectest.Exit(0, "")).
 		OnElevated("apt-get install -y --no-remove git", exectest.Exit(100, "")).
-		On(statusPy, notInstalled()).
+		On(statusPy, notInstalled(), notInstalled()).
 		OnElevated("apt-get install -y --no-remove python3.13", exectest.Exit(0, ""))
-	evs := runAll(context.Background(), t, e.runner(""), tui.Selection{Apps: []tui.Mark{gitMark(), {ID: "python", Name: "Python"}}})
+	evs := runAll(context.Background(), t, e.runner(""), e.approve(tui.Selection{Apps: []tui.Mark{gitMark(), {ID: "python", Name: "Python"}}}))
 	if got := statuses(evs); got != "failed,ok" {
 		t.Fatalf("estados: %s", got)
 	}
@@ -391,7 +405,7 @@ func TestRunnerOrdersAppsThenRecipesWithRebootLast(t *testing.T) {
 func TestRunnerRecipeRunsThroughTheEngine(t *testing.T) {
 	e := newTUIEnv(t)
 	e.run.On(sh("chk-a"), exectest.Exit(1, "")).On(sh("do-a"), exectest.Exit(0, "feito a")).On(sh("do-b"), exectest.Exit(0, "feito b"))
-	evs := runAll(context.Background(), t, e.runner(""), tui.Selection{Recipes: []tui.RecipeMark{{ID: "simples", Name: "Receita simples"}}})
+	evs := runAll(context.Background(), t, e.runner(""), e.approve(tui.Selection{Recipes: []tui.RecipeMark{{ID: "simples", Name: "Receita simples"}}}))
 	if statuses(evs) != "ok" {
 		t.Fatalf("estado %s\n%s", statuses(evs), logText(evs))
 	}
@@ -410,7 +424,7 @@ func TestRunnerRebootQuestionGoesThroughEventsAndDeclineKeepsResume(t *testing.T
 	done := make(chan struct{})
 	r := e.runner("")
 	go func() {
-		r.Run(context.Background(), tui.Selection{Recipes: []tui.RecipeMark{{ID: "com-reboot", Name: "Com reboot"}, {ID: "simples", Name: "Receita simples"}}}, ch)
+		r.Run(context.Background(), e.approve(tui.Selection{Recipes: []tui.RecipeMark{{ID: "com-reboot", Name: "Com reboot"}, {ID: "simples", Name: "Receita simples"}}}), ch)
 		close(done)
 	}()
 	var evs []tui.Event
@@ -461,10 +475,10 @@ func TestEventPrompterNeverBlocksWhenCancelled(t *testing.T) {
 func TestFileLogHasOnlyLifecycleAndWarnsWhenItCannotWrite(t *testing.T) {
 	e := newTUIEnv(t)
 	dir := filepath.Join(t.TempDir(), "logs")
-	e.run.On(statusGit, notInstalled()).
+	e.run.On(statusGit, notInstalled(), notInstalled()).
 		OnElevated("apt-get update", exectest.Exit(0, "")).
 		OnElevated("apt-get install -y --no-remove git", exectest.Exit(0, "SAIDA-SECRETA-DO-COMANDO"))
-	runAll(context.Background(), t, e.runner(dir), tui.Selection{Apps: []tui.Mark{gitMark()}})
+	runAll(context.Background(), t, e.runner(dir), e.approve(tui.Selection{Apps: []tui.Mark{gitMark()}}))
 	files, _ := filepath.Glob(filepath.Join(dir, "tui-*.log"))
 	if len(files) != 1 {
 		t.Fatalf("um log por execução: %v", files)
@@ -484,8 +498,8 @@ func TestFileLogHasOnlyLifecycleAndWarnsWhenItCannotWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	e2 := newTUIEnv(t)
-	e2.run.On(statusGit, exectest.Exit(0, "installed\t1:2.43.0-1\n"))
-	evs := runAll(context.Background(), t, e2.runner(filepath.Join(blocker, "logs")), tui.Selection{Apps: []tui.Mark{gitMark()}})
+	e2.run.On(statusGit, exectest.Exit(0, "installed\t1:2.43.0-1\n"), exectest.Exit(0, "installed\t1:2.43.0-1\n"))
+	evs := runAll(context.Background(), t, e2.runner(filepath.Join(blocker, "logs")), e2.approve(tui.Selection{Apps: []tui.Mark{gitMark()}}))
 	var warned bool
 	for _, ev := range evs {
 		if ev.Kind == tui.EventWarn && strings.Contains(ev.Line, "Não deu para gravar o log em arquivo") {
@@ -505,5 +519,207 @@ func TestLineWriterSplitsLinesAndFlushesTheRest(t *testing.T) {
 	w.Flush()
 	if strings.Join(got, "|") != "a|bc\r50%||fim" {
 		t.Fatalf("linhas: %q", got)
+	}
+}
+
+// ---- Crivo no #41 ----
+
+func hasSudo(lines []string) bool { return containsSub(lines, "sudo -n --") }
+
+// (1) O plano das receitas usa a MESMA regra de elevação da engine: sem requires_admin nada vai com sudo; com
+// requires_admin o check E o run vão, e o aviso de sudo acende.
+func TestPlannerRecipeElevationMatchesTheEngine(t *testing.T) {
+	e := newTUIEnv(t)
+	e.info.IsAdmin = false
+	e.fs = fstest.MapFS{
+		"recipes/linux/livre.yaml": {Data: []byte("id: livre\nname: Livre\nos: linux\nsteps:\n  - id: a\n    check: { sh: chk }\n    run: { sh: faz }\n")},
+		"recipes/linux/admin.yaml": {Data: []byte("id: admin\nname: Admin\nos: linux\nrequires_admin: true\nsteps:\n  - id: a\n    check: { sh: chk }\n    run: { sh: faz }\n")},
+	}
+	plan, err := e.planner().Plan(context.Background(), tui.Selection{Recipes: []tui.RecipeMark{{ID: "livre", Name: "Livre"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasSudo(plan.Commands) || contains(plan.Warnings, msg.WarnPlanSudo) {
+		t.Fatalf("receita sem requires_admin NÃO roda com sudo (a engine usa Elevate=false):\n%v\n%v", plan.Commands, plan.Warnings)
+	}
+	if !containsSub(plan.Commands, "[livre 1/1] verificar: /bin/sh -c chk") || !containsSub(plan.Commands, "[livre 1/1] /bin/sh -c faz") {
+		t.Fatalf("comandos: %v", plan.Commands)
+	}
+	plan, _ = e.planner().Plan(context.Background(), tui.Selection{Recipes: []tui.RecipeMark{{ID: "admin", Name: "Admin"}}})
+	if !containsSub(plan.Commands, "verificar: sudo -n -- /bin/sh -c chk") || !containsSub(plan.Commands, "] sudo -n -- /bin/sh -c faz") || !contains(plan.Warnings, msg.WarnPlanSudo) {
+		t.Fatalf("com requires_admin o check e o run vão com sudo e o aviso acende:\n%v\n%v", plan.Commands, plan.Warnings)
+	}
+	// e a engine de verdade executa exatamente isso: o comando do plano é o que roda
+	e.info.IsAdmin = false
+	e.run.OnElevated("/bin/sh -c chk", exectest.Exit(1, "")).OnElevated("/bin/sh -c faz", exectest.Exit(0, ""))
+	e.run2(t, "admin")
+}
+
+// run2 roda a receita e confere que TODA chamada elevada do runner é a que o plano mostrou.
+func (e *tuiEnv) run2(t *testing.T, id string) {
+	t.Helper()
+	sel := e.approve(tui.Selection{Recipes: []tui.RecipeMark{{ID: id, Name: id}}})
+	evs := runAll(context.Background(), t, e.runner(""), sel)
+	if statuses(evs) != "ok" {
+		t.Fatalf("estado %s\n%s", statuses(evs), logText(evs))
+	}
+	for _, c := range e.run.Calls() {
+		if strings.Contains(c.String(), "/bin/sh -c") && !c.Elevate {
+			t.Fatalf("a engine rodou sem Elevate o que o plano mostrou com sudo: %s", c)
+		}
+	}
+}
+
+// (1b) Passo `install:` de receita passa pelo MESMO passe do install e mostra os comandos reais (com sudo).
+func TestPlannerRecipeInstallStepShowsRealCommands(t *testing.T) {
+	e := newTUIEnv(t)
+	e.info.IsAdmin = false
+	e.fs = fstest.MapFS{"recipes/linux/apps.yaml": {Data: []byte(recInstall)}}
+	e.run.On(statusGit, notInstalled())
+	plan, err := e.planner().Plan(context.Background(), tui.Selection{Recipes: []tui.RecipeMark{{ID: "apps", Name: "Apps"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsSub(plan.Commands, "[apps 1/1] sudo -n -- env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get install -y --no-remove git") {
+		t.Fatalf("o passo install: mostra o comando real, não só os ids:\n%v", plan.Commands)
+	}
+	if containsSub(plan.Commands, "instalar pelo catálogo") || !contains(plan.Warnings, msg.WarnPlanSudo) {
+		t.Fatalf("comandos %v / avisos %v", plan.Commands, plan.Warnings)
+	}
+	if !contains(plan.Approved, "sudo -n -- env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get install -y --no-remove git") {
+		t.Fatalf("o comando do passo install: entra na lista aprovada: %v", plan.Approved)
+	}
+	onlyReadsRunner(t, e.run)
+}
+
+// (3) O executor só aceita o que estava no plano aprovado.
+func TestRunnerRefusesCommandsOutsideTheApprovedPlan(t *testing.T) {
+	e := newTUIEnv(t)
+	e.run.On(statusGit, notInstalled())
+	// sem plano aprovado (Approved vazio): nenhuma mutação roda, falha fechado
+	evs := runAll(context.Background(), t, e.runner(""), tui.Selection{Apps: []tui.Mark{gitMark()}})
+	if statuses(evs) != "failed" {
+		t.Fatalf("estado %s", statuses(evs))
+	}
+	var failed tui.Event
+	for _, ev := range evs {
+		if ev.Kind == tui.EventItemDone {
+			failed = ev
+		}
+	}
+	if !strings.Contains(failed.Err, "mudou desde a Revisão") {
+		t.Fatalf("erro: %q", failed.Err)
+	}
+	for _, c := range e.run.Calls() {
+		if c.Elevate || !c.ReadOnly {
+			t.Fatalf("executou mutação sem plano aprovado: %s", c)
+		}
+	}
+}
+
+func TestRunnerRefusesAChangedCommandButRunsTheApprovedOnes(t *testing.T) {
+	e := newTUIEnv(t)
+	e.run.On(statusGit, notInstalled(), notInstalled()).
+		OnElevated("apt-get update", exectest.Exit(0, "")).
+		OnElevated("apt-get install -y --no-remove git", exectest.Exit(0, ""))
+	sel := e.approve(tui.Selection{Apps: []tui.Mark{gitMark()}})
+	// o plano aprovado era do git; "mudou desde a Revisão": trocam o app por python (comando fora do plano)
+	e.run.On(statusPy, notInstalled())
+	bad := tui.Selection{Apps: []tui.Mark{{ID: "python", Name: "Python"}}, Approved: sel.Approved}
+	evs := runAll(context.Background(), t, e.runner(""), bad)
+	if statuses(evs) != "failed" {
+		t.Fatalf("python não estava no plano: %s", statuses(evs))
+	}
+	for _, c := range e.run.Calls() {
+		if strings.Contains(c.String(), "python3.13") && c.Elevate {
+			t.Fatalf("o comando fora do plano rodou: %s", c)
+		}
+	}
+	// o plano aprovado de verdade roda
+	if got := statuses(runAll(context.Background(), t, e.runner(""), sel)); got != "ok" {
+		t.Fatalf("o plano aprovado roda: %s", got)
+	}
+}
+
+func TestRunnerRefusesRecipeStepOutsideTheApprovedPlan(t *testing.T) {
+	e := newTUIEnv(t)
+	e.run.On(sh("chk-a"), exectest.Exit(1, ""))
+	sel := tui.Selection{Recipes: []tui.RecipeMark{{ID: "simples", Name: "Receita simples"}}} // sem Approved
+	evs := runAll(context.Background(), t, e.runner(""), sel)
+	if statuses(evs) != "failed" {
+		t.Fatalf("estado %s\n%s", statuses(evs), logText(evs))
+	}
+	for _, c := range e.run.Calls() {
+		if strings.Contains(c.String(), "do-a") {
+			t.Fatalf("a etapa fora do plano aprovado rodou: %s", c)
+		}
+	}
+}
+
+// (2) O log em arquivo grava só status + classe do erro: stderr com URL/token fica só na tela.
+func TestFileLogNeverGetsErrorTextWithSecrets(t *testing.T) {
+	e := newTUIEnv(t)
+	dir := filepath.Join(t.TempDir(), "logs")
+	secretErr := "E: Falha em https://usuario:tok3n-SECRETO@evil.example/pool/git.deb Authorization: Bearer abc123"
+	e.run.On(statusGit, notInstalled(), notInstalled()).
+		OnElevated("apt-get update", exectest.Exit(0, "")).
+		OnElevated("apt-get install -y --no-remove git", exectest.Reply{Result: exec.Result{ExitCode: 100, Stderr: []byte(secretErr)}})
+	evs := runAll(context.Background(), t, e.runner(dir), e.approve(tui.Selection{Apps: []tui.Mark{gitMark()}}))
+	var screen tui.Event
+	for _, ev := range evs {
+		if ev.Kind == tui.EventItemDone {
+			screen = ev
+		}
+	}
+	if screen.Status != tui.ItemFailed || screen.Err == "" {
+		t.Fatalf("a tela recebe a falha com a mensagem: %+v", screen)
+	}
+	files, _ := filepath.Glob(filepath.Join(dir, "tui-*.log"))
+	if len(files) != 1 {
+		t.Fatalf("log: %v", files)
+	}
+	b, _ := os.ReadFile(files[0])
+	for _, leak := range []string{"tok3n", "SECRETO", "evil.example", "Bearer", "abc123", "https://", "Falha em"} {
+		if strings.Contains(string(b), leak) {
+			t.Fatalf("o log em arquivo vazou %q:\n%s", leak, b)
+		}
+	}
+	if !strings.Contains(string(b), "item 1 (Git): failed [error]") {
+		t.Fatalf("o log tem status + classe:\n%s", b)
+	}
+}
+
+func TestErrClass(t *testing.T) {
+	cases := map[string]error{
+		"needs-admin":         providers.ErrNeedsAdmin,
+		"not-found":           fmt.Errorf("x: %w", providers.ErrNotFound),
+		"hash-mismatch":       providers.ErrHashMismatch,
+		"not-approved":        fmt.Errorf("%w: cmd", errNotApproved),
+		"cancelled":           context.Canceled,
+		"timeout":             context.DeadlineExceeded,
+		"not-elevated":        exec.ErrNotElevated,
+		"error":               errors.New("qualquer coisa com https://u:tok@h"),
+		"version-unsupported": providers.ErrVersionUnsupported,
+	}
+	for want, err := range cases {
+		if got := errClass(err); got != want {
+			t.Errorf("errClass(%v) = %q, quero %q", err, got, want)
+		}
+	}
+	if errClass(nil) != "" {
+		t.Error("nil = vazio")
+	}
+}
+
+// (5) Windows sem terminal elevado: receita requires_admin é Problem no plano (Executar bloqueado na Revisão).
+func TestPlannerBlocksRequiresAdminRecipeOnWindowsWithoutElevation(t *testing.T) {
+	e := newTUIEnv(t)
+	e.info = platform.Info{OS: platform.Windows, Arch: "amd64", User: "ana", IsAdmin: false}
+	e.fs = fstest.MapFS{"recipes/windows/w.yaml": {Data: []byte("id: w\nname: W\nos: windows\nrequires_admin: true\nsteps:\n  - id: a\n    run: { powershell: Get-Date }\n")}}
+	d := e.deps()
+	d.GOOS = "windows"
+	plan, err := (&tuiPlanner{deps: d, rd: e.rd()}).Plan(context.Background(), tui.Selection{Recipes: []tui.RecipeMark{{ID: "w", Name: "W"}}})
+	if err != nil || !containsSub(plan.Problems, "w") {
+		t.Fatalf("err=%v problemas=%v", err, plan.Problems)
 	}
 }

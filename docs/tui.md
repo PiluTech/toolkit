@@ -214,6 +214,24 @@ ctx que ele cancela ao sair).
   ctx encerra o item atual e marca o resto `ItemNotRun`. A saída dos comandos vai em `EventLog` por linha
   (`lineWriter`, `\r` preservado). Log em arquivo `<LogDir>/tui-<data>.log` (0600) só com o ciclo de vida (item,
   estado, erro), NUNCA a saída dos comandos; se não der para gravar, `EventWarn` e a execução continua.
+- **Plano = execução (Crivo no #41)**: a elevação das receitas segue a MESMA regra da engine (`runAction`): só com
+  `requires_admin`, fora do Windows e sem ser administrador, e vale para o `check` E para o `run` (o plano mostra
+  `verificar: ...` e o comando; o aviso de `sudo -n` acende por `OSRunner.UsesSudo` de cada comando, inclusive de
+  receita). Passo `install:` passa pelo MESMO passe do plano do install (`planTargets`) e mostra os comandos
+  reais, com sudo.
+- **Lista de permissão**: `Plan.Approved` (cada comando que muda o sistema, como o runner real o executa) viaja em
+  `Selection.Approved` e o `approvedRunner` só deixa mutação passar se a linha exibida estiver nela (leituras
+  passam); fora do plano = erro "comando fora do plano aprovado (mudou desde a Revisão)", sem executar. Falha
+  fechado (sem plano, nenhuma mutação). O filtro envolve só o Runner dos passos e do `install:`
+  (`buildEngine(..., wrap)`); o registro da retomada e o reinício seguem no Runner puro.
+- **Log em arquivo**: só status + CLASSE do erro (`needs-admin`, `not-found`, `hash-mismatch`, `not-approved`,
+  `cancelled`, `timeout`, `recipe-failed`, `error`...). A mensagem completa do erro (que os providers montam com a
+  1ª linha do stderr, `providers.Snippet`, podendo ter URL ou token) só vai à tela. Teste com stderr de URL/token.
+- **Limites documentados**: (a) o cancelamento (`q`+`s`) manda SIGTERM/SIGKILL ao grupo de processos do filho, mas
+  um filho que roda como ROOT via `sudo` não é alcançado por um SIGKILL do usuário: o item pode terminar sozinho
+  depois do cancelamento (o toolkit não o abandona, a engine registra o estado); (b) no Windows sem terminal
+  elevado, receita `requires_admin` já é `Problem` no plano (Executar fica bloqueado na Revisão), e um passo
+  elevado de app falha seguro por item (`ErrNotElevated`), sem afetar os demais.
 - **Depois da execução** (`runClosedMsg`) as abas `Reloader` (Apps, Receitas e Diagnóstico) releem o estado.
 - Pendente deste item: lotes de log a cada 50 ms (hoje cada linha é um evento) e o `RecipeMark.Reboots` (a ordem
   por reinício consulta o conjunto de receitas no Runner).

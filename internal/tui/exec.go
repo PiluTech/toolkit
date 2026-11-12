@@ -10,6 +10,9 @@ import (
 type Selection struct {
 	Apps    []Mark
 	Recipes []RecipeMark
+	// Approved são os comandos que mudam o sistema do plano EXIBIDO na Revisão (Plan.Approved): o executor só
+	// aceita estes; outro comando é recusado ("mudou desde a Revisão"). A raiz o preenche ao executar.
+	Approved []string
 }
 
 // Empty diz se não há nada marcado.
@@ -28,6 +31,9 @@ type Plan struct {
 	Problems []string
 	// NothingToDo: tudo já está instalado.
 	NothingToDo bool
+	// Approved: cada comando que MUDA o sistema, como o runner real o executa (a mesma linha de Commands, sem o
+	// prefixo de etapa). É a lista de permissão do executor.
+	Approved []string
 }
 
 // Planner calcula o plano de uma seleção (leituras reais, mutações só registradas).
