@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	osexec "os/exec"
+	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -18,6 +21,7 @@ import (
 // UpdateDeps são os pontos injetáveis do `toolkit update` (nil/zero = valores reais).
 type UpdateDeps struct {
 	APIBase, DownloadBase string                 // release de teste (padrão: GitHub)
+	AllowedHosts          []string               // hosts permitidos (padrão: os do GitHub); testes trocam
 	Current               string                 // versão em execução (padrão buildinfo.Version)
 	GOOS, GOARCH          string                 // padrão runtime
 	Exe                   func() (string, error) // binário em execução (padrão os.Executable)
@@ -34,7 +38,7 @@ func (d UpdateDeps) config(deps Deps) (update.Config, error) {
 	if err != nil {
 		return update.Config{}, fmt.Errorf("não achei o caminho do binário: %w", err)
 	}
-	c := update.Config{APIBase: d.APIBase, DownloadBase: d.DownloadBase, Current: d.Current, GOOS: d.GOOS, GOARCH: d.GOARCH, Exe: exe, Downloader: deps.downloader(), Token: deps.githubToken}
+	c := update.Config{Invoked: d.invoked(exe), AllowedHosts: d.AllowedHosts, APIBase: d.APIBase, DownloadBase: d.DownloadBase, Current: d.Current, GOOS: d.GOOS, GOARCH: d.GOARCH, Exe: exe, Downloader: deps.downloader(), Token: deps.githubToken}
 	if c.Current == "" {
 		c.Current = buildinfo.Version
 	}
@@ -45,6 +49,30 @@ func (d UpdateDeps) config(deps Deps) (update.Config, error) {
 		c.GOARCH = runtime.GOARCH
 	}
 	return c, nil
+}
+
+// invoked é o caminho pelo qual o binário foi chamado (os.Args[0], achado no PATH se vier sem barra): no Linux
+// os.Executable() já devolve o caminho resolvido e esconderia um link simbólico.
+func (d UpdateDeps) invoked(exe string) string {
+	if d.Exe != nil { // teste: o binário é o informado
+		return exe
+	}
+	a0 := ""
+	if len(os.Args) > 0 {
+		a0 = os.Args[0]
+	}
+	if a0 == "" {
+		return exe
+	}
+	if !strings.ContainsRune(a0, os.PathSeparator) {
+		if p, err := osexec.LookPath(a0); err == nil {
+			a0 = p
+		}
+	}
+	if abs, err := filepath.Abs(a0); err == nil {
+		return abs
+	}
+	return exe
 }
 
 type updateFlags struct {

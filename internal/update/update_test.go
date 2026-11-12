@@ -155,7 +155,7 @@ func setup(t *testing.T, goos string) (Config, *fakeRelease, string) {
 	if err := os.WriteFile(exe, []byte("BINARIO-ANTIGO-v0.1.0"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	return Config{APIBase: "https://example.com/api", DownloadBase: "https://example.com/dl", Current: "v0.1.0", GOOS: goos, GOARCH: "amd64", Exe: exe, Downloader: d}, f, dir
+	return Config{APIBase: "https://example.com/api", DownloadBase: "https://example.com/dl", Current: "v0.1.0", GOOS: goos, GOARCH: "amd64", Exe: exe, Downloader: d, AllowedHosts: []string{"example.com"}}, f, dir
 }
 
 func TestLatestAndPlan(t *testing.T) {

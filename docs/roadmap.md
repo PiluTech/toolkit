@@ -13,6 +13,16 @@ Ordem combinada com o Paulo; um PR por vez, com revisão (Lupa/Crivo).
 6. **Smoke manual** (`docs/smoke.md`) em Windows 11, macOS e Linux, e a validação do `win.ps1` e do PATH do usuário
    no Windows.
 
+## Menores da revisão do `toolkit update` (#42, não bloqueiam)
+
+- Assinatura/attestation dos artefatos: GitHub artifact attestations (provenance) no `release.yml` para os binários e o
+  `checksums.txt`, e o `toolkit update` verificar a attestation além do SHA-256 (hoje o `checksums.txt` vem do mesmo
+  canal da release e não é assinado).
+- Tornar a lista de hosts do update configurável por política de empresa (proxy/espelho interno) sem abrir mão do
+  SHA-256 pelo `checksums.txt`.
+- A API do GitHub sem token limita 60 consultas/hora por IP: considerar resolver a última versão pelo redirecionamento
+  de `releases/latest` (sem API) quando só a tag importa.
+
 ## Menores da revisão do PR 5c (não bloqueiam)
 
 - (a) O `ReadOnly` do `Cmd` vem de quem o monta: um check (leitura) passa pela lista de permissão sem comparação.

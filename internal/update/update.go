@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/PiluTech/toolkit/internal/catalog"
 	"github.com/PiluTech/toolkit/internal/download"
 	"github.com/PiluTech/toolkit/internal/textsafe"
 )
@@ -55,6 +57,15 @@ type Config struct {
 	Downloader   *download.Downloader
 	// Token devolve o token da API do GitHub (nil = sem token). Só vai ao api.github.com padrão.
 	Token func() string
+	// AllowedHosts prende os hosts de TODA requisição do update, inclusive dos redirecionamentos (nil = os do GitHub:
+	// github.com, api.github.com e *.githubusercontent.com, para onde o GitHub redireciona os assets). Entrada
+	// "*.dominio" casa subdomínios.
+	AllowedHosts []string
+	// Invoked é o caminho pelo qual o binário foi chamado (os.Args[0], ou o achado no PATH): no Linux
+	// os.Executable() já devolve o caminho RESOLVIDO e esconde um link simbólico.
+	Invoked string
+	// beforeSwap (só testes) roda entre a preparação do arquivo e a releitura do hash que antecede a troca.
+	beforeSwap func(staged string)
 	// Rename é injetável para testar a troca (padrão os.Rename).
 	Rename func(oldpath, newpath string) error
 }
@@ -80,11 +91,63 @@ func (c Config) rename() func(string, string) error {
 	return os.Rename
 }
 
-func (c Config) downloader() *download.Downloader {
-	if c.Downloader != nil {
-		return c.Downloader
+// DefaultAllowedHosts são os hosts que o update aceita (a release e para onde o GitHub redireciona os assets).
+var DefaultAllowedHosts = []string{"github.com", "api.github.com", "*.githubusercontent.com"}
+
+// ErrHostNotAllowed indica que a URL (ou um redirecionamento) aponta para fora dos hosts permitidos do update.
+var ErrHostNotAllowed = errors.New("host fora da lista permitida do update")
+
+func hostAllowed(host string, allowed []string) bool {
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	for _, a := range allowed {
+		a = strings.ToLower(a)
+		if strings.HasPrefix(a, "*.") {
+			if strings.HasSuffix(host, a[1:]) && len(host) > len(a)-1 {
+				return true
+			}
+			continue
+		}
+		if host == a {
+			return true
+		}
 	}
-	return &download.Downloader{}
+	return false
+}
+
+// downloader devolve uma CÓPIA do Downloader cujo CheckURL (aplicado na requisição E em cada redirecionamento)
+// exige, além da política padrão (https, host público...), que o host esteja na lista permitida do update.
+func (c Config) downloader() *download.Downloader {
+	base := c.Downloader
+	if base == nil {
+		base = &download.Downloader{}
+	}
+	d := *base
+	inner := base.CheckURL
+	if inner == nil {
+		inner = func(u string) error { return catalog.CheckURL(u, false) }
+	}
+	allowed := c.AllowedHosts
+	if allowed == nil {
+		allowed = DefaultAllowedHosts
+	}
+	d.CheckURL = func(raw string) error {
+		if err := inner(raw); err != nil {
+			return err
+		}
+		u, err := url.Parse(raw)
+		if err != nil || !hostAllowed(u.Hostname(), allowed) {
+			return fmt.Errorf("%w: %s", ErrHostNotAllowed, hostOf(raw))
+		}
+		return nil
+	}
+	return &d
+}
+
+func hostOf(raw string) string {
+	if u, err := url.Parse(raw); err == nil {
+		return textsafe.Line(u.Hostname())
+	}
+	return "?"
 }
 
 // Release é o que a API do GitHub diz da release.
@@ -102,9 +165,9 @@ func Latest(ctx context.Context, c Config) (Release, error) {
 var tokenRe = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
 // apiHeaders: o token (se houver e for válido) só vai ao api.github.com padrão, nunca a outro host.
-func (c Config) apiHeaders(url string) http.Header {
+func (c Config) apiHeaders(endpoint string) http.Header {
 	h := http.Header{"Accept": {"application/vnd.github+json"}}
-	if c.Token != nil && strings.HasPrefix(url, DefaultAPIBase) {
+	if c.Token != nil && strings.HasPrefix(endpoint, DefaultAPIBase) {
 		if t := c.Token(); t != "" && tokenRe.MatchString(t) {
 			h.Set("Authorization", "Bearer "+t)
 		}
@@ -112,8 +175,8 @@ func (c Config) apiHeaders(url string) http.Header {
 	return h
 }
 
-func fetchRelease(ctx context.Context, c Config, url string) (Release, error) {
-	body, err := c.downloader().Metadata(ctx, url, maxAPIBytes, c.apiHeaders(url))
+func fetchRelease(ctx context.Context, c Config, endpoint string) (Release, error) {
+	body, err := c.downloader().Metadata(ctx, endpoint, maxAPIBytes, c.apiHeaders(endpoint))
 	if err != nil {
 		var se *download.StatusError
 		if errors.As(err, &se) && (se.Code == http.StatusForbidden || se.Code == http.StatusTooManyRequests) {
@@ -229,6 +292,9 @@ func ParseChecksums(data []byte, name string) (string, error) {
 // execução, confere o hash de novo e troca. No Unix o rename é atômico; no Windows o executável em uso é
 // renomeado para .old (apagado na próxima execução) e o novo entra no lugar, com volta em caso de falha.
 func Apply(ctx context.Context, c Config, p Plan) error {
+	if err := CheckInstall(c.Invoked, c.Exe); err != nil {
+		return err
+	}
 	exe, err := checkTarget(c.Exe)
 	if err != nil {
 		return err
@@ -254,9 +320,69 @@ func Apply(ctx context.Context, c Config, p Plan) error {
 	if err != nil {
 		return err
 	}
+	if c.beforeSwap != nil {
+		c.beforeSwap(staged)
+	}
+	// janela em diretório com escrita compartilhada: relê o hash do arquivo preparado IMEDIATAMENTE antes da troca
+	if got, herr := hashFile(staged); herr != nil || got != want {
+		_ = os.Remove(staged)
+		if herr != nil {
+			return herr
+		}
+		return fmt.Errorf("%w: esperado %s, encontrado %s antes da troca", ErrStagedMismatch, want, got)
+	}
 	if err := swap(c, exe, staged); err != nil {
 		_ = os.Remove(staged)
 		return err
+	}
+	return nil
+}
+
+// managedMarkers: caminhos de instalação feita por gerenciador de pacotes (o update não mexe neles).
+var managedMarkers = []struct{ marker, hint string }{
+	{"/Cellar/", "atualize com: brew upgrade toolkit"},
+	{"/Homebrew/", "atualize com: brew upgrade toolkit"},
+	{"/.linuxbrew/", "atualize com: brew upgrade toolkit"},
+	{"/nix/store/", "atualize pelo Nix (nix profile upgrade / home-manager)"},
+	{"/snap/", "atualize com: snap refresh"},
+	{"/WindowsApps/", "atualize pela Microsoft Store"},
+}
+
+// CheckInstall recusa uma instalação de gerenciador de pacotes: (1) o caminho real ou o usado para chamar o
+// binário passa por Cellar, nix/store, linuxbrew...; (2) o caminho usado é um link simbólico que aponta para
+// FORA do próprio diretório (Linuxbrew, ln -s para outro lugar). Necessário porque no Linux os.Executable()
+// devolve o caminho já resolvido e o Lstat do binário real nunca veria o link.
+func CheckInstall(invoked, resolved string) error {
+	norm := func(p string) string { return strings.ReplaceAll(filepath.ToSlash(p), "//", "/") + "/" }
+	for _, p := range []string{invoked, resolved} {
+		if p == "" {
+			continue
+		}
+		n := norm(p)
+		for _, m := range managedMarkers {
+			if strings.Contains(n, m.marker) {
+				return fmt.Errorf("%w: %s (%s)", ErrManagedInstall, textsafe.Printable(p), m.hint)
+			}
+		}
+	}
+	if invoked == "" {
+		return nil
+	}
+	fi, err := os.Lstat(invoked)
+	if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		return nil
+	}
+	target, err := filepath.EvalSymlinks(invoked)
+	if err != nil {
+		return nil
+	}
+	// compara os diretórios JÁ resolvidos (no macOS /var é um link para /private/var)
+	invDir := filepath.Dir(invoked)
+	if r, err := filepath.EvalSymlinks(invDir); err == nil {
+		invDir = r
+	}
+	if filepath.Dir(target) != invDir {
+		return fmt.Errorf("%w: %s aponta para %s (atualize pelo gerenciador que criou o link)", ErrManagedInstall, textsafe.Printable(invoked), textsafe.Printable(target))
 	}
 	return nil
 }
@@ -321,7 +447,28 @@ func stage(src, exe, want string) (string, error) {
 		_ = os.Remove(name)
 		return "", fmt.Errorf("%w: esperado %s, gravado %s", ErrStagedMismatch, want, got)
 	}
+	// e de novo DEPOIS do Chmod, lendo o arquivo do disco (não o que foi copiado da memória)
+	if got, err := hashFile(name); err != nil || got != want {
+		_ = os.Remove(name)
+		if err != nil {
+			return "", err
+		}
+		return "", fmt.Errorf("%w: esperado %s, no disco %s", ErrStagedMismatch, want, got)
+	}
 	return name, nil
+}
+
+func hashFile(path string) (string, error) {
+	f, err := os.Open(path) //nolint:gosec // arquivo preparado por nós, ao lado do binário
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = f.Close() }()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // swap troca o binário pelo preparado. Unix: rename atômico por cima. Windows: o executável em uso não pode ser
@@ -348,9 +495,21 @@ func swap(c Config, exe, staged string) error {
 	return nil
 }
 
-// CleanupOld apaga a sobra ".old" de uma atualização no Windows (melhor esforço, nunca falha).
+// CleanupOld trata a sobra ".old" de uma atualização no Windows (melhor esforço, nunca falha). Janela do
+// Windows: a troca é um rename DUPLO (exe -> .old, novo -> exe); se o processo morrer entre os dois, só o .old
+// resta. Então: se o binário FALTA e o .old existe, o .old volta ao lugar (o próximo comando restaura); senão o
+// .old é apagado.
 func CleanupOld(exe string) {
-	if exe != "" {
-		_ = os.Remove(exe + ".old")
+	if exe == "" {
+		return
 	}
+	old := exe + ".old"
+	if _, err := os.Stat(old); err != nil {
+		return
+	}
+	if _, err := os.Stat(exe); os.IsNotExist(err) {
+		_ = os.Rename(old, exe)
+		return
+	}
+	_ = os.Remove(old)
 }
