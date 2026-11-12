@@ -97,3 +97,19 @@ func TestDryRunRecusaEnvInvalidoComoORunnerReal(t *testing.T) {
 		t.Errorf("comando inválido não deve entrar no plano: %v", dry.Planned())
 	}
 }
+
+func TestDryRunNoteEhPlanejadorEFicaForaDePlanned(t *testing.T) {
+	d := exec.NewDryRunRunner(exec.OSRunner{})
+	var p exec.Planner = d // o provider detecta o Runner que simula por esta interface
+	p.Note("baixar https://example.com/a.msi")
+	if _, err := d.Run(context.Background(), exec.Cmd{Name: "msiexec.exe"}); err != nil {
+		t.Fatal(err)
+	}
+	plan := d.Plan()
+	if len(plan) != 2 || plan[0].Note == "" || plan[0].Cmd.Name != "" || plan[1].Cmd.Name != "msiexec.exe" {
+		t.Fatalf("plano: %+v", plan)
+	}
+	if cmds := d.Planned(); len(cmds) != 1 || cmds[0].Name != "msiexec.exe" {
+		t.Fatalf("Planned: %+v", cmds)
+	}
+}
