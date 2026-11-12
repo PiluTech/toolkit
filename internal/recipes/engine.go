@@ -11,10 +11,10 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/platform"
-	"github.com/PiluVitu/toolkit/internal/resume"
-	"github.com/PiluVitu/toolkit/internal/state"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/platform"
+	"github.com/PiluTech/toolkit/internal/resume"
+	"github.com/PiluTech/toolkit/internal/state"
 )
 
 // Erros da engine.

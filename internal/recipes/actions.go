@@ -6,8 +6,8 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/platform"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/platform"
 )
 
 // Caminhos absolutos no Windows: nunca resolver powershell.exe/wsl.exe pelo PATH (admin).

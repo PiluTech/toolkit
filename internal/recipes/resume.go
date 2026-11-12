@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/PiluVitu/toolkit/internal/state"
+	"github.com/PiluTech/toolkit/internal/state"
 )
 
 // ResumePending implementa `toolkit resume`: continua a receita ativa depois do reboot. Termina SEMPRE
