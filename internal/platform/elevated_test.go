@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/PiluVitu/toolkit/internal/exec/exectest"
+	"github.com/PiluTech/toolkit/internal/exec/exectest"
 )
 
 func TestIsElevatedViaPowerShell(t *testing.T) {

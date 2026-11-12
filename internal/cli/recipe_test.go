@@ -11,11 +11,11 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/exec/exectest"
-	"github.com/PiluVitu/toolkit/internal/platform"
-	"github.com/PiluVitu/toolkit/internal/resume"
-	"github.com/PiluVitu/toolkit/internal/resume/resumetest"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/exec/exectest"
+	"github.com/PiluTech/toolkit/internal/platform"
+	"github.com/PiluTech/toolkit/internal/resume"
+	"github.com/PiluTech/toolkit/internal/resume/resumetest"
 )
 
 const recSimple = `id: simples

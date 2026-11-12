@@ -19,16 +19,16 @@ import (
 
 	"github.com/spf13/cobra"
 
-	toolkit "github.com/PiluVitu/toolkit"
-	"github.com/PiluVitu/toolkit/internal/buildinfo"
-	"github.com/PiluVitu/toolkit/internal/catalog"
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/msg"
-	"github.com/PiluVitu/toolkit/internal/platform"
-	"github.com/PiluVitu/toolkit/internal/providers"
-	"github.com/PiluVitu/toolkit/internal/recipes"
-	"github.com/PiluVitu/toolkit/internal/resume"
-	"github.com/PiluVitu/toolkit/internal/state"
+	toolkit "github.com/PiluTech/toolkit"
+	"github.com/PiluTech/toolkit/internal/buildinfo"
+	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/msg"
+	"github.com/PiluTech/toolkit/internal/platform"
+	"github.com/PiluTech/toolkit/internal/providers"
+	"github.com/PiluTech/toolkit/internal/recipes"
+	"github.com/PiluTech/toolkit/internal/resume"
+	"github.com/PiluTech/toolkit/internal/state"
 )
 
 // RecipeDeps são as dependências dos comandos recipe e resume (injetáveis nos testes; zero values usam o

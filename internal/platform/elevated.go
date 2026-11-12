@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/PiluVitu/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/exec"
 )
 
 // elevatedScript devolve True quando o token do processo tem a função de Administrador.
