@@ -201,7 +201,7 @@ func (s Systemd) Register(ctx context.Context, sp Spec) error {
 	return runOK(ctx, s.Runner, s.cmd("systemctl", false, "enable", "--", UnitName()), "registrar a retomada (systemctl)")
 }
 
-// ErrBinaryMismatch: o binário que ficou em RootBinDir não tem o SHA-256 do que foi lido.
+// ErrBinaryMismatch indica que o binário que ficou em RootBinDir não tem o SHA-256 do que foi lido.
 var ErrBinaryMismatch = errors.New("o binário instalado não confere com o original (SHA-256)")
 
 // verifyHash confere o SHA-256 de um arquivo de root (sha256sum, leitura).
