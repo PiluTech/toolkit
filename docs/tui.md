@@ -12,8 +12,8 @@ só com terminal; com `--no-tui`, sem terminal ou com `TERM=dumb`, mostra a ajud
 ## Pacotes
 
 - `internal/tui`: raiz (`Model`), interface `Tab`, tema, layout, ajuda. Bubble Tea **v2**
-  (`charm.land/bubbletea/v2`), Lip Gloss v2 (`charm.land/lipgloss/v2`), Bubbles v2
-  (`charm.land/bubbles/v2`). Versões exatas no `go.mod`.
+  (`charm.land/bubbletea/v2`), Lip Gloss v2 (`charm.land/lipgloss/v2`). Bubbles v2 (`charm.land/bubbles/v2`, v2.2.1)
+  entra no `go.mod` junto com a primeira aba que o usa (textinput/viewport/spinner). Versões exatas no `go.mod`.
 - `internal/textsafe`: `Printable`/`Line`, a limpeza de todo texto de fora antes de ir ao terminal.
 
 ## Estrutura da tela (H = altura)
@@ -169,6 +169,9 @@ etapas: painel rola, título "N de M". Linha de log com `\r` substitui a última
 caracteres: primeira frase na lista, texto inteiro no log do item.
 
 ## Segurança
+
+0. Registro (sem ação): a `colorprofile` (dependência do Bubble Tea) consulta o `tmux` pelo PATH quando o terminal
+   é tmux/screen, para detectar o perfil de cor. É leitura, mas é um binário achado pelo PATH.
 
 1. Todo texto de fora (saída de gerenciador, nomes do catálogo, notas da release, erros) passa por
    `textsafe.Printable`/`Line` antes de ir à tela: uma sequência de escape no log redesenha o terminal.
