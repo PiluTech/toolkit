@@ -60,7 +60,9 @@ NOTARY_P8_BASE64="$(printf 'P8-SECRETO-FALSO' | base64)"
 export DEVELOPER_ID_P12_BASE64 NOTARY_P8_BASE64
 export DEVELOPER_ID_P12_PASSWORD="senha-p12-falsa"
 export NOTARY_KEY_ID="KEYID-FALSO" NOTARY_ISSUER="ISSUER-FALSO"
-sign() { PATH="$fake:$PATH" "$src/scripts/release-sign-macos.sh" "$@"; }
+# GITHUB_ACTIONS sai do ambiente: no Actions real o script imprime "::add-mask::<valor>" (é assim que o runner
+# esconde o segredo do log), e o teste de "nada de segredo na saída" falharia por isso (testado à parte, abaixo).
+sign() { PATH="$fake:$PATH" env -u GITHUB_ACTIONS "$src/scripts/release-sign-macos.sh" "$@"; }
 
 # 1. argumentos e ambiente: recusa sem tocar em ferramenta
 mkdist; : >"$log"
@@ -100,12 +102,20 @@ grep -q ASSINADO "$tmp/dist/toolkit_linux_amd64" && fail "linux foi 'assinado'"
 [ "$(wc -l <"$tmp/dist/checksums.txt" | tr -d ' ')" = 7 ] || fail "checksums.txt deveria ter 7 linhas"
 ( cd "$tmp/dist" && if command -v sha256sum >/dev/null; then sha256sum -c checksums.txt; else shasum -a 256 -c checksums.txt; fi ) >/dev/null || fail "checksums não confere com os binários assinados"
 
+# 2b. no GitHub Actions o valor só pode aparecer em linhas "::add-mask::" (que o runner consome), nunca em outra
+mkdist; : >"$log"
+PATH="$fake:$PATH" GITHUB_ACTIONS=true "$src/scripts/release-sign-macos.sh" --dir "$tmp/dist" >"$tmp/o" 2>&1 || fail "GITHUB_ACTIONS: assinatura (falsa) falhou"
+grep -q '^::add-mask::' "$tmp/o" || fail "GITHUB_ACTIONS: faltou o ::add-mask::"
+for s in P12-SECRETO-FALSO P8-SECRETO-FALSO senha-p12-falsa "$DEVELOPER_ID_P12_BASE64" "$NOTARY_P8_BASE64"; do
+  if grep -vF '::add-mask::' "$tmp/o" | grep -qF "$s"; then fail "GITHUB_ACTIONS: segredo fora do ::add-mask::"; fi
+done
+
 # 3. falhas: a keychain e os temporários são apagados mesmo assim, e a saída não vaza segredo
 for mode in FAKE_CODESIGN_FAIL FAKE_IMPORT_FAIL; do
   mkdist; : >"$log"
   ( export "$mode=1"; sign --dir "$tmp/dist" ) >"$tmp/o" 2>&1 && fail "$mode: falha engolida"
   kcpath="$(grep -m1 '^kcpath' "$log" | cut -d' ' -f2)"
-  [ -n "$kcpath" ] && [ ! -e "$kcpath" ] || fail "$mode: keychain não foi apagada"
+  if [ -z "$kcpath" ] || [ -e "$kcpath" ]; then fail "$mode: keychain não foi apagada"; fi
   grep -q "^deleted $kcpath" "$log" || fail "$mode: sem delete-keychain"
   grep -qF 'senha-p12-falsa' "$tmp/o" && fail "$mode: senha na saída"
 done
@@ -130,7 +140,7 @@ sig=TERM # INT não: job em segundo plano herda SIGINT ignorado
   rc=0; wait "$pid" || rc=$?
   [ "$rc" -ne 0 ] || fail "$sig: o script terminou com sucesso depois do sinal"
   kcpath="$(grep -m1 '^kcpath' "$log" | cut -d' ' -f2)"
-  [ -n "$kcpath" ] && [ ! -e "$kcpath" ] || fail "$sig: keychain não foi apagada"
+  if [ -z "$kcpath" ] || [ -e "$kcpath" ]; then fail "$sig: keychain não foi apagada"; fi
   grep -q '^xcrun notarytool' "$log" && fail "$sig: o script seguiu e notarizou depois do sinal"
   [ "$(grep -c '^codesign .*--sign' "$log")" = 1 ] || fail "$sig: o script seguiu e assinou o segundo binário"
 }

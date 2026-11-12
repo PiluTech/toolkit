@@ -45,7 +45,7 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-      - name: golangci-lint v2.15.0 (binário oficial, SHA-256 de tools.sha256)
+      - name: golangci-lint v2.15.0 e shellcheck v0.11.0 (binários oficiais, SHA-256 de tools.sha256)
         shell: bash
         run: |
           ./scripts/instalar-ferramentas.sh "$RUNNER_TEMP/bin"

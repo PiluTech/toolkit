@@ -61,6 +61,10 @@ mutci escrita 's/^  contents: read\n/  contents: write\n/m'
 mutci sem-concurrency 's/^concurrency:\n.*\n.*\n//m'
 mutci pull-request-target 's/^on:\n/on:\n  pull_request_target:\n/m'
 mutci larger-runner 's/os: \[ubuntu-latest, macos-latest, windows-latest\]/os: [ubuntu-latest-xl, macos-latest, windows-latest]/'
+mutci segredo-colchete 's/(      - name: gate\n)/      - run: echo \$\{\{ secrets["QUALQUER"] \}\}\n$1/'
+mutci segredo-inherit 's/(    timeout-minutes: 30\n)/$1    secrets: inherit\n/'
+mutci os-desconhecido 's/os: \[ubuntu-latest, macos-latest, windows-latest\]/os: [ubuntu-latest, macos-latest, windows-latest, meu-runner-proprio]/'
+mutci os-no-include 's/- os: windows-latest/- os: self-runner/'
 mutci sha-solto 's/actions\/checkout\@[0-9a-f]{40}/actions\/checkout\@v4/'
 
 # pull_request fora do ci.yml é reprovado (um workflow qualquer com pull_request)

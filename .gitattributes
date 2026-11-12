@@ -1,0 +1,9 @@
+# Fim de linha LF em tudo que é texto, em qualquer sistema: no Windows o autocrlf do Git for Windows converteria
+# go.sum, go.mod e scripts para CRLF (o "go mod tidy -diff" e o bash do gate quebram).
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary
+*.zip binary
+*.gz binary
+internal/providers/*/testdata/* -text

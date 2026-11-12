@@ -4,3 +4,7 @@
 /.github/CODEOWNERS   @PiluVitu
 /scripts/release*.sh  @PiluVitu
 /docs/release.md      @PiluVitu
+/scripts/check-workflows*.sh @PiluVitu
+/scripts/ci.sh        @PiluVitu
+/scripts/instalar-ferramentas*.sh @PiluVitu
+/tools.sha256         @PiluVitu

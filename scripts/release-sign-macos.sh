@@ -27,7 +27,7 @@ done
 die() { echo "release-sign-macos: $*" >&2; exit 1; }
 step() { printf '\n==> %s\n' "$*"; }
 
-[ -n "$DIR" ] && [ -d "$DIR" ] || die "use --dir <pasta com os binários> (a pasta tem de existir)"
+if [ -z "$DIR" ] || [ ! -d "$DIR" ]; then die "use --dir <pasta com os binários> (a pasta tem de existir)"; fi
 BINS=(toolkit_darwin_amd64 toolkit_darwin_arm64)
 for a in "${BINS[@]}"; do [ -f "$DIR/$a" ] || die "faltou $DIR/$a"; done
 for n in DEVELOPER_ID_P12_BASE64 DEVELOPER_ID_P12_PASSWORD NOTARY_KEY_ID NOTARY_ISSUER NOTARY_P8_BASE64; do

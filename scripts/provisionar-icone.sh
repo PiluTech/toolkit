@@ -23,7 +23,7 @@ sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d
 
 want="$(awk '{print $1}' "$LOCK_DIR/package-lock.sha256")"
 got="$(sha256 "$LOCK_DIR/package-lock.json")"
-[ -n "$want" ] && [ "$got" = "$want" ] || die "o package-lock.json não bate com o hash versionado (package-lock.sha256): esperado '$want', obtido '$got'"
+if [ -z "$want" ] || [ "$got" != "$want" ]; then die "o package-lock.json não bate com o hash versionado (package-lock.sha256): esperado '$want', obtido '$got'"; fi
 
 # já provisionado com este lockfile e esta versão: nada a fazer (e nenhuma rede)
 if [ -f "$DIR/.provisionado" ] && [ "$(cat "$DIR/.provisionado")" = "$got" ] \

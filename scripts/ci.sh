@@ -23,6 +23,13 @@ step "gofmt (autoteste do verificador + verificação)"
 
 step "bootstraps (shellcheck quando existe + testes com release falsa)"
 if command -v shellcheck >/dev/null 2>&1; then
+  # a versão do shellcheck é a de tools.sha256: um mais novo acusa regras que o gate local não conhece
+  sc_want="$(sed -n 's/^SC_VERSION="\(.*\)"/\1/p' scripts/instalar-ferramentas.sh)"
+  sc_have="$(shellcheck --version | sed -n 's/^version: //p')"
+  if [ "$sc_have" != "$sc_want" ]; then
+    if [ -n "${CI:-}" ]; then echo "shellcheck $sc_have != $sc_want (rode scripts/instalar-ferramentas.sh)" >&2; exit 1; fi
+    echo "aviso: shellcheck $sc_have != $sc_want do projeto (rode scripts/instalar-ferramentas.sh)" >&2
+  fi
   shellcheck scripts/bootstrap/*.sh scripts/release.sh scripts/release_test.sh scripts/release-checksums.sh \
     scripts/release-sign-macos.sh scripts/release-sign-macos_test.sh scripts/check-workflows.sh scripts/check-workflows_test.sh \
     scripts/gerar-icone.sh scripts/provisionar-icone.sh scripts/gerar-icone_test.sh

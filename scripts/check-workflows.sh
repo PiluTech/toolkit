@@ -65,7 +65,15 @@ if [ -f "$c" ]; then
   printf '%s\n' "$on" | grep -qE '^  pull_request:' || bad "$n: deve validar pull_request"
   printf '%s\n' "$on" | grep -qE '^  push:' || bad "$n: deve validar push na main"
   printf '%s\n' "$on" | grep -qE '^    branches: \[main\]' || bad "$n: push só na main"
-  grep -qE 'secrets\.' "$c" && bad "$n: o ci.yml não pode usar segredo (PR de fork roda aqui)"
+  # a palavra "secrets" em QUALQUER forma (secrets.X, secrets['X'], secrets: inherit, toJSON(secrets)) é proibida
+  grep -qE '(^|[^A-Za-z0-9_])secrets([^A-Za-z0-9_]|$)' "$c" && bad "$n: o ci.yml não pode usar segredo (PR de fork roda aqui)"
+  # os VALORES de matrix.os (lista inline, include e exclude) precisam estar na lista de runners padrão
+  while IFS= read -r v; do
+    v="${v#*os:}"; v="${v%%#*}"
+    for item in $(printf '%s' "$v" | tr '[],"'"'"'' '     '); do
+      printf '%s' "$item" | grep -qE '^(ubuntu-(latest|2[0-9]\.[0-9]{2})|windows-(latest|20[0-9]{2})|macos-(latest|[0-9]+))$' || bad "$n: matrix.os com runner fora da lista padrão: $item"
+    done
+  done < <(grep -E '^[[:space:]]*-?[[:space:]]*os:' "$c" || true)
   grep -qE '^[[:space:]]*environment:' "$c" && bad "$n: o ci.yml não pode usar environment"
   grep -qE ':[[:space:]]*write' "$c" && bad "$n: o ci.yml não pode ter permissão de escrita"
   if ! awk '/^permissions:/ {p=1; next} p && /^[A-Za-z]/ {exit} p {print}' "$c" | grep -qE '^  contents: read[[:space:]]*$'; then

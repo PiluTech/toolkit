@@ -50,7 +50,7 @@ check_toolchain() {
   want="$(awk '$1 == "go" { print $2; exit }' go.mod)"
   have="$(go env GOVERSION 2>/dev/null)" || die "o go não conseguiu usar a toolchain que o go.mod exige (go $want): $(go env GOVERSION 2>&1 | head -n1)"
   have="${have#go}"
-  [ -n "$want" ] && [ -n "$have" ] || die "não consegui ler a versão do go (go.mod: '$want', go: '$have')"
+  if [ -z "$want" ] || [ -z "$have" ]; then die "não consegui ler a versão do go (go.mod: '$want', go: '$have')"; fi
   if [ "$(printf '%s\n%s\n' "$want" "$have" | sort -V | head -n1)" != "$want" ]; then
     die "a toolchain ($have) é mais velha que a do go.mod ($want); use GOTOOLCHAIN=auto"
   fi
