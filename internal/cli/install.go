@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/download"
 	"github.com/PiluTech/toolkit/internal/exec"
 	"github.com/PiluTech/toolkit/internal/msg"
 	"github.com/PiluTech/toolkit/internal/providers"
@@ -64,6 +65,13 @@ func (d Deps) providerList(r exec.Runner) []providers.Provider {
 	}
 	return []providers.Provider{winget.New(r), brew.New(r), apt.New(r), dnf.New(r), pacman.New(r), flatpak.New(r), urlprovider.New(r, urlprovider.Options{GOOS: d.GOOS, Downloader: d.Downloader, AppsDir: d.AppsDir}),
 		githubrelease.New(r, githubrelease.Options{GOOS: d.GOOS, Downloader: d.Downloader, AppsDir: d.AppsDir, Token: d.githubToken})}
+}
+
+func (d Deps) downloader() *download.Downloader {
+	if d.Downloader != nil {
+		return d.Downloader
+	}
+	return &download.Downloader{}
 }
 
 func (d Deps) githubToken() string {
@@ -150,7 +158,7 @@ func resolveVersion(app catalog.App, requested string) (map[string]string, strin
 }
 
 func runInstall(ctx context.Context, out, errOut io.Writer, deps Deps, f installFlags, args []string) error {
-	cat, err := loadCatalog(deps, listFlags{catalog: f.catalog, sha256: f.sha256, replace: f.replace}, errOut)
+	cat, err := loadCatalog(ctx, deps, listFlags{catalog: f.catalog, sha256: f.sha256, replace: f.replace}, errOut)
 	if err != nil {
 		return err
 	}

@@ -1,13 +1,16 @@
 # Catálogo de apps
 
-> Formato decidido ([decisoes.md](decisoes.md)), implementado na fase 1 (`internal/catalog`; a carga por URL com `--catalog-sha256` ainda não). Detalhes de cada
+> Formato decidido ([decisoes.md](decisoes.md)), implementado na fase 1 (`internal/catalog`) e, para a carga por URL, na fase 5 (`internal/cli` + `internal/download`). Detalhes de cada
 > provider em [arquitetura.md](arquitetura.md#33-providers).
 
 O catálogo padrão fica em `catalog/catalog.yaml` e vai embutido no binário. Um catálogo externo entra com
 `--catalog`:
 
 - `--catalog <arquivo>`: caminho local, aceito sem hash.
-- `--catalog <url> --catalog-sha256 <hash>`: URL só com o SHA-256 do arquivo. Sem o hash, é recusada.
+- `--catalog <url> --catalog-sha256 <hash>`: URL só com o SHA-256 do arquivo (64 hex). Sem o hash, ou com hash malformado, é recusada **antes** de qualquer
+  requisição. Vale para `toolkit list` e `toolkit install`. A URL segue a mesma política do provider `url` (https, host público, redirects revalidados, sem proxy
+  de ambiente), o arquivo é lido em memória até 1 MiB e o hash é conferido **antes** de o YAML ser lido; hash divergente = nada é carregado. Erros de YAML citam
+  `host/caminho:linha:coluna`. `--catalog-sha256` com arquivo local continua sendo erro.
 - Por padrão o externo é **mesclado** sobre o embutido, e um app com o mesmo id substitui o original.
   Com `--catalog-replace`, o externo substitui o embutido inteiro.
 

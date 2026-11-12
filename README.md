@@ -39,7 +39,7 @@ toolkit resume                  # chamado sozinho depois do reboot; pode ser rod
 ```
 
 Flags para automação: `--no-tui`, `--yes`, `--dry-run`, `--verbose` e `--catalog <arquivo>` (uma URL
-só com `--catalog-sha256 <hash>`).
+só com `--catalog-sha256 <hash>`, conferido antes de ler o catálogo).
 
 ## Plataformas
 
