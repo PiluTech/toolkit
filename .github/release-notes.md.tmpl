@@ -1,0 +1,23 @@
+toolkit {{VERSION}}
+
+<!-- RASCUNHO: o Paulo troca esta seção pelo que mudou nesta versão antes de publicar (docs/release.md). -->
+
+## O que mudou
+- (preencher)
+
+## Instalação
+Windows (PowerShell):
+```
+irm https://github.com/PiluTech/toolkit/releases/latest/download/win.ps1 | iex
+```
+Linux e macOS:
+```
+curl -fsSL https://github.com/PiluTech/toolkit/releases/latest/download/unix.sh | sh
+```
+Os dois baixam o binário desta release, conferem o SHA-256 pelo `checksums.txt` e instalam no PATH do usuário, sem administrador. Para ver antes o que fariam: `-DryRun` (Windows) ou `--dry-run` (Unix).
+
+## Arquivos
+`toolkit_<so>_<arch>` (binário cru; `.exe` no Windows), `checksums.txt`, `unix.sh` e `win.ps1`. Os binários de macOS são assinados (Developer ID) e notarizados pela Apple.
+
+## Limites conhecidos desta versão
+- (preencher)

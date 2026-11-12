@@ -23,13 +23,19 @@ step "gofmt (autoteste do verificador + verificação)"
 
 step "bootstraps (shellcheck quando existe + testes com release falsa)"
 if command -v shellcheck >/dev/null 2>&1; then
-  shellcheck scripts/bootstrap/*.sh scripts/release.sh scripts/release_test.sh
+  shellcheck scripts/bootstrap/*.sh scripts/release.sh scripts/release_test.sh scripts/release-checksums.sh \
+    scripts/release-sign-macos.sh scripts/release-sign-macos_test.sh scripts/check-workflows.sh scripts/check-workflows_test.sh
 else
   echo "shellcheck não encontrado: pulando a análise estática dos bootstraps" >&2
 fi
 ./scripts/bootstrap/unix_test.sh
 ./scripts/bootstrap/win_static_test.sh
 ./scripts/release_test.sh
+./scripts/release-sign-macos_test.sh
+
+step "workflows do GitHub Actions (actionlint quando existe + regras de supply chain do release.yml)"
+./scripts/check-workflows_test.sh
+./scripts/check-workflows.sh
 
 step "go vet (linux, windows, darwin)"
 for os in linux windows darwin; do

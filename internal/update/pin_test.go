@@ -17,6 +17,9 @@ func TestHostAllowed(t *testing.T) {
 	cases := map[string]bool{
 		"github.com": true, "api.github.com": true, "GitHub.COM": true, "github.com.": true,
 		"objects.githubusercontent.com": true, "release-assets.githubusercontent.com": true,
+		// só os hosts dos ASSETS de release: raw/gist/avatars e o resto do *.githubusercontent.com NÃO passam
+		"raw.githubusercontent.com": false, "gist.githubusercontent.com": false, "avatars.githubusercontent.com": false,
+		"user-images.githubusercontent.com": false, "evil.objects.githubusercontent.com": false,
 		"githubusercontent.com": false, "evil-github.com": false, "github.com.evil.example": false,
 		"githubusercontent.com.evil.example": false, "xgithub.com": false, "evil.example": false, "": false,
 	}
@@ -79,6 +82,44 @@ func TestURLOutsideTheAllowlistIsRefusedBeforeAnyRequest(t *testing.T) {
 	}
 	if len(f.hits) != 0 {
 		t.Fatalf("nenhuma requisição para host fora da lista: %v", f.hits)
+	}
+}
+
+// WindowsApps: o caminho do Windows não diferencia maiúsculas.
+func TestCheckInstallWindowsAppsIsCaseInsensitive(t *testing.T) {
+	for _, p := range []string{`C:\Program Files\WindowsApps\x\toolkit.exe`, `C:\Program Files\windowsapps\x\toolkit.exe`, `C:\PROGRAM FILES\WINDOWSAPPS\x\toolkit.exe`, "/mnt/c/Program Files/WindowsApps/x/toolkit.exe", "/mnt/c/program files/windowsapps/x/toolkit.exe"} {
+		err := CheckInstall("", p)
+		if !errors.Is(err, ErrManagedInstall) || !strings.Contains(err.Error(), "Microsoft Store") {
+			t.Errorf("%s: %v", p, err)
+		}
+	}
+	if err := CheckInstall("", `C:\Users\ana\AppData\Local\toolkit\bin\toolkit.exe`); err != nil {
+		t.Fatalf("instalação do bootstrap: %v", err)
+	}
+}
+
+// A mensagem do link para outro diretório diz como reinstalar/forçar pelo bootstrap.
+func TestSymlinkMessageSaysHowToReinstallWithTheBootstrap(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink")
+	}
+	binDir, realDir := t.TempDir(), t.TempDir()
+	target := filepath.Join(realDir, "toolkit")
+	if err := os.WriteFile(target, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(binDir, "toolkit")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skip(err)
+	}
+	err := CheckInstall(link, target)
+	if !errors.Is(err, ErrManagedInstall) {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"curl -fsSL https://github.com/PiluTech/toolkit/releases/latest/download/unix.sh | sh", "gerenciador"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("a mensagem não diz %q: %v", want, err)
+		}
 	}
 }
 
