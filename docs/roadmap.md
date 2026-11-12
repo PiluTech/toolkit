@@ -28,6 +28,11 @@ Feito: bloco `detect` no catálogo, `internal/detect`, install pulando, aba Apps
 - Detecção de CLI no PATH (git, 7zip no macOS/Linux) não existe: só app com bundle, entrada do registro, .desktop,
   flatpak ou snap.
 
+## Menores da revisão do #48 (registro)
+
+- (c) Registro do Crivo: sem ação neste PR. O `realDetector` é um singleton por processo (o Runner da 1ª chamada
+  vale); se um dia houver Runners com semântica diferente, passar o Runner a cada `Find`.
+
 ## Menores da revisão do `toolkit update` (#42, não bloqueiam)
 
 - Assinatura/attestation dos artefatos: GitHub artifact attestations (provenance) no `release.yml` para os binários e o
@@ -69,3 +74,10 @@ datas/números pelo formatador, espaço para o texto crescer ~35% na TUI (coluna
 grafema já existem), teste que falha se uma chave existir em um idioma e faltar nos outros. Termos técnicos,
 nomes de comandos e de apps não se traduzem. As receitas e o catálogo são dados (nome/descrição por idioma
 viriam como campos opcionais).
+
+## CI no Windows (experimental)
+
+O job `windows-latest` do `ci.yml` roda com `continue-on-error` e hoje falha em `scripts/release_test.sh`: o Git Bash
+não tem permissões POSIX (`chmod 600` não muda nada), e os scripts de release só rodam em macOS/Linux. O CRLF do
+`go.sum` e o shellcheck foram resolvidos (`.gitattributes`, `tools.sha256`). Para tirar o `experimental`: pular os
+testes de release no Windows no `ci.sh` (ou rodar só o que vale para o `win.ps1`/Go).

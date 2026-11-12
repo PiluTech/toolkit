@@ -119,6 +119,24 @@ Rotação: refaça o comando do segredo; revogue a chave antiga no App Store Con
 - Limite: quem tem permissão de escrita e aprova o próprio deploy pode lançar; a proteção é a política de tag,
   o revisor e o histórico (todo uso do environment aparece em Deployments).
 
+## Validação em PR e imagem do macOS
+
+- **`ci.yml`** roda `scripts/ci.sh` em todo **pull request** e a cada **push na main** (ubuntu, macOS e Windows; o
+  Windows é `experimental` e não reprova o PR até passar a primeira vez em máquina de verdade), com `concurrency`
+  (um push novo cancela a validação antiga do mesmo PR), `paths-ignore` de `docs/**` e `LICENSE`, `timeout-minutes`,
+  `permissions: contents: read` e **nenhum segredo, environment ou permissão de escrita**: PR de fork roda sem ver
+  nada. Só runners **padrão** (gratuitos em repo público); larger runner e self-hosted são reprovados por
+  `scripts/check-workflows.sh`. O `release.yml` continua **só por tag** e é o único que vê segredo.
+- **macOS do release fixo em `macos-15`** (não `macos-latest`): a assinatura sai sempre da mesma imagem; troque de
+  propósito, num PR, quando quiser subir. **`setup-go` com `cache: false` no release**: nenhum cache de build é
+  restaurado num job que produz binário assinado.
+- **CODEOWNERS** (`.github/CODEOWNERS`): `.github/workflows/`, `scripts/release*.sh`, `docs/release.md` e o próprio
+  CODEOWNERS → @PiluVitu. Para valer é preciso ligar, na proteção do branch `main`, "Require review from Code
+  Owners" (Settings → Branches), junto com "Require a pull request before merging".
+- **`-A` no `security import` do keychain temporário**: mantido (com `set-key-partition-list`, `apple-tool:,apple:`)
+  até a primeira release real pelo pipeline; depois dela, avaliar trocar o `-A` por `-T /usr/bin/codesign` para
+  restringir o acesso à chave só ao `codesign` e registrar o resultado aqui.
+
 ## Custo (minutos de Actions)
 
 - **Repositório público** (o caso do toolkit): os runners hospedados padrão (ubuntu, windows, macOS) são
@@ -135,9 +153,9 @@ Rotação: refaça o comando do segredo; revogue a chave antiga no App Store Con
   | draft (ubuntu) | ~1 min | 1x | ~1 |
   | **Total** | | | **~110 por release** (faixa ~60 a ~230) |
 
-  Ou seja, ~18 releases por mês nos 2.000 minutos, ~9 no pior caso de notarização lenta. O `ci.yml` (manual) com a
-  matriz ubuntu/windows/macos soma sozinho ~10x no macOS: não o dispare à toa em repo privado. A espera da
-  aprovação do environment não consome minuto (o job fica pendente).
+  Ou seja, ~18 releases por mês nos 2.000 minutos, ~9 no pior caso de notarização lenta. O `ci.yml` (em todo PR e push
+  na main) com a matriz ubuntu/windows/macos soma sozinho ~10x no macOS: se o repo virar privado, reduza a matriz.
+  A espera da aprovação do environment não consome minuto (o job fica pendente).
 
 ## Plano B: release manual no Mac
 

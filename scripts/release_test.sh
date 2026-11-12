@@ -41,7 +41,7 @@ cat >"$fake/xcrun" <<EOF
 echo "xcrun \$*" >>"$log"
 while [ \$# -gt 0 ]; do
   if [ "\$1" = --key ]; then
-    perm="\$(stat -f %Lp "\$2" 2>/dev/null || stat -c %a "\$2")"
+    perm="\$(stat -c %a "\$2" 2>/dev/null || stat -f %Lp "\$2")"
     echo "p8perm \$perm \$2" >>"$log"
     echo "p8conteudo \$(cat "\$2")" >>"$log"
   fi
@@ -140,7 +140,7 @@ mkdir "$tmp/fora"; echo guarda >"$tmp/fora/marca"
 ln -s "$tmp/fora" "$repo/elo"
 for bad in "$tmp/fora" "$repo" "$repo/" / "" . .. "$repo/.git" "$repo/elo" "$repo/scripts" "$repo/dist/../.." ; do
   rel --version v0.0.1 --out "$bad" >"$tmp/o" 2>&1 && fail "--out '$bad' aceito"
-  [ -f "$repo/scripts/release.sh" ] && [ -f "$tmp/fora/marca" ] && [ -d "$repo/.git" ] || fail "--out '$bad' apagou algo"
+  if [ ! -f "$repo/scripts/release.sh" ] || [ ! -f "$tmp/fora/marca" ] || [ ! -d "$repo/.git" ]; then fail "--out '$bad' apagou algo"; fi
 done
 rm -f "$repo/elo"
 rel --version v0.0.1 --out "$out" --dry-run >"$tmp/o" 2>&1 || fail "--out legítimo recusado: $(cat "$tmp/o")"

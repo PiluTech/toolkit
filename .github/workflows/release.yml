@@ -39,6 +39,7 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
+          cache: false # release não restaura cache de build: um cache envenenado entraria no binário assinado
       - name: golangci-lint v2.15.0 (binário oficial, SHA-256 de tools.sha256)
         run: |
           ./scripts/instalar-ferramentas.sh "$RUNNER_TEMP/bin"
@@ -59,7 +60,7 @@ jobs:
   sign-macos:
     name: codesign e notarização (macos)
     needs: build
-    runs-on: macos-latest
+    runs-on: macos-15 # imagem FIXA: o release assina com a mesma toolchain sempre; troque de propósito, não por surpresa
     timeout-minutes: 60
     environment: release
     permissions:

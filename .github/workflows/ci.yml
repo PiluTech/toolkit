@@ -1,20 +1,42 @@
 name: ci
 
-# Só manual por enquanto: o repositório é privado e a conta está sem orçamento de Actions.
-# Quando for público, acrescente push e pull_request.
+# Validação completa (scripts/ci.sh) em todo pull request e a cada push na main. O repositório é PÚBLICO: os runners
+# padrão (ubuntu, windows e macOS) são gratuitos e sem limite de minutos; nunca use "larger runner" (cobrado).
+# Este workflow NÃO usa segredo, nem environment, nem permissão de escrita: PR de fork roda sem ver nada.
+# O release.yml é outro arquivo, só por tag.
 on:
-  workflow_dispatch:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "LICENSE"
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "LICENSE"
 
 permissions:
   contents: read
 
+# um PR por vez: o push novo cancela a validação do anterior no mesmo PR/branch
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
+    name: ci (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        # O Windows nunca rodou este gate em máquina de verdade (scripts bash sob o Git Bash): enquanto isso, a falha
+        # dele aparece mas não reprova o PR. Tire o experimental quando ele passar a primeira vez.
+        include:
+          - os: windows-latest
+            experimental: true
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental == true }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -23,7 +45,7 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-      - name: golangci-lint v2.15.0 (binário oficial, SHA-256 de tools.sha256)
+      - name: golangci-lint v2.15.0 e shellcheck v0.11.0 (binários oficiais, SHA-256 de tools.sha256)
         shell: bash
         run: |
           ./scripts/instalar-ferramentas.sh "$RUNNER_TEMP/bin"
