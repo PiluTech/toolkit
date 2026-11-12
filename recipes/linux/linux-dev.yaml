@@ -1,0 +1,12 @@
+id: linux-dev
+name: Ferramentas de dev no Linux
+description: Instala git e Python 3.12 e define a branch padrão como main.
+os: linux
+steps:
+  - id: apps
+    name: Instalar git e Python
+    install: [git, "python@3.12"]
+  - id: git-defaults
+    name: Branch padrão main
+    check: { sh: "test \"$(git config --global init.defaultBranch)\" = main" }
+    run: { sh: "git config --global init.defaultBranch main" }

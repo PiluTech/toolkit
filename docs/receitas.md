@@ -1,6 +1,6 @@
 # Receitas
 
-> Formato decidido ([decisoes.md](decisoes.md)), ainda sem implementação (fase 3). Detalhes da engine em
+> Formato decidido ([decisoes.md](decisoes.md)). Fase 3 em andamento: o parse/validação (`internal/recipes`) e as receitas embutidas já existem; engine, state e retomada vêm nos PRs seguintes. Detalhes da engine em
 > [arquitetura.md](arquitetura.md#34-receitas-e-engine).
 
 Uma receita é uma sequência de etapas para um SO, num arquivo YAML em `recipes/<so>/<id>.yaml`. Serve

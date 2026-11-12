@@ -1,0 +1,15 @@
+id: diag-memoria
+name: Diagnóstico de memória e disco
+description: Mostra memória, discos e uso de espaço. Só leitura.
+os: linux
+kind: diagnostic
+steps:
+  - id: memoria
+    name: Memória
+    run: { sh: "free -h" }
+  - id: discos
+    name: Discos
+    run: { sh: "lsblk -o NAME,SIZE,TYPE,MOUNTPOINT" }
+  - id: espaco
+    name: Espaço usado
+    run: { sh: "df -h" }
