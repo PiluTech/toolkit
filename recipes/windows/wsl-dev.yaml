@@ -6,13 +6,16 @@ requires_admin: true
 steps:
   - id: enable-features
     name: Habilitar WSL e Plataforma de Máquina Virtual
-    check: { powershell: "(Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform).State -eq 'Enabled' -and (Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux).State -eq 'Enabled'" }
+    check: { powershell: "if ((Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform).State -eq 'Enabled' -and (Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux).State -eq 'Enabled') { exit 0 } else { exit 1 }" }
     run:
-      powershell: >-
-        dism /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart;
-        if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 3010) { exit $LASTEXITCODE };
-        dism /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart;
-        exit $LASTEXITCODE
+      powershell: |-
+        $reboot = 0
+        foreach ($f in 'VirtualMachinePlatform', 'Microsoft-Windows-Subsystem-Linux') {
+          dism /online /enable-feature /featurename:$f /all /norestart
+          if ($LASTEXITCODE -eq 3010) { $reboot = 3010 }
+          elseif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+        exit $reboot
       success_codes: [3010]
     reboot: if-needed
     timeout: 30m

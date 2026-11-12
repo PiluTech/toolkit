@@ -39,6 +39,8 @@ Cada `check` ou `run` tem exatamente um destes campos:
 
 `success_codes` aceita exit codes além do 0, por exemplo `[3010]` para o dism que pede reboot.
 
+**PowerShell e exit code.** O `powershell.exe -EncodedCommand` só devolve um exit code diferente de 0 e 1 se o script terminar com `exit N`; uma expressão booleana (`... -eq 'Enabled'`) sai sempre com 0. Por isso todo `check` em PowerShell deve terminar com `exit 0` / `exit 1`, e um `run` com `success_codes` deve terminar com `exit $LASTEXITCODE`.
+
 ### Reboot
 
 - `never`: nunca reinicia.
@@ -102,7 +104,7 @@ os: windows
 requires_admin: true
 steps:
   - id: enable-features
-    check: { powershell: "(Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform).State -eq 'Enabled'" }
+    check: { powershell: "if ((Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform).State -eq 'Enabled') { exit 0 } else { exit 1 }" }
     run:
       powershell: >-
         dism /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart;
