@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strings"
 	"text/tabwriter"
-	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -21,6 +20,7 @@ import (
 	"github.com/PiluTech/toolkit/internal/exec"
 	"github.com/PiluTech/toolkit/internal/msg"
 	"github.com/PiluTech/toolkit/internal/providers"
+	"github.com/PiluTech/toolkit/internal/textsafe"
 )
 
 // Deps são as dependências injetáveis do CLI.
@@ -188,22 +188,7 @@ func runList(ctx context.Context, out, errOut io.Writer, deps Deps, f listFlags)
 // printable devolve s com tudo que não é imprimível (controle, ESC, quebra de linha, U+2028...) escapado
 // como \xNN, \uNNNN ou \UNNNNNNNN: a tabela nunca repassa sequência de terminal. (A carga já recusa esses
 // caracteres; isto é a segunda camada.)
-func printable(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		switch {
-		case unicode.IsPrint(r) || r == ' ':
-			b.WriteRune(r)
-		case r < 0x100:
-			fmt.Fprintf(&b, `\x%02x`, r)
-		case r < 0x10000:
-			fmt.Fprintf(&b, `\u%04x`, r)
-		default:
-			fmt.Fprintf(&b, `\U%08x`, r)
-		}
-	}
-	return b.String()
-}
+func printable(s string) string { return textsafe.Printable(s) }
 
 func writeTable(out io.Writer, items []listItem) error {
 	if len(items) == 0 {
