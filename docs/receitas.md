@@ -58,7 +58,7 @@ Cada `check` ou `run` tem exatamente um destes campos:
      toolkit antes de registrar.
    - Linux (segurança): o root do boot só executa e lê o que é de root. O binário é COPIADO para
      `/usr/local/lib/toolkit/toolkit` (root:root 0755), nunca o `~/.local/bin` de quem iniciou a receita; o
-     `state.json` e o log têm de ficar em `/var/lib` (ou `/var/log`). Fora disso o registro é recusado
+     `state.json` e o log têm de ficar em `/var/lib` (ou `/var/log`). O binário é lido uma vez e entregue por stdin, com SHA-256 conferido na cópia e de novo antes do `enable`; o `state.json` e os diretórios até `/var/lib` têm de ser de root (uid 0, sem escrita de grupo/outros). Fora disso o registro é recusado
      (`ErrUnsafeRootPath`) antes de qualquer comando, e a máquina não reinicia: receita com reboot no
      Linux exige rodar com `sudo`.
    - Linux: unit systemd de sistema (`toolkit-resume.service`), oneshot, no boot e depois de

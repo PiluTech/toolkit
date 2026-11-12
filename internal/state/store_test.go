@@ -281,7 +281,7 @@ func TestStaleLockOfLiveProcessIsKept(t *testing.T) {
 	if err := os.WriteFile(s.lockPath(), []byte(strconv.Itoa(os.Getpid())+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	old := time.Now().Add(-time.Hour)
+	old := time.Now().Add(-30 * time.Minute)
 	if err := os.Chtimes(s.lockPath(), old, old); err != nil {
 		t.Fatal(err)
 	}
@@ -290,6 +290,57 @@ func TestStaleLockOfLiveProcessIsKept(t *testing.T) {
 	}
 	if _, err := os.Stat(s.lockPath()); err != nil {
 		t.Fatal("o lock do processo vivo tem de continuar")
+	}
+}
+
+// Pid reaproveitado: o mesmo pid, mas outro processo (início diferente) ou lock além do teto de uma
+// operação do state (o lock vale milissegundos): não segura o lock para sempre.
+func TestStaleLockWithReusedPidIsRemoved(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sem checagem de pid no Windows")
+	}
+	pid := strconv.Itoa(os.Getpid())
+	cases := map[string]struct {
+		content string
+		age     time.Duration
+	}{
+		"início diferente (Linux)":  {pid + " 1\n", 30 * time.Minute},
+		"acima do teto de 1h":       {pid + " " + procStart(os.Getpid()) + "\n", 2 * time.Hour},
+		"sem início, acima do teto": {pid + "\n", 2 * time.Hour},
+	}
+	for name, c := range cases {
+		if strings.HasPrefix(name, "início") && procStart(os.Getpid()) == "" {
+			continue // sem /proc o início não é conhecido
+		}
+		s := newStore(t)
+		_ = os.MkdirAll(s.Dir, 0o700)
+		if err := os.WriteFile(s.lockPath(), []byte(c.content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		old := time.Now().Add(-c.age)
+		_ = os.Chtimes(s.lockPath(), old, old)
+		if err := s.Save(context.Background(), sample()); err != nil {
+			t.Errorf("%s: lock de pid reaproveitado segurou o state: %v", name, err)
+		}
+	}
+}
+
+// O lock que o próprio store grava carrega pid e início do processo.
+func TestLockRecordsPidAndStart(t *testing.T) {
+	s := newStore(t)
+	_ = os.MkdirAll(s.Dir, 0o700)
+	unlock, err := s.lock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	b, _ := os.ReadFile(s.lockPath())
+	f := strings.Fields(string(b))
+	if len(f) == 0 || f[0] != strconv.Itoa(os.Getpid()) {
+		t.Fatalf("lock = %q", b)
+	}
+	if runtime.GOOS == "linux" && len(f) != 2 {
+		t.Fatalf("no Linux o lock traz o início do processo: %q", b)
 	}
 }
 

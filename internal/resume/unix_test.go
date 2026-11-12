@@ -2,7 +2,10 @@ package resume_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
@@ -68,10 +71,29 @@ func TestSystemdUnitFileRejects(t *testing.T) {
 	}
 }
 
+var fakeBin = []byte("binario-do-toolkit")
+
+func fakeRead(string) ([]byte, error) { return fakeBin, nil }
+
+func binSum() string { h := sha256.Sum256(fakeBin); return hex.EncodeToString(h[:]) }
+
+// scriptState: state e diretórios acima, até /var/lib, de root e sem escrita para outros.
+func scriptState(r *exectest.FakeRunner) {
+	r.On("stat -c \"%u %a\" -- /var/lib/toolkit/state.json", exectest.Exit(0, "0 600\n"))
+	r.On("stat -c \"%u %a\" -- /var/lib/toolkit", exectest.Exit(0, "0 755\n"))
+	r.On("stat -c \"%u %a\" -- /var/lib", exectest.Exit(0, "0 755\n"))
+}
+
+func newSystemdRead(r *exectest.FakeRunner, root bool) resume.Systemd {
+	s := newSystemd(r, root)
+	s.ReadFile = fakeRead
+	return s
+}
+
 func TestSystemdRegisterAsRootAndNonRoot(t *testing.T) {
 	for _, root := range []bool{true, false} {
 		r := exectest.New(t)
-		s := newSystemd(r, root)
+		s := newSystemdRead(r, root)
 		script := func(line string) {
 			if root {
 				r.On(line, exectest.Exit(0, ""))
@@ -79,33 +101,113 @@ func TestSystemdRegisterAsRootAndNonRoot(t *testing.T) {
 				r.OnElevated(line, exectest.Exit(0, ""))
 			}
 		}
+		scriptState(r)
 		script("install -d -m 0755 -o root -g root /usr/local/bin")
-		script("install -m 0755 -o root -g root -- /home/ana/dl/toolkit /usr/local/bin/toolkit")
+		script("tee -- /usr/local/bin/toolkit.new")
+		script("chown root:root -- /usr/local/bin/toolkit.new")
+		script("chmod 0755 -- /usr/local/bin/toolkit.new")
+		r.On("sha256sum -- /usr/local/bin/toolkit.new", exectest.Exit(0, binSum()+"  /usr/local/bin/toolkit.new\n"))
+		script("mv -f -- /usr/local/bin/toolkit.new /usr/local/bin/toolkit")
 		script("tee -- " + unitPath)
 		script("chmod 0644 -- " + unitPath)
 		script("systemctl daemon-reload")
+		r.On("sha256sum -- /usr/local/bin/toolkit", exectest.Exit(0, binSum()+"  /usr/local/bin/toolkit\n"))
 		script("systemctl enable -- toolkit-resume.service")
 		err := s.Register(context.Background(), resume.Spec{Executable: "/home/ana/dl/toolkit", Args: []string{"resume"}, LogPath: "/var/lib/toolkit/logs/r.log"})
 		if err != nil {
 			t.Fatalf("root=%v: %v", root, err)
 		}
 		calls := r.Calls()
-		if len(calls) != 6 {
-			t.Fatalf("root=%v: %d chamadas", root, len(calls))
-		}
+		var names []string
 		for _, c := range calls {
-			if c.Elevate == root || c.ReadOnly {
-				t.Fatalf("root=%v: Elevate/ReadOnly errado em %v", root, c)
+			names = append(names, c.Name)
+			if c.ReadOnly && c.Elevate {
+				t.Fatalf("leitura elevada: %v", c)
+			}
+			if !c.ReadOnly && c.Elevate == root {
+				t.Fatalf("root=%v: Elevate errado em %v", root, c)
 			}
 		}
-		// a unit vai por stdin do tee, nunca por argumento
-		if calls[2].Stdin == nil {
+		// ordem: confere o state ANTES de tocar em qualquer coisa, e confere o destino antes do enable
+		want := "stat stat stat install tee chown chmod sha256sum mv tee chmod systemctl sha256sum systemctl"
+		if strings.Join(names, " ") != want {
+			t.Fatalf("ordem:\n%s\n%s", strings.Join(names, " "), want)
+		}
+		// o binário e a unit vão por stdin do tee (uma só leitura do original), nunca por argumento
+		if calls[4].Stdin == nil || calls[9].Stdin == nil {
 			t.Fatal("tee sem stdin")
 		}
+		got, _ := io.ReadAll(calls[4].Stdin)
+		if string(got) != string(fakeBin) {
+			t.Fatalf("o tee deve receber os bytes lidos uma vez: %q", got)
+		}
 		// enable, nunca start
-		for _, c := range calls {
-			if c.Name == "systemctl" && len(c.Args) > 0 && (c.Args[0] == "start" || c.Args[0] == "enable --now") {
-				t.Fatalf("não pode iniciar a unit agora: %v", c)
+		last := calls[len(calls)-1]
+		if last.Name != "systemctl" || last.Args[0] != "enable" {
+			t.Fatalf("o último passo deve ser o enable: %v", last)
+		}
+	}
+}
+
+// O destino com outro conteúdo (trocado entre a cópia e o enable, ou cópia corrompida) impede o enable.
+func TestSystemdRegisterRefusesHashMismatch(t *testing.T) {
+	for _, stage := range []string{"copia", "final"} {
+		r := exectest.New(t)
+		s := newSystemdRead(r, true)
+		scriptState(r)
+		for _, l := range []string{
+			"install -d -m 0755 -o root -g root /usr/local/bin", "tee -- /usr/local/bin/toolkit.new",
+			"chown root:root -- /usr/local/bin/toolkit.new", "chmod 0755 -- /usr/local/bin/toolkit.new",
+			"mv -f -- /usr/local/bin/toolkit.new /usr/local/bin/toolkit", "tee -- " + unitPath, "chmod 0644 -- " + unitPath, "systemctl daemon-reload",
+		} {
+			r.On(l, exectest.Exit(0, ""))
+		}
+		bad := strings.Repeat("0", 64) + "  x\n"
+		good := binSum() + "  x\n"
+		if stage == "copia" {
+			r.On("sha256sum -- /usr/local/bin/toolkit.new", exectest.Exit(0, bad))
+		} else {
+			r.On("sha256sum -- /usr/local/bin/toolkit.new", exectest.Exit(0, good))
+			r.On("sha256sum -- /usr/local/bin/toolkit", exectest.Exit(0, bad))
+		}
+		err := s.Register(context.Background(), resume.Spec{Executable: "/home/ana/dl/toolkit", Args: []string{"resume"}})
+		if !errors.Is(err, resume.ErrBinaryMismatch) {
+			t.Fatalf("%s: err = %v", stage, err)
+		}
+		for _, c := range r.Calls() {
+			if c.Name == "systemctl" && c.Args[0] == "enable" {
+				t.Fatalf("%s: habilitou a unit com binário divergente", stage)
+			}
+			if stage == "copia" && c.Name == "mv" {
+				t.Fatal("copia divergente não pode virar o binário do root")
+			}
+		}
+	}
+}
+
+// Dono e modo do state (e dos diretórios acima, até /var/lib), não só o prefixo.
+func TestSystemdRegisterChecksStateOwnership(t *testing.T) {
+	cases := map[string][3]string{
+		"state de usuário":       {"1000 600", "0 755", "0 755"},
+		"diretório do usuário":   {"0 600", "1000 755", "0 755"},
+		"diretório gravável":     {"0 600", "0 777", "0 755"},
+		"grupo escreve no state": {"0 620", "0 755", "0 755"},
+		"/var/lib gravável":      {"0 600", "0 755", "0 775"},
+		"stat ilegível":          {"lixo", "0 755", "0 755"},
+	}
+	for name, out := range cases {
+		r := exectest.New(t)
+		s := newSystemdRead(r, true)
+		r.On("stat -c \"%u %a\" -- /var/lib/toolkit/state.json", exectest.Exit(0, out[0]+"\n"))
+		r.On("stat -c \"%u %a\" -- /var/lib/toolkit", exectest.Exit(0, out[1]+"\n"))
+		r.On("stat -c \"%u %a\" -- /var/lib", exectest.Exit(0, out[2]+"\n"))
+		err := s.Register(context.Background(), resume.Spec{Executable: "/home/ana/dl/toolkit", Args: []string{"resume"}})
+		if !errors.Is(err, resume.ErrUnsafeRootPath) {
+			t.Errorf("%s: err = %v", name, err)
+		}
+		for _, c := range r.Calls() {
+			if !c.ReadOnly {
+				t.Errorf("%s: executou mutação antes de recusar: %v", name, c)
 			}
 		}
 	}
@@ -113,15 +215,17 @@ func TestSystemdRegisterAsRootAndNonRoot(t *testing.T) {
 
 func TestSystemdRegisterSkipsCopyWhenAlreadyInBinDir(t *testing.T) {
 	r := exectest.New(t)
-	s := newSystemd(r, true)
+	s := newSystemdRead(r, true)
+	scriptState(r)
 	for _, l := range []string{"install -d -m 0755 -o root -g root /usr/local/bin", "tee -- " + unitPath, "chmod 0644 -- " + unitPath, "systemctl daemon-reload", "systemctl enable -- toolkit-resume.service"} {
 		r.On(l, exectest.Exit(0, ""))
 	}
+	r.On("sha256sum -- /usr/local/bin/toolkit", exectest.Exit(0, binSum()+"  x\n"))
 	if err := s.Register(context.Background(), resume.Spec{Executable: "/usr/local/bin/toolkit", Args: []string{"resume"}}); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range r.Calls() {
-		if c.Name == "install" && len(c.Args) > 0 && c.Args[0] == "-m" {
+		if c.Name == "mv" || (c.Name == "tee" && c.Args[1] == "/usr/local/bin/toolkit.new") {
 			t.Fatal("não copia o binário sobre ele mesmo")
 		}
 	}
@@ -129,13 +233,26 @@ func TestSystemdRegisterSkipsCopyWhenAlreadyInBinDir(t *testing.T) {
 
 func TestSystemdRegisterErrorStops(t *testing.T) {
 	r := exectest.New(t)
-	s := newSystemd(r, true)
+	s := newSystemdRead(r, true)
+	scriptState(r)
 	r.On("install -d -m 0755 -o root -g root /usr/local/bin", exectest.Exit(1, ""))
 	if err := s.Register(context.Background(), resume.Spec{Executable: "/usr/local/bin/toolkit", Args: []string{"resume"}}); err == nil {
 		t.Fatal("falha do install deve parar o registro")
 	}
-	if len(r.Calls()) != 1 {
+	if n := len(r.Calls()); n != 4 { // 3 stat + install
 		t.Fatalf("deve parar no primeiro erro: %v", r.Calls())
+	}
+}
+
+func TestSystemdRegisterReadErrorRunsNothing(t *testing.T) {
+	r := exectest.New(t)
+	s := newSystemd(r, true)
+	s.ReadFile = func(string) ([]byte, error) { return nil, errors.New("sumiu") }
+	if err := s.Register(context.Background(), resume.Spec{Executable: "/home/ana/dl/toolkit", Args: []string{"resume"}}); err == nil {
+		t.Fatal("binário ilegível")
+	}
+	if len(r.Calls()) != 0 {
+		t.Fatalf("nada pode executar: %v", r.Calls())
 	}
 }
 
@@ -348,13 +465,18 @@ func TestSystemdDefaultsToRootOwnedBinDir(t *testing.T) {
 	if resume.RootBinDir != "/usr/local/lib/toolkit" {
 		t.Fatal(resume.RootBinDir)
 	}
+	s.ReadFile = fakeRead
+	scriptState(r)
 	for _, line := range []string{
 		"install -d -m 0755 -o root -g root /usr/local/lib/toolkit",
-		"install -m 0755 -o root -g root -- /home/ana/.local/bin/toolkit /usr/local/lib/toolkit/toolkit",
+		"tee -- /usr/local/lib/toolkit/toolkit.new", "chown root:root -- /usr/local/lib/toolkit/toolkit.new", "chmod 0755 -- /usr/local/lib/toolkit/toolkit.new",
+		"mv -f -- /usr/local/lib/toolkit/toolkit.new /usr/local/lib/toolkit/toolkit",
 		"tee -- " + unitPath, "chmod 0644 -- " + unitPath, "systemctl daemon-reload", "systemctl enable -- toolkit-resume.service",
 	} {
 		r.On(line, exectest.Exit(0, ""))
 	}
+	r.On("sha256sum -- /usr/local/lib/toolkit/toolkit.new", exectest.Exit(0, binSum()+"  x\n"))
+	r.On("sha256sum -- /usr/local/lib/toolkit/toolkit", exectest.Exit(0, binSum()+"  x\n"))
 	if err := s.Register(context.Background(), resume.Spec{Executable: "/home/ana/.local/bin/toolkit", Args: []string{"resume"}}); err != nil {
 		t.Fatal(err)
 	}
