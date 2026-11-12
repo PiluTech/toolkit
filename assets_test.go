@@ -49,6 +49,43 @@ func TestCatalogoEmbutidoTemAsSeteEntradasEUrlSempreTemSha256(t *testing.T) {
 	}
 }
 
+// O bloco detect do catálogo embutido só tem ids conhecidos (Discord, Firefox, VLC, VS Code, 7-Zip, Git no Windows).
+func TestCatalogoEmbutidoTemDeteccaoDosAppsConhecidos(t *testing.T) {
+	cat, err := catalog.Parse("catalog.yaml", toolkit.CatalogYAML)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := cat.Get("discord")
+	m, ok := d.DetectFor("darwin")
+	if !ok || m.AppBundle != "Discord.app" || m.BundleID != "com.hnc.Discord" {
+		t.Fatalf("discord macOS: %+v", m)
+	}
+	if w, _ := d.DetectFor("windows"); w.DisplayName != "Discord" {
+		t.Fatalf("discord windows: %+v", w)
+	}
+	for _, id := range []string{"vscode", "firefox", "vlc"} {
+		a, _ := cat.Get(id)
+		for _, goos := range []string{"darwin", "windows", "linux"} {
+			if _, ok := a.DetectFor(goos); !ok {
+				t.Errorf("%s sem detect para %s", id, goos)
+			}
+		}
+	}
+	// Sem certeza, sem bloco: python não tem; git e 7zip só no Windows.
+	if py, _ := cat.Get("python"); len(py.Detect) != 0 {
+		t.Errorf("python não deveria ter detect: %+v", py.Detect)
+	}
+	for _, id := range []string{"git", "7zip"} {
+		a, _ := cat.Get(id)
+		if _, ok := a.DetectFor("windows"); !ok {
+			t.Errorf("%s sem detect no Windows", id)
+		}
+		if _, ok := a.DetectFor("darwin"); ok {
+			t.Errorf("%s é linha de comando no macOS: sem detect", id)
+		}
+	}
+}
+
 func TestReceitasEmbutidasValidamEUsamAppsDoCatalogo(t *testing.T) {
 	set, err := recipes.LoadFS(toolkit.Recipes, "recipes")
 	if err != nil {

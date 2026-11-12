@@ -32,6 +32,8 @@ var (
 	ErrVersionUnsupported = errors.New("o gerenciador não permite escolher esta versão")
 	// ErrInvalidRef: campo do instalador inválido para o provider (charset, "-" inicial, campo que não é dele).
 	ErrInvalidRef = errors.New("instalador inválido")
+	// ErrExternalVersion: o app está instalado fora do gerenciador, mas não na versão pedida (ou a versão não pôde ser lida).
+	ErrExternalVersion = errors.New("instalado fora do gerenciador em outra versão")
 )
 
 // PackageRef é UMA entrada de instalação do catálogo, com os templates {{...}} já resolvidos.

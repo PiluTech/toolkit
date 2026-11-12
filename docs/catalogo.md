@@ -26,6 +26,10 @@ apps:
     macos:   [<instalador>, ...]
     linux:   [<instalador>, ...]
     any:     [<instalador>, ...] # usado quando não há lista para o SO atual
+    detect:                      # opcional: como achar o app já instalado FORA do gerenciador
+      macos:   { app_bundle: ..., bundle_id: ... }
+      windows: { display_name: ... }
+      linux:   { desktop_id: ..., flatpak_id: ..., snap: ... }
 ```
 
 - **id**: minúsculas, números e hífen (`^[a-z0-9][a-z0-9-]*$`). É o nome usado na CLI
@@ -58,6 +62,56 @@ aba nova na TUI. Uma categoria nova é uma linha na lista do código.
 ### Texto sem caractere de controle
 
 Qualquer texto do arquivo (chaves e valores: `name`, versões, `args`...) com caractere de controle (ESC, BEL, quebra de linha, tab, DEL, C1), de formatação (Cf: bidi como U+202E e U+2066, zero width U+200B, BOM U+FEFF, ZWJ U+200D) ou separador de linha e de parágrafo (U+2028, U+2029) é erro de carga. Esses textos vão para o terminal: controle reescreveria a tela, bidi inverteria o nome (um app que parece outro) e U+2028 quebraria a linha da tabela. Efeito colateral aceito: emoji composto com ZWJ no `name` é recusado; acentos e emoji simples valem.
+
+## Apps instalados fora do gerenciador (`detect`)
+
+Sem isto, um app instalado à mão (o Discord que veio do `.dmg`, o programa do instalador do Windows) aparece como
+"não instalado" e o gerenciador falha ao tentar instalar por cima (`brew`: "It seems there is already an App at
+/Applications/Discord.app"). O bloco `detect` do app ensina o toolkit a achar essa instalação, **só por leitura**.
+
+| SO | Campo | O que é | Como é lido |
+|---|---|---|---|
+| `macos` | `app_bundle` | nome do bundle (`Discord.app`) | existe como pasta em `/Applications` ou `~/Applications`; a versão vem de `Contents/Info.plist` (`CFBundleShortVersionString`, senão `CFBundleVersion`) |
+| `macos` | `bundle_id` | `CFBundleIdentifier` (`com.hnc.Discord`) | se o nome não existir, olha o `Info.plist` dos `.app` dessas duas pastas (até 500 por pasta), para achar um app renomeado |
+| `windows` | `display_name` | `DisplayName` do registro Uninstall (`Discord`) | um PowerShell de texto fixo (caminho absoluto, só leitura) lista `HKLM` e `HKCU`, visões 64 e 32 bits; a versão é o `DisplayVersion` |
+| `linux` | `desktop_id` | arquivo `.desktop` (`discord.desktop`) | existe em `/usr/share/applications` ou `~/.local/share/applications` |
+| `linux` | `flatpak_id` | id do flatpak | `flatpak list --app` (também vale quando o instalador do catálogo é o próprio flatpak: a segunda leitura é redundante, mas inofensiva) |
+| `linux` | `snap` | nome do snap | `snap list <nome>` |
+
+Regras:
+
+- Cada campo só vale no SO dele (`macos: { snap: x }` é erro) e `any` não existe em `detect`. O bloco de um SO tem de ter
+  ao menos um campo. Vale a mesma validação rigorosa do resto do arquivo: chave desconhecida ou repetida, texto com
+  controle ou formatação (`rejectControl`), erro com `arquivo:linha:coluna`. `app_bundle` termina em `.app` e não tem
+  `/`, `\` nem `..` (acentos e espaço valem); `bundle_id` e `flatpak_id` só usam letras, números e `. -` (`_` no flatpak);
+  `desktop_id` termina em `.desktop`; `snap` é minúsculo com hífen; `display_name` é texto sem espaço nas pontas.
+- Catálogo antigo, sem o bloco, continua válido e se comporta como antes.
+- **Só é consultado depois que o gerenciador diz "não instalado"**: app instalado pelo gerenciador nunca vira "fora" (nem quando ele tem outra versão que a pedida). Com versão pedida (`app@versão`), o app de fora só conta como "nada a fazer" se a versão lida for a mesma; versão diferente ou ilegível é erro (`ErrExternalVersion`: remova o app antes), nunca um "já instalado" falso.
+- O `display_name` casa sem diferenciar maiúsculas com o `DisplayName` do registro **depois de tirar do fim** os grupos
+  entre parênteses e os tokens que são só versão: `7-Zip 24.08 (x64)` casa com `7-Zip`, `Mozilla Firefox (x64 pt-BR)`
+  com `Mozilla Firefox`; `Git Extensions` **não** casa com `Git`. Escreva o nome base.
+- A detecção é de melhor esforço: `plutil`, PowerShell, `flatpak` ou `snap` ausentes ou falhando viram "não
+  detectado", nunca um erro que trave o install. Todo texto lido (plist, registro, saída de comando, nome de
+  arquivo) passa por `textsafe` e é limitado em tamanho.
+- Efeito: `toolkit install` **pula** o app com `já instalado fora do Homebrew em /Applications/Discord.app (versão
+  0.0.350): nada a fazer` (nada é preparado nem instalado, o código de saída é 0 e o plano fica vazio); a aba Apps
+  mostra `✓ instalado (fora do Homebrew)`; `toolkit list --installed` (e `--json`) traz o estado e o lugar. Não há
+  `--reinstall` ainda (ver `docs/roadmap.md`): para trocar pela versão do gerenciador, remova o app antes.
+
+Exemplo:
+
+```yaml
+discord:
+  name: Discord
+  category: comunicacao
+  windows: [{ provider: winget, id: Discord.Discord }]
+  macos:   [{ provider: brew, cask: discord }]
+  linux:   [{ provider: flatpak, id: com.discordapp.Discord }]
+  detect:
+    macos:   { app_bundle: Discord.app, bundle_id: com.hnc.Discord }
+    windows: { display_name: Discord }
+    linux:   { desktop_id: discord.desktop, snap: discord }
+```
 
 ## Campos por provider
 

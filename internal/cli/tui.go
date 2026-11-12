@@ -159,15 +159,25 @@ func (b *appsBackend) candidate(ctx context.Context, id string) (providers.Candi
 }
 
 func (b *appsBackend) Status(ctx context.Context, id string) tui.AppStatus {
-	c, err := b.candidate(ctx, id)
+	cat, err := loadCatalog(ctx, b.deps, listFlags{}, io.Discard)
 	if err != nil {
 		return tui.AppStatus{Err: err}
 	}
-	ok, version, err := c.Provider.IsInstalled(ctx, c.Ref)
+	app, ok := cat.Get(id)
+	if !ok {
+		return tui.AppStatus{Err: fmt.Errorf("app %q fora do catálogo", id)}
+	}
+	rn := b.deps.runner()
+	st, err := readState(ctx, b.deps, rn, providers.NewRegistry(b.deps.providerList(rn)...), app)
 	if err != nil {
 		return tui.AppStatus{Err: err}
 	}
-	return tui.AppStatus{Installed: ok, Version: version}
+	out := tui.AppStatus{Installed: st.Installed, Version: st.Version}
+	if st.External != nil {
+		out.External, out.ExternalManager, out.ExternalWhere = true, st.External.Manager, st.External.Where
+		out.Version = st.External.Version
+	}
+	return out
 }
 
 // Versions devolve o que a aba oferece: a lista ESTÁTICA do catálogo (versions: [...], a primeira é a

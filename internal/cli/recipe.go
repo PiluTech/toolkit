@@ -560,7 +560,8 @@ func (c catalogInstaller) Install(ctx context.Context, apps []string) (recipes.I
 		}
 		targets = append(targets, target{app, vars, version})
 	}
-	reg := providers.NewRegistry(c.deps.providerList(c.deps.runner())...)
+	rn := c.deps.runner()
+	reg := providers.NewRegistry(c.deps.providerList(rn)...)
 	var failed []string
 	for _, t := range targets {
 		_, _ = fmt.Fprintf(c.out, msg.InstallHeader+"\n", printable(t.app.ID), printable(t.app.Name))
@@ -569,10 +570,13 @@ func (c catalogInstaller) Install(ctx context.Context, apps []string) (recipes.I
 			err = providers.NoInstallerError(t.app, c.goos, skips)
 		} else {
 			var res providers.Outcome
-			if res, err = providers.InstallApp(ctx, cands, t.version); err == nil {
-				if res.Result.AlreadyInstalled {
+			if res, err = providers.InstallAppWith(ctx, cands, t.version, providers.Options{External: c.deps.externalFinder(rn, t.app)}); err == nil {
+				switch {
+				case res.External != nil:
+					printExternal(c.out, *res.External)
+				case res.Result.AlreadyInstalled:
 					_, _ = fmt.Fprintf(c.out, msg.InstallAlready+"\n", res.Provider, "")
-				} else {
+				default:
 					_, _ = fmt.Fprintf(c.out, msg.InstallDone+"\n", res.Provider)
 				}
 				outcome.RebootRequired = outcome.RebootRequired || res.Result.RebootRequired
