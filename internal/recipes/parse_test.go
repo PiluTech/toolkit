@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PiluVitu/toolkit/internal/catalog"
-	"github.com/PiluVitu/toolkit/internal/platform"
+	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/platform"
 )
 
 const okRecipe = `id: wsl-dev

@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	toolkit "github.com/PiluVitu/toolkit"
-	"github.com/PiluVitu/toolkit/internal/catalog"
-	"github.com/PiluVitu/toolkit/internal/platform"
-	"github.com/PiluVitu/toolkit/internal/recipes"
+	toolkit "github.com/PiluTech/toolkit"
+	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/platform"
+	"github.com/PiluTech/toolkit/internal/recipes"
 )
 
 func TestCatalogoEmbutidoEValido(t *testing.T) {

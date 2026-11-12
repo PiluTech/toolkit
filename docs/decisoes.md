@@ -7,7 +7,7 @@
 | # | Tema | Decisão | Onde |
 |---|---|---|---|
 | 1 | Versão com id em template | Quando o id tem `{{...}}`, o YAML declara a lista (`versions: ["3.13", "3.12"]`, a primeira é a padrão). `versions: true` só para id fixo, em que o gerenciador lista as versões. O validador exige a lista quando há template. | [catalogo.md](catalogo.md#versões) |
-| 2 | Visibilidade do repositório | Planejado como público, no dono `PiluVitu`. Está **privado por enquanto**, por decisão do Paulo. O conteúdo continua escrito para ser público (nada de dado privado). | [arquitetura.md](arquitetura.md#39-ci-local) |
+| 2 | Visibilidade do repositório | Planejado como público, no dono `PiluTech`. Está **público** (decisão do Paulo, 2026-11). O conteúdo é escrito para ser público (nada de dado privado). | [arquitetura.md](arquitetura.md#39-ci-local) |
 | 3 | URL dos bootstraps | Começa com os assets da release do GitHub (`.../releases/latest/download/win.ps1` e `unix.sh`). Depois, um domínio próprio redireciona para `/win` e `/sh`. | [README.md](../README.md) |
 | 4 | Biblioteca YAML | `go.yaml.in/yaml/v3` (o `gopkg.in/yaml.v3` está arquivado). | [arquitetura.md](arquitetura.md#310-dependências-supply-chain) |
 | 5 | Bubble Tea | v2 (`charm.land/bubbletea/v2`), com Bubbles e Lip Gloss v2. | idem |

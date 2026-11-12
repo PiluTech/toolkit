@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/PiluVitu/toolkit/internal/buildinfo"
+	"github.com/PiluTech/toolkit/internal/buildinfo"
 )
 
 // Erros de ResolvePaths e Detect.
