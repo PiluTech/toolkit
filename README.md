@@ -9,7 +9,7 @@ de um catálogo, escolhe versões e roda receitas de várias etapas que continua
 
 ## Comandos de uma linha (planejados)
 
-Windows (PowerShell 5.1 ou 7, como administrador quando a receita pedir):
+Windows (PowerShell 5.1 ou 7, sem administrador):
 
 ```powershell
 irm https://github.com/PiluTech/toolkit/releases/latest/download/win.ps1 | iex
@@ -18,12 +18,17 @@ irm https://github.com/PiluTech/toolkit/releases/latest/download/win.ps1 | iex
 Linux e macOS:
 
 ```sh
-curl -fsSL https://github.com/PiluTech/toolkit/releases/latest/download/unix.sh | bash
+curl -fsSL https://github.com/PiluTech/toolkit/releases/latest/download/unix.sh | sh
 ```
 
-Os bootstraps são curtos e legíveis (cerca de 20 linhas cada). Eles baixam o binário da release, conferem
-o SHA-256 pelo `checksums.txt` da mesma release e só então executam. Para fixar uma versão, defina
-`TOOLKIT_VERSION` antes de rodar (padrão: a última release).
+Os bootstraps são curtos e legíveis (`scripts/bootstrap/unix.sh` e `win.ps1`). Eles baixam o binário da
+release, conferem o SHA-256 pelo `checksums.txt` da mesma release e, se divergir, abortam sem instalar.
+Instalam no PATH do usuário, sem `sudo` e sem administrador: `~/.local/bin` no Linux e no macOS,
+`%LOCALAPPDATA%\toolkit\bin` no Windows (o script acrescenta essa pasta ao PATH do usuário). Para fixar uma
+versão, defina `TOOLKIT_VERSION` antes de rodar (padrão: a última release). `--dry-run` só mostra o que
+faria: `curl -fsSL .../unix.sh | sh -s -- --dry-run` ou, no PowerShell,
+`$env:TOOLKIT_DRYRUN='1'; irm .../win.ps1 | iex`. Quem prefere ler antes de rodar baixa o `unix.sh`,
+abre e executa com `sh unix.sh`.
 
 Depois de instalado:
 
@@ -93,7 +98,7 @@ Diagnósticos (RAM, disco, `sfc`, DISM, rede) também são receitas. Formato com
   "keys". O Office entra só pelo Office Deployment Tool oficial, com `config.xml` declarado.
 - **Não baixa nada sem SHA-256.** Uma entrada de URL direta sem `sha256` é recusada na validação do
   catálogo, e uma release do GitHub sem checksum é recusada na instalação.
-- **Não roda `curl | bash` de terceiros** dentro das receitas. Scripts só do próprio repositório, numa
+- **Não roda `curl | sh` de terceiros** dentro das receitas. Scripts só do próprio repositório, numa
   versão fixada e com hash conferido.
 - **Não roda a TUI inteira como root.** No Linux e no macOS, o `sudo` vai só nos comandos que precisam.
   No Windows, o toolkit pede elevação (UAC) só quando algo escolhido exige admin.
