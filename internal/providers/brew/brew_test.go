@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/exec/exectest"
-	"github.com/PiluVitu/toolkit/internal/providers"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/exec/exectest"
+	"github.com/PiluTech/toolkit/internal/providers"
 )
 
 func newP(f *exectest.FakeRunner) *Provider {

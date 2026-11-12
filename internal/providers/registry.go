@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/PiluVitu/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/catalog"
 )
 
 // Registry guarda os providers por nome.

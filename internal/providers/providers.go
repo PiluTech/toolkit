@@ -11,9 +11,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/PiluVitu/toolkit/internal/catalog"
-	"github.com/PiluVitu/toolkit/internal/exec"
-	"github.com/PiluVitu/toolkit/internal/tmpl"
+	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/exec"
+	"github.com/PiluTech/toolkit/internal/tmpl"
 )
 
 // Erros tipados. Os providers devolvem estes (embrulhados com %w) para o chamador decidir.

@@ -12,7 +12,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/PiluVitu/toolkit/internal/tmpl"
+	"github.com/PiluTech/toolkit/internal/tmpl"
 )
 
 var (
