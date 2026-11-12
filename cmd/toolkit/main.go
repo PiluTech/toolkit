@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/PiluVitu/toolkit/internal/cli"
+	"github.com/PiluTech/toolkit/internal/cli"
 )
 
 func main() {

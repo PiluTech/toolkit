@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/PiluVitu/toolkit/internal/tmpl"
+	"github.com/PiluTech/toolkit/internal/tmpl"
 )
 
 // Categories é a lista fixa de categorias. Categoria desconhecida é erro na carga.

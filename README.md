@@ -12,13 +12,13 @@ de um catálogo, escolhe versões e roda receitas de várias etapas que continua
 Windows (PowerShell 5.1 ou 7, como administrador quando a receita pedir):
 
 ```powershell
-irm https://github.com/PiluVitu/toolkit/releases/latest/download/win.ps1 | iex
+irm https://github.com/PiluTech/toolkit/releases/latest/download/win.ps1 | iex
 ```
 
 Linux e macOS:
 
 ```sh
-curl -fsSL https://github.com/PiluVitu/toolkit/releases/latest/download/unix.sh | bash
+curl -fsSL https://github.com/PiluTech/toolkit/releases/latest/download/unix.sh | bash
 ```
 
 Os bootstraps são curtos e legíveis (cerca de 20 linhas cada). Eles baixam o binário da release, conferem
