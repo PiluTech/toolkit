@@ -420,3 +420,43 @@ func TestInstallRealDoesNotRepeatAppHeaders(t *testing.T) {
 		t.Fatalf("o cabeçalho do app saiu %d vezes:\n%s", n, o.String())
 	}
 }
+
+// Passo elevado com Secret: o Display não mostra sudo (nem os Args), mas o aviso de sudo -n acende.
+func TestPrintPlanWarnsAboutSudoForSecretSteps(t *testing.T) {
+	f := exectest.New(t)
+	dry := exec.NewDryRunRunner(f)
+	dry.CheckElevation = func(exec.Cmd) error { return nil }
+	if _, err := dry.Run(context.Background(), exec.Cmd{Name: "apt-get", Args: []string{"install", "x"}, Elevate: true, Secret: true}); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	printPlan(&out, Deps{GOOS: "linux", Euid: func() int { return 1000 }}, dry, true)
+	if !strings.Contains(out.String(), "sudo -v") {
+		t.Fatalf("o aviso de sudo -n deve acender para passo elevado com Secret:\n%s", out.String())
+	}
+	var asRoot bytes.Buffer
+	printPlan(&asRoot, Deps{GOOS: "linux", Euid: func() int { return 0 }}, dry, true)
+	if strings.Contains(asRoot.String(), "sudo") {
+		t.Fatalf("como root não há aviso de sudo:\n%s", asRoot.String())
+	}
+}
+
+// Com falha no plano do install real, o que o passe do plano escreveu (cabeçalho e "já instalado" dos outros
+// apps) NÃO é descartado: o usuário vê o contexto do erro.
+func TestInstallRealFailureKeepsPlanPassOutput(t *testing.T) {
+	// git já instalado, python a instalar (plano NÃO vazio) e firefox sem flatpak na máquina: falha no plano
+	f := aptFake(t).On(statusGit, exectest.Exit(0, "installed\t1:2.43.0-1\n")).
+		On(`dpkg-query -W "-f=${db:Status-Status}\t${Version}\n" python3.13`, notInstalled())
+	var o, e bytes.Buffer
+	deps := Deps{GOOS: "linux", Euid: func() int { return 1000 }, EmbeddedYML: []byte(embedded),
+		NewRunner: func() exec.Runner { return f }, CheckElevation: func(exec.Cmd) error { return nil }, Interactive: func() bool { return false }}
+	cmd := NewRootCmdWith(&o, &e, deps)
+	cmd.SetArgs([]string{"install", "git", "python", "firefox", "--yes"})
+	if err := cmd.ExecuteContext(context.Background()); err == nil {
+		t.Fatal("firefox sem flatpak deve falhar")
+	}
+	out := o.String()
+	if !strings.Contains(out, "==> git (Git)") || !strings.Contains(out, "já instalado") || !strings.Contains(out, "==> python (Python)") || !strings.Contains(out, "==> firefox (Firefox)") {
+		t.Fatalf("o contexto do plano (cabeçalhos e já-instalado) sumiu na falha:\n%s\n--- stderr:\n%s", out, e.String())
+	}
+}

@@ -192,7 +192,9 @@ func runInstall(ctx context.Context, out, errOut io.Writer, deps Deps, f install
 		planOut = &planBuf
 	}
 	failed, plan := installPass(ctx, planOut, errOut, deps, targets, true)
-	if !f.dryRun && len(plan.Plan()) == 0 {
+	// Se o plano sai vazio (tudo instalado) ou algum app falha no plano, não haverá passe real que repita o que
+	// o plano escreveu: é o contexto que o usuário precisa ver (cabeçalhos, "já instalado", erros).
+	if !f.dryRun && (len(plan.Plan()) == 0 || len(failed) > 0) {
 		_, _ = out.Write(planBuf.Bytes())
 	}
 	printPlan(out, deps, plan, f.dryRun)
@@ -283,7 +285,7 @@ func printPlan(out io.Writer, deps Deps, dry *exec.DryRunRunner, dryRun bool) {
 			continue
 		}
 		line := printable(display.Display(step.Cmd))
-		if strings.HasPrefix(line, "sudo ") { // só se o runner real usará sudo (não como root, não no Windows)
+		if display.UsesSudo(step.Cmd) { // a mesma decisão do runner real (não o texto: Secret não mostra sudo)
 			usesSudo = true
 		}
 		if step.Cmd.Elevate && step.Err != nil {

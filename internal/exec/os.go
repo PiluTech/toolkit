@@ -218,6 +218,15 @@ func (r OSRunner) Run(ctx context.Context, c Cmd) (Result, error) {
 // LookPath procura o executável no PATH.
 func (OSRunner) LookPath(name string) (string, error) { return osexec.LookPath(name) }
 
+// UsesSudo diz se este Cmd rodaria via `sudo -n` (Elevate, no Unix, sem ser root). Vem da MESMA decisão do
+// argv (não do texto do Display: um Cmd com Secret não mostra os Args nem o sudo, e mesmo assim roda via sudo).
+func (r OSRunner) UsesSudo(c Cmd) bool {
+	if !c.Elevate || r.goos() == "windows" {
+		return false
+	}
+	return r.euid() != 0
+}
+
 // Display devolve a linha de comando COMO SERÁ EXECUTADA, para o plano do dry-run: com Elevate no Unix,
 // "sudo -n -- env VAR=valor ... cmd args"; sem Elevate mas com Env, "VAR=valor ... cmd args" (o Env vai para o
 // ambiente do processo). Cmd com Secret não mostra os Args. Se a elevação for recusada (Windows sem token), cai
