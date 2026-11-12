@@ -103,6 +103,10 @@ func (d *Detector) readPlist(ctx context.Context, appPath string) (plistInfo, bo
 // Info.plist, ilegível ou grande demais: ok false (o bundle continua existindo; só não há id nem versão).
 func (d *Detector) readPlistBudget(ctx context.Context, appPath string, bin *int) (plistInfo, bool) {
 	p := appPath + "/Contents/Info.plist"
+	// Stat ANTES do Open: abrir um FIFO para leitura já bloqueia até aparecer um escritor.
+	if st, err := fs.Stat(d.opts.FS, rel(p)); err != nil || !st.Mode().IsRegular() {
+		return plistInfo{}, false
+	}
 	f, err := d.opts.FS.Open(rel(p))
 	if err != nil {
 		return plistInfo{}, false

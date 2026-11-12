@@ -75,7 +75,7 @@ Sem isto, um app instalado à mão (o Discord que veio do `.dmg`, o programa do 
 | `macos` | `bundle_id` | `CFBundleIdentifier` (`com.hnc.Discord`) | se o nome não existir, olha o `Info.plist` dos `.app` dessas duas pastas (até 500 por pasta), para achar um app renomeado |
 | `windows` | `display_name` | `DisplayName` do registro Uninstall (`Discord`) | um PowerShell de texto fixo (caminho absoluto, só leitura) lista `HKLM` e `HKCU`, visões 64 e 32 bits; a versão é o `DisplayVersion` |
 | `linux` | `desktop_id` | arquivo `.desktop` (`discord.desktop`) | existe em `/usr/share/applications` ou `~/.local/share/applications` |
-| `linux` | `flatpak_id` | id do flatpak | `flatpak list --app` (só se o instalador do catálogo não for o próprio flatpak, que já é lido pelo provider) |
+| `linux` | `flatpak_id` | id do flatpak | `flatpak list --app` (também vale quando o instalador do catálogo é o próprio flatpak: a segunda leitura é redundante, mas inofensiva) |
 | `linux` | `snap` | nome do snap | `snap list <nome>` |
 
 Regras:
@@ -86,7 +86,7 @@ Regras:
   `/`, `\` nem `..` (acentos e espaço valem); `bundle_id` e `flatpak_id` só usam letras, números e `. -` (`_` no flatpak);
   `desktop_id` termina em `.desktop`; `snap` é minúsculo com hífen; `display_name` é texto sem espaço nas pontas.
 - Catálogo antigo, sem o bloco, continua válido e se comporta como antes.
-- **Só é consultado depois que o gerenciador diz "não instalado"**: app instalado pelo gerenciador nunca vira "fora".
+- **Só é consultado depois que o gerenciador diz "não instalado"**: app instalado pelo gerenciador nunca vira "fora" (nem quando ele tem outra versão que a pedida). Com versão pedida (`app@versão`), o app de fora só conta como "nada a fazer" se a versão lida for a mesma; versão diferente ou ilegível é erro (`ErrExternalVersion`: remova o app antes), nunca um "já instalado" falso.
 - O `display_name` casa sem diferenciar maiúsculas com o `DisplayName` do registro **depois de tirar do fim** os grupos
   entre parênteses e os tokens que são só versão: `7-Zip 24.08 (x64)` casa com `7-Zip`, `Mozilla Firefox (x64 pt-BR)`
   com `Mozilla Firefox`; `Git Extensions` **não** casa com `Git`. Escreva o nome base.

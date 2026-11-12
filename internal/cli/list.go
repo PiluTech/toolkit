@@ -281,7 +281,7 @@ func stateCell(it listItem) string {
 		text += " " + it.InstalledVersion
 	}
 	if it.Source == "external" && it.ExternalPath != "" {
-		text += " em " + it.ExternalPath
+		text += fmt.Sprintf(msg.ListStateExternalAt, it.ExternalPath)
 	}
 	return text
 }

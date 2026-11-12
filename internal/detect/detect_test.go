@@ -3,6 +3,7 @@ package detect
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"strings"
 	"sync"
 	"testing"
@@ -126,6 +127,17 @@ func TestMacBundleSemInfoPlist(t *testing.T) {
 	f, found := find(t, d, app(t, discordMac))
 	if !found || f.Version != "" || f.Where != "/Applications/Discord.app" {
 		t.Fatalf("o bundle existe mesmo sem Info.plist: %v %+v", found, f)
+	}
+}
+
+// Info.plist que não é arquivo regular (FIFO num ~/Applications) nunca é aberto para leitura: travaria o toolkit.
+func TestMacInfoPlistQueNaoEhArquivoRegularEhIgnorado(t *testing.T) {
+	p := plist("com.hnc.Discord", "<key>CFBundleShortVersionString</key><string>1.2</string>")
+	p.Mode = fs.ModeNamedPipe
+	fsys := fstest.MapFS{"Applications/Discord.app/Contents/Info.plist": p}
+	f, found := find(t, New(&stub{}, Options{GOOS: "darwin", FS: fsys}), app(t, discordMac))
+	if !found || f.Version != "" {
+		t.Fatalf("o bundle existe, mas sem versão lida do FIFO: %v %+v", found, f)
 	}
 }
 

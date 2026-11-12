@@ -72,6 +72,49 @@ func TestInstallAppSemOptionsEhOComportamentoAntigo(t *testing.T) {
 	}
 }
 
+// O gerenciador tem o app em outra versão que a pedida: o .app que existe é DELE; nunca vira "fora".
+func TestInstallAppInstaladoPeloGerenciadorEmOutraVersaoNaoConsultaExterno(t *testing.T) {
+	p := &fakeProvider{name: "brew", installed: true, have: "1.0"}
+	n := 0
+	out, err := InstallAppWith(context.Background(), []Candidate{cand(p)}, "2.0", Options{External: finder(true, nil, &n)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.External != nil || n != 0 {
+		t.Fatalf("external=%+v consultas=%d: app do gerenciador não pode virar fora do gerenciador", out.External, n)
+	}
+}
+
+// Versão pedida diferente (ou desconhecida) da que está fora do gerenciador: não dizer "nada a fazer".
+func TestInstallAppExternoEmOutraVersaoQueAPedidaEhErro(t *testing.T) {
+	for _, ver := range []string{"0.0.351", "1.2.3"} {
+		p := &fakeProvider{name: "brew"}
+		n := 0
+		out, err := InstallAppWith(context.Background(), []Candidate{cand(p)}, ver, Options{External: finder(true, nil, &n)})
+		if !errors.Is(err, ErrExternalVersion) || out.External != nil {
+			t.Fatalf("pedida %s: out=%+v err=%v", ver, out, err)
+		}
+		if strings.Contains(strings.Join(p.calls, ","), "install") {
+			t.Fatalf("não pode instalar por cima: %v", p.calls)
+		}
+	}
+	for _, ver := range []string{"0.0.350", "latest"} {
+		p := &fakeProvider{name: "brew"}
+		n := 0
+		out, err := InstallAppWith(context.Background(), []Candidate{cand(p)}, ver, Options{External: finder(true, nil, &n)})
+		if err != nil || out.External == nil {
+			t.Fatalf("pedida %s: out=%+v err=%v", ver, out, err)
+		}
+	}
+	p := &fakeProvider{name: "brew"}
+	noVer := func(context.Context) (External, bool, error) {
+		return External{Where: "/Applications/Discord.app"}, true, nil
+	}
+	if _, err := InstallAppWith(context.Background(), []Candidate{cand(p)}, "1.0", Options{External: noVer}); !errors.Is(err, ErrExternalVersion) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestDisplayName(t *testing.T) {
 	for in, want := range map[string]string{"brew": "Homebrew", "winget": "winget", "flatpak": "Flatpak", "url": "toolkit", "github-release": "toolkit", "xyz": "xyz"} {
 		if got := DisplayName(in); got != want {

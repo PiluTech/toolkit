@@ -178,13 +178,18 @@ func InstallAppWith(ctx context.Context, cands []Candidate, version string, opts
 			out.Result = InstallResult{AlreadyInstalled: true, Version: have}
 			return out, nil
 		}
-		if opts.External != nil && !externalChecked {
+		// Só quando o gerenciador NÃO tem o app: se ele tem (em outra versão que a pedida), o .app que existe é
+		// dele, não "de fora".
+		if opts.External != nil && !externalChecked && (err != nil || !installed) {
 			externalChecked = true
 			ext, found, err := opts.External(ctx)
 			if err != nil {
 				return out, fmt.Errorf("%s: %w", c.Provider.Name(), err)
 			}
 			if found {
+				if pinned && (ext.Version == "" || !SameVersion(ext.Version, ver)) {
+					return out, fmt.Errorf("%w: já instalado fora do %s (versão %q), mas %q foi pedida; remova o app antes", ErrExternalVersion, DisplayName(c.Provider.Name()), ext.Version, ver)
+				}
 				ext.Manager = DisplayName(c.Provider.Name())
 				out.Provider, out.Ref, out.External = c.Provider.Name(), c.Ref, &ext
 				return out, nil

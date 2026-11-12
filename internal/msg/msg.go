@@ -41,6 +41,7 @@ const (
 	ListHeaderState       = "INSTALADO"
 	ListStateYes          = "instalado"
 	ListStateExternal     = "instalado (fora do %s)"
+	ListStateExternalAt   = " em %s"
 	ListStateNo           = "não instalado"
 	ListStateUnknown      = "não deu para verificar"
 	ListVersionsAny       = "sim"
