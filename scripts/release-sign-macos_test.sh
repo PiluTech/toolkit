@@ -26,6 +26,7 @@ cat >"$fake/codesign" <<EOF
 #!/bin/sh
 echo "codesign \$*" >>"$log"
 [ -n "\$FAKE_CODESIGN_FAIL" ] && exit 1
+if [ -n "\$FAKE_CODESIGN_SLOW" ]; then : >"$tmp/started"; sleep 2; fi
 for last; do :; done
 case "\$*" in *--sign*) printf 'ASSINADO' >>"\$last" ;; esac
 EOF
@@ -114,6 +115,25 @@ grep -q 'não foi aceita' "$tmp/o" || fail "mensagem da notarização rejeitada"
 # sem checksums novos quando a notarização falha: o checksums.txt antigo não pode ser dado como final
 mkdist; : >"$log"
 ( export DEVELOPER_ID_P12_BASE64='%%%nao-base64%%%'; sign --dir "$tmp/dist" ) >"$tmp/o" 2>&1 && fail "base64 inválido aceito"
+
+# 3b. sinal (cancelamento do job): a limpeza roda E o script TERMINA com erro, sem seguir adiante (sem notarizar
+# nem gerar checksums com binário meio assinado)
+sig=TERM # INT não: job em segundo plano herda SIGINT ignorado
+{
+  mkdist; : >"$log"; rm -f "$tmp/started"
+  ( export FAKE_CODESIGN_SLOW=1; sign --dir "$tmp/dist" ) >"$tmp/o" 2>&1 &
+  pid=$!
+  for _ in $(seq 1 100); do [ -e "$tmp/started" ] && break; sleep 0.1; done
+  [ -e "$tmp/started" ] || fail "$sig: o codesign falso não começou"
+  # o pid é do subshell ( ); o script é filho dele: sinaliza o script direto
+  pkill -"$sig" -f 'scripts/release-sign-macos.sh --dir' 2>/dev/null || true
+  rc=0; wait "$pid" || rc=$?
+  [ "$rc" -ne 0 ] || fail "$sig: o script terminou com sucesso depois do sinal"
+  kcpath="$(grep -m1 '^kcpath' "$log" | cut -d' ' -f2)"
+  [ -n "$kcpath" ] && [ ! -e "$kcpath" ] || fail "$sig: keychain não foi apagada"
+  grep -q '^xcrun notarytool' "$log" && fail "$sig: o script seguiu e notarizou depois do sinal"
+  [ "$(grep -c '^codesign .*--sign' "$log")" = 1 ] || fail "$sig: o script seguiu e assinou o segundo binário"
+}
 
 # 4. nada de segredo literal nem de publicação no script
 if grep -nE 'op://|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' scripts/release-sign-macos.sh; then fail "credencial literal no script"; fi

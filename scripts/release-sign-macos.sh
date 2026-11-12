@@ -20,7 +20,7 @@ DIR=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --dir) DIR="${2:?--dir precisa de valor}"; shift 2 ;;
-    -h | --help) sed -n '2,17p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "release-sign-macos: argumento desconhecido: $1" >&2; exit 2 ;;
   esac
 done
@@ -50,7 +50,11 @@ cleanup() {
   [ "$kc_created" = 1 ] && security delete-keychain "$kc" >/dev/null 2>&1
   rm -rf "$work"
 }
-trap cleanup EXIT INT TERM
+# Sinal (cancelamento do job): sair com erro; só o trap EXIT limpa. Um trap de INT/TERM que só limpasse deixaria
+# o script SEGUIR (sem keychain, com "set +e") e terminar com sucesso.
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap cleanup EXIT
 
 step "keychain temporária e certificado Developer ID"
 kcpass="$(openssl rand -hex 24)"
