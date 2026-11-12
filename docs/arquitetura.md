@@ -436,12 +436,17 @@ nenhum teste pode executar winget, dism ou reboot de verdade, e o gate de qualid
 - **github-release** (fase 5) [13][14]:
   - Uso `GET /repos/{repo}/releases` com `GITHUB_TOKEN` opcional (redigido no log) e
     `X-GitHub-Api-Version`.
-  - Hash, nesta ordem: (a) arquivo de checksums da release (`checksums.txt`, `*.sha256`,
-    `SHA256SUMS`); (b) campo `digest` do asset, que o GitHub calcula no upload desde 2025-06-03
-    [13][14]; (c) `sha256:` fixado no YAML. Sem nenhum dos três, **recuso**.
-- **url**: `sha256` obrigatório. A validação do catálogo já recusa uma entrada `url` sem hash.
+  - Hash (implementado; decisão 18): o `sha256:` fixado no YAML é a autoridade e dispensa as outras
+    fontes; sem ele, o arquivo de checksums da release (`checksums.txt`, `*.sha256`, `SHA256SUMS`) e/ou o
+    campo `digest` do asset, que o GitHub calcula no upload desde 2025-06-03 [13][14] (se os dois existem e
+    divergem, **recuso**). Sem nenhum dos três, **recuso antes de baixar o asset**. Checksums e `digest`
+    vêm do mesmo canal da release; só o pin é independente do GitHub, e a assinatura dos checksums não é
+    verificada. O `GITHUB_TOKEN` vai só ao `api.github.com`; a URL do asset tem de ser
+    `https://github.com/<repo>/releases/download/...`.
+- **url**: `sha256` obrigatório. A validação do catálogo já recusa uma entrada `url` sem hash. Implementado em `internal/providers/url` sobre `internal/providers/artifact` (tabela de tipos em `catalogo.md`); `IsInstalled` é sempre "não" (uma URL não tem nome de pacote) e o `--dry-run` registra o download como `Step.Note` sem requisição.
 - **download/archive**: tamanho máximo configurável, o arquivo é gravado em temp e só é movido depois
   do hash conferir, e a extração recusa caminho absoluto, `..` e symlink que aponte para fora do destino.
+- **Pacote `internal/download`** (implementado na fase 5): `File`/`Bytes` exigem sha256 e conferem antes de o arquivo existir com o nome final; `Metadata` (sem hash) é só para a resposta da API de releases. Toda URL passa por `catalog.CheckURL` antes e a cada redirect (até 5); o cliente padrão não usa proxy de ambiente, não descomprime e só conecta a IP público (`CheckPublicIP` no `Dialer.Control`, que pega também nome público resolvendo para IP interno). `Accept-Encoding: identity`, limite de tamanho por `Content-Length` e por leitura, timeout por tentativa, retry só para rede/429/5xx, nunca para hash. Pasta temporária 0700 e nome de arquivo próprio (`SafeName`).
 
 ### 3.4 Receitas e engine
 
