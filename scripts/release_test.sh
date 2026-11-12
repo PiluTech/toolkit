@@ -146,6 +146,20 @@ rm -f "$repo/elo"
 rel --version v0.0.1 --out "$out" --dry-run >"$tmp/o" 2>&1 || fail "--out legítimo recusado: $(cat "$tmp/o")"
 rm -rf "$out"
 
+# 5e. toolchain: o go.mod exige go X; com um go mais velho fixo (GOTOOLCHAIN=local falso) o release recusa
+mkdir -p "$tmp/oldgo"
+cat >"$tmp/oldgo/go" <<EOF2
+#!/bin/sh
+case "\$1 \$2" in "env GOVERSION") echo go1.20.0 ;; *) exec "$(command -v go)" "\$@" ;; esac
+EOF2
+chmod +x "$tmp/oldgo/go"
+rm -rf "$out"
+( cd "$repo" && PATH="$tmp/oldgo:$fake:$PATH" "$script" --version v0.0.1 --out "$out" ) >"$tmp/o" 2>&1 && fail "toolchain velha aceita"
+grep -q 'mais velha que a do go.mod' "$tmp/o" || fail "mensagem da toolchain: $(cat "$tmp/o")"
+[ -e "$out" ] && fail "criou dist antes de validar a toolchain"
+rel --version v0.0.1 --out "$out" --dry-run >"$tmp/o" 2>&1 || fail "toolchain atual recusada: $(cat "$tmp/o")"
+grep -q '^toolchain: go' "$tmp/o" || fail "o release não informa a toolchain"
+
 # 6. nada de segredo nem de caminho do 1Password no repositório, e sem publicação automática
 if grep -nE 'op://|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$script"; then fail "release.sh tem credencial/caminho literal"; fi
 grep -nE '^[^#]*gh +release' "$script" | grep -v echo && fail "release.sh publica sozinho"
