@@ -13,6 +13,19 @@ Ordem combinada com o Paulo; um PR por vez, com revisão (Lupa/Crivo).
 6. **Smoke manual** (`docs/smoke.md`) em Windows 11, macOS e Linux, e a validação do `win.ps1` e do PATH do usuário
    no Windows.
 
+## Apps instalados fora do gerenciador (feito, com sobras)
+
+Feito: bloco `detect` no catálogo, `internal/detect`, install pulando, aba Apps e `list --installed`
+(`docs/catalogo.md`). Sobras, sem pressa:
+- `--reinstall` (ou `--force`) no `install` para trocar a instalação de fora pela do gerenciador: não é barato nem
+  seguro (o `brew install --cask` precisa de `--force` e sobrescreve o `.app` do usuário; no Windows seria
+  desinstalar antes). Hoje o aviso manda remover o app e rodar de novo.
+- No Windows cada app "não instalado" custa uma chamada ao PowerShell (~0,3 a 1 s); um cache da listagem do
+  registro por execução (invalidado depois de uma instalação) resolve para o `list --installed` e a TUI.
+- `.app` de versões versionadas (`python@3.12`) e instalações do python.org ficam sem `detect` até haver ids confirmados.
+- Detecção de CLI no PATH (git, 7zip no macOS/Linux) não existe: só app com bundle, entrada do registro, .desktop,
+  flatpak ou snap.
+
 ## Padrões de produto da PiluTech (skill `padroes-produto-pilutech`)
 
 ### Acessibilidade da TUI (meta equivalente ao WCAG 2.2 AA)

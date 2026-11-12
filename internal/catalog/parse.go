@@ -214,6 +214,8 @@ func (p *parser) parseApp(key, node *yaml.Node) (App, bool) {
 		case k.Value == "versions":
 			versionsNode = v
 			app.Versions = p.parseVersions(id, v)
+		case k.Value == "detect":
+			app.Detect = p.parseDetect(id, v)
 		case slices.Contains(osKeys, k.Value):
 			app.Installers[k.Value] = p.parseInstallers(id, k.Value, v)
 		default:

@@ -26,7 +26,13 @@ type AppInfo struct {
 type AppStatus struct {
 	Installed bool
 	Version   string
-	Err       error // não deu para verificar
+	// External: instalado FORA do gerenciador do catálogo (o .app do .dmg, o instalador do Windows). Installed
+	// também fica true. ExternalManager é o nome do gerenciador esperado ("Homebrew") e ExternalWhere o lugar
+	// ("/Applications/Discord.app").
+	External        bool
+	ExternalManager string
+	ExternalWhere   string
+	Err             error // não deu para verificar
 }
 
 // AppsBackend é o que a aba Apps precisa do resto do toolkit. A implementação real (catálogo + providers
@@ -209,6 +215,8 @@ func (t *AppsTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		delete(t.pending, msg.id)
 		st := msg.st
 		st.Version = textsafe.Line(st.Version)
+		st.ExternalManager = textsafe.Line(st.ExternalManager)
+		st.ExternalWhere = textsafe.Line(st.ExternalWhere)
 		if st.Err != nil {
 			st.Err = fmt.Errorf("%s", textsafe.Line(st.Err.Error()))
 		}
@@ -710,6 +718,8 @@ func (t *AppsTab) columns(w int) cols {
 		c.via, c.ver, c.state = 0, 0, 22
 	case w < 80:
 		c.via = 0
+	case w >= 100:
+		c.state = 32 // cabe "✓ instalado (fora do Homebrew)"
 	}
 	// margem 1 + cursor 1 + espaço + marca 3 + espaço = 7; 2 espaços entre colunas
 	fixed := 7
@@ -745,7 +755,7 @@ func (t *AppsTab) rowLine(i int, c cols) string {
 	if i == t.cur {
 		name = t.theme.Bold().Render(name)
 	}
-	state, ver := t.stateText(a)
+	state, ver := t.stateText(a, c.state)
 	if c.ver == 0 && ver != "" { // 60 a 69 colunas: a versão junto do estado
 		state += " " + ver
 		ver = ""
@@ -771,8 +781,24 @@ func (t *AppsTab) rowLine(i int, c cols) string {
 	return line
 }
 
-// stateText devolve o estado em símbolo + palavra, e a versão instalada.
-func (t *AppsTab) stateText(a AppInfo) (state, ver string) {
+// Texto do estado "instalado fora do gerenciador": completo quando a coluna comporta, curto senão.
+const (
+	stateExternalFull  = "instalado (fora do %s)"
+	stateExternalShort = "instalado (fora)"
+)
+
+// externalText escolhe o texto de "instalado fora do gerenciador" que cabe em width colunas (com o símbolo).
+func externalText(st AppStatus, width int) string {
+	if st.ExternalManager != "" {
+		if full := SymOK + " " + fmt.Sprintf(stateExternalFull, st.ExternalManager); lipgloss.Width(full) <= width {
+			return full
+		}
+	}
+	return SymOK + " " + stateExternalShort
+}
+
+// stateText devolve o estado em símbolo + palavra, e a versão instalada. width é a largura da coluna de estado.
+func (t *AppsTab) stateText(a AppInfo, width int) (state, ver string) {
 	if a.NoInstaller {
 		return SymSkipped + " sem instalador", ""
 	}
@@ -785,6 +811,8 @@ func (t *AppsTab) stateText(a AppInfo) (state, ver string) {
 		return SymPending + " na fila", ""
 	case st.Err != nil:
 		return SymFail + " não deu para verificar", ""
+	case st.Installed && st.External:
+		return externalText(st, width), st.Version
 	case st.Installed:
 		return SymOK + " instalado", st.Version
 	}
