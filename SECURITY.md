@@ -2,8 +2,7 @@
 
 ## Versões suportadas
 
-O projeto está em desenvolvimento e ainda não tem release. Quando houver, só a última release recebe
-correções de segurança.
+O projeto está em desenvolvimento. Só a última release recebe correções de segurança.
 
 ## Como reportar uma vulnerabilidade
 
@@ -43,6 +42,13 @@ Qualquer caso em que uma destas regras não se cumpra é uma vulnerabilidade:
 5. **Logs sem segredos**: `GITHUB_TOKEN`, cabeçalhos `Authorization` e comandos marcados como secretos
    são mascarados.
 6. **Hash de pacote do winget nunca é ignorado**: `--ignore-security-hash` não é usado em hipótese alguma.
+
+## Release
+
+A release é feita localmente (`scripts/release.sh`): binários estáticos dos 6 alvos, `checksums.txt` calculado
+depois da assinatura e, no macOS, binários assinados com Developer ID e notarizados. As credenciais de
+notarização (key id, issuer e a chave .p8, lida do 1Password na hora para um arquivo temporário 600
+apagado ao final) nunca ficam no repositório, nem o nome da identidade de assinatura. O script só compila com a árvore limpa e a tag da versão em HEAD, e só apaga o `--out` se ele for um subdiretório do repositório. A criação da release no GitHub é um passo manual.
 
 ## Fora do escopo
 
