@@ -29,6 +29,7 @@ func NewRootCmdWith(out, errOut io.Writer, deps Deps) *cobra.Command {
 	root.SetOut(out)
 	root.SetErr(errOut)
 	root.AddCommand(newVersionCmd(), newListCmd(deps), newInstallCmd(deps))
+	root.AddCommand(newRecipeCmds(deps)...)
 	return root
 }
 

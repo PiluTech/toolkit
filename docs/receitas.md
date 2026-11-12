@@ -1,6 +1,6 @@
 # Receitas
 
-> Formato decidido ([decisoes.md](decisoes.md)). Fase 3 em andamento: o parse/validação (`internal/recipes`) e as receitas embutidas já existem; engine, state e retomada vêm nos PRs seguintes. Detalhes da engine em
+> Formato decidido ([decisoes.md](decisoes.md)). Fase 3 implementada: parse/validação e engine (`internal/recipes`), estado (`internal/state`), retomada por SO (`internal/resume`) e os comandos `recipe` e `resume`. Falta o smoke em máquina real (WSL e reboot de verdade). Detalhes da engine em
 > [arquitetura.md](arquitetura.md#34-receitas-e-engine).
 
 Uma receita é uma sequência de etapas para um SO, num arquivo YAML em `recipes/<so>/<id>.yaml`. Serve
@@ -86,21 +86,40 @@ Onde fica o estado:
 | Linux | `/var/lib/toolkit/state.json` | `$XDG_STATE_HOME/toolkit/state.json` |
 | macOS | `/Library/Application Support/toolkit/` | `~/Library/Application Support/toolkit/` |
 
-O log de cada execução fica ao lado do estado, em `logs/`.
+O log de cada execução (`logs/<receita>-<data>.log`, permissão 0600) fica ao lado do estado e guarda só
+eventos (etapa, código de saída, erro), nunca a saída dos comandos. `--verbose` também o mostra no terminal.
+`toolkit recipe status` lê o estado do privilégio atual (admin ou usuário).
+
+### Privilégio
+
+- **Windows:** receita `requires_admin` exige terminal elevado (o relançamento automático com UAC ainda
+  não existe). O toolkit descobre a elevação perguntando ao PowerShell.
+- **Linux:** a retomada roda como root e lê `/var/lib/toolkit`. Por isso uma receita que pode reiniciar
+  (`reboot` diferente de `never`) tem de ser iniciada com `sudo`. Receita sem reboot roda como usuário e
+  usa `sudo -n` só nos comandos de uma receita `requires_admin`.
+- **macOS:** tudo como usuário (o brew não roda como root).
+
+### `--dry-run`
+
+Só os `check` rodam (leitura, nunca elevados); o resto é descrito. Não cria estado, log nem retomada e
+nunca reinicia. Um `check` precisa ser só leitura: o dry-run o executa de verdade.
 
 ## Comandos
 
 ```sh
-toolkit recipe list
-toolkit recipe run wsl-dev [--yes] [--dry-run]
-toolkit recipe status
-toolkit recipe reset wsl-dev     # libera uma nova tentativa depois de uma falha
-toolkit resume
+toolkit recipe list [--os windows|linux|macos] [--json]
+toolkit recipe run wsl-dev [--yes] [--dry-run] [--verbose]
+toolkit recipe status [--json]
+toolkit recipe reset wsl-dev     # descarta o andamento: libera uma nova tentativa depois de uma falha
+toolkit resume [--yes] [--verbose] [--no-tui]
 ```
 
 ## Exemplos
 
 ### Setup com reboot (Windows)
+
+É a `recipes/windows/wsl-dev.yaml` embutida no binário (resumida aqui). Repare que cada `check` em
+PowerShell termina com `exit 0` / `exit 1`, e que o `run` com `success_codes` termina com `exit $reboot`.
 
 ```yaml
 id: wsl-dev
@@ -111,20 +130,25 @@ steps:
   - id: enable-features
     check: { powershell: "if ((Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform).State -eq 'Enabled') { exit 0 } else { exit 1 }" }
     run:
-      powershell: >-
-        dism /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart;
-        dism /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+      powershell: |-
+        $reboot = 0
+        foreach ($f in 'VirtualMachinePlatform', 'Microsoft-Windows-Subsystem-Linux') {
+          dism /online /enable-feature /featurename:$f /all /norestart
+          if ($LASTEXITCODE -eq 3010) { $reboot = 3010 }
+          elseif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+        exit $reboot
       success_codes: [3010]
-    reboot: required
+    reboot: if-needed
   - id: install-distro
-    check: { powershell: "wsl -l -q | Select-String -Quiet Ubuntu" }
+    check: { powershell: "if (wsl -l -q | Select-String -Quiet Ubuntu) { exit 0 } else { exit 1 }" }
     run:   { powershell: "wsl --install -d Ubuntu --no-launch" }
-  - id: setup-inside
-    # o unix.sh vem da mesma versão do toolkit em execução, com hash conferido pelo checksums.txt
-    run: { wsl: { distro: Ubuntu, bash: "bash /mnt/c/ProgramData/toolkit/bin/unix.sh recipe linux-dev" } }
   - id: apps
-    install: [vscode, git, docker-desktop]
+    install: [git, vscode]
 ```
+
+A etapa `setup-inside` (rodar o `unix.sh` da mesma versão dentro da distro, com hash conferido) entra
+junto com os bootstraps, na fase 6.
 
 ### Setup simples (Linux)
 
