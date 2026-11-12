@@ -13,6 +13,11 @@ type KeyHint struct {
 // modais e modo; o que não é dela vai para a aba ativa. Todo texto que vem de fora (catálogo, saída de
 // gerenciador, notas, erros) passa por textsafe antes de chegar em View/Status.
 type Tab interface {
+	// Init devolve o comando inicial da aba (carregar dados, iniciar o spinner); nil = nada.
+	Init() tea.Cmd
+	// Capturing diz se a aba está recebendo texto ou mostrando um modal: a raiz então repassa TODAS as
+	// teclas à aba (exceto Ctrl+C), inclusive q, ?, Tab e os números, que viram texto da busca.
+	Capturing() bool
 	// Title é o nome inteiro da aba ("Receitas"); Short é o nome curto (60 a 69 colunas: "Rec").
 	Title() string
 	Short() string

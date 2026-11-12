@@ -15,11 +15,14 @@ import (
 type fakeTab struct {
 	title, short, body, status string
 	more, selected             int
+	capturing                  bool
 	got                        []tea.Msg
 }
 
-func (f *fakeTab) Title() string { return f.title }
-func (f *fakeTab) Short() string { return f.short }
+func (f *fakeTab) Init() tea.Cmd   { return nil }
+func (f *fakeTab) Capturing() bool { return f.capturing }
+func (f *fakeTab) Title() string   { return f.title }
+func (f *fakeTab) Short() string   { return f.short }
 func (f *fakeTab) Update(m tea.Msg) (Tab, tea.Cmd) {
 	f.got = append(f.got, m)
 	return f, nil

@@ -20,6 +20,8 @@ func DefaultTabs() []Tab {
 	}
 }
 
+func (t *staticTab) Init() tea.Cmd                 { return nil }
+func (t *staticTab) Capturing() bool               { return false }
 func (t *staticTab) Title() string                 { return t.title }
 func (t *staticTab) Short() string                 { return t.short }
 func (t *staticTab) Update(tea.Msg) (Tab, tea.Cmd) { return t, nil }

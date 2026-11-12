@@ -47,7 +47,13 @@ func New(o Options, tabs ...Tab) *Model {
 }
 
 // Init pede a cor de fundo do terminal (claro ou escuro).
-func (m *Model) Init() tea.Cmd { return tea.RequestBackgroundColor }
+func (m *Model) Init() tea.Cmd {
+	cmds := []tea.Cmd{tea.RequestBackgroundColor}
+	for _, t := range m.tabs {
+		cmds = append(cmds, t.Init())
+	}
+	return tea.Batch(cmds...)
+}
 
 // Active devolve o índice da aba ativa (para os testes).
 func (m *Model) Active() int { return m.active }
@@ -67,13 +73,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyPressMsg:
+		// aba digitando ou com modal: as teclas são dela (só Ctrl+C sai sempre)
+		if m.modal == modalNone && m.tabs[m.active].Capturing() && msg.String() != "ctrl+c" {
+			return m, m.toActive(msg)
+		}
 		if next, cmd, handled := m.global(msg.String()); handled {
 			return next, cmd
 		}
+		return m, m.toActive(msg)
 	}
+	// o resto (dados carregados, spinner, fim de execução) vai a TODAS as abas: cada uma ignora o que
+	// não é dela, e a aba de fundo não perde resultado.
+	cmds := make([]tea.Cmd, 0, len(m.tabs))
+	for i, t := range m.tabs {
+		tab, cmd := t.Update(msg)
+		m.tabs[i] = tab
+		cmds = append(cmds, cmd)
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func (m *Model) toActive(msg tea.Msg) tea.Cmd {
 	tab, cmd := m.tabs[m.active].Update(msg)
 	m.tabs[m.active] = tab
-	return m, cmd
+	return cmd
 }
 
 // global trata as teclas da raiz: abas, ajuda, voltar e sair.
