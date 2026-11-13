@@ -121,8 +121,8 @@ Rotação: refaça o comando do segredo; revogue a chave antiga no App Store Con
 
 ## Validação em PR e imagem do macOS
 
-- **`ci.yml`** roda `scripts/ci.sh` em todo **pull request** e a cada **push na main** (ubuntu, macOS e Windows; o
-  Windows é `experimental` e não reprova o PR até passar a primeira vez em máquina de verdade), com `concurrency`
+- **`ci.yml`** roda `scripts/ci.sh` em todo **pull request** e a cada **push na main** (ubuntu, macOS e Windows, os três
+  obrigatórios; no Windows o `ci.sh` pula os testes de release/assinatura/ícone, que dependem de permissões POSIX e do Mac), com `concurrency`
   (um push novo cancela a validação antiga do mesmo PR), `paths-ignore` de `docs/**` e `LICENSE`, `timeout-minutes`,
   `permissions: contents: read` e **nenhum segredo, environment ou permissão de escrita**: PR de fork roda sem ver
   nada. Só runners **padrão** (gratuitos em repo público); larger runner e self-hosted são reprovados por
