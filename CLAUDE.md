@@ -14,6 +14,7 @@ Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (
 - `CONTRIBUTING.md`: como adicionar um app ou receita.
 - `docs/tui.md`: especificação da TUI (variante A adotada: abas, tokens, teclas, estados, mensagens Bubble Tea), decisões em aberto e pendências fora da TUI (update, menores da fase 5).
 - `docs/roadmap.md`: o que vem depois da v0.1.0 (update, aviso de versão, ícone, localização pt-BR/en/es, acessibilidade da TUI, smoke) e os padrões de produto da PiluTech (skill `padroes-produto-pilutech`).
+- `docs/auditoria-a11y-l10n.md`: auditoria de acessibilidade e localização (2026-11-13) contra a skill `padroes-produto-pilutech`: achados A1–A8 e L1–L9, o que já cumpre, medição de contraste e ordem sugerida das correções.
 - `docs/release.md`: pipeline de release no GitHub Actions (tag `v*.*.*` → build ubuntu → codesign/notarização macOS no environment `release` → rascunho), cadastro dos segredos, custo e plano B manual.
 - `docs/smoke.md`: roteiro de smoke manual da fase 2 (saídas reais a capturar, Windows 11, Mac, Linux), sempre `--dry-run` primeiro.
 - `docs/briefing.md`: pedido original do Paulo (fases 1–6, requisitos). Não editar.
@@ -67,6 +68,7 @@ Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (
 - Gate: `scripts/ci.sh` (ou `make ci`; `~/.local/bin` entra no FIM do PATH; o gofmt vai por `scripts/check-gofmt.sh`, que reprova também sintaxe quebrada, com autoteste em `scripts/check-gofmt_test.sh`). Actions do workflow fixadas por SHA de commit (versão em comentário) e checkout com `persist-credentials: false`. Heavy pelo build-slot: `~/.maestri-local/build-slot.sh ./scripts/ci.sh`. `.github/workflows/ci.yml` só em `workflow_dispatch`.
 
 ## Regras do projeto
+- Release, build de distribuição, assinatura/notarização, CI completo e testes demorados rodam no GitHub Actions (grátis em repo público); no Mac fica só a validação rápida antes do push e o que exige a máquina (ícone, permissão, olho humano).
 - Padrões de produto: skill `padroes-produto-pilutech` (acessibilidade, localização pt-BR/en/es). Todo PR informa a linha "A11y/l10n".
 - Escrever como repositório público, o repositório é público: nada de dado de cliente, segredo, IP, e-mail ou referência a projetos privados em código, docs, testes ou mensagens de commit.
 - Trabalhar por fases do briefing e parar ao fim de cada uma para revisão.
