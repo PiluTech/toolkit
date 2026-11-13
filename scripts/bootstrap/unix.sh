@@ -33,13 +33,14 @@ fetch() {
   fi
 }
 
-# truthy VALOR: não vazio e diferente de 0/false (sem distinguir maiúsculas).
+# truthy VALOR: mesma regra do envOn do Go: ligado = definido e, sem espaços e sem distinguir maiúsculas,
+# diferente de vazio, 0, false, no e off.
 truthy() {
-  case "$1" in
-    "" | 0) return 1 ;;
-    [Ff][Aa][Ll][Ss][Ee]) return 1 ;;
-    *) return 0 ;;
+  v="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d ' \t')"
+  case "$v" in
+    "" | 0 | false | no | off) return 1 ;;
   esac
+  return 0
 }
 
 # in_ci: algum sistema de CI conhecido está ativo.
@@ -49,17 +50,34 @@ in_ci() {
     truthy "${TEAMCITY_VERSION:-}" || truthy "${JENKINS_URL:-}" || truthy "${CODEBUILD_BUILD_ID:-}"
 }
 
-# launch_tui BINARIO: abre "toolkit tui" ligado ao terminal (no curl | sh a stdin é o pipe, então usa
-# /dev/tty; TOOLKIT_TTY só existe para testes). Nunca falha o bootstrap.
+# stdout_is_tty: a saída deste script é um terminal? (TOOLKIT_TEST_STDOUT=tty|notty só existe para testes)
+stdout_is_tty() {
+  case "${TOOLKIT_TEST_STDOUT:-}" in tty) return 0 ;; notty) return 1 ;; esac
+  [ -t 1 ]
+}
+
+# stdin_kind: tty, pipe ou file. O pipe é o do próprio "curl | sh" (a exceção atendida por /dev/tty); uma
+# entrada de arquivo ("sh unix.sh < arquivo") ou /dev/null não é alguém para usar a interface.
+# (TOOLKIT_TEST_STDIN só existe para testes.)
+stdin_kind() {
+  case "${TOOLKIT_TEST_STDIN:-}" in tty | pipe | file) echo "$TOOLKIT_TEST_STDIN"; return 0 ;; esac
+  if [ -t 0 ]; then echo tty
+  elif [ -p /dev/stdin ]; then echo pipe
+  else echo file; fi
+}
+
+# launch_tui BINARIO: abre "toolkit tui" depois de instalar. Só com saída E entrada de terminal: a saída tem de
+# ser um terminal (com "> log" ou "| tee" não abre) e a entrada, um terminal ou o pipe do próprio curl | sh; neste
+# caso a TUI lê de /dev/tty (só como stdin; a saída continua sendo a do script). TOOLKIT_TTY só existe para
+# testes. Nunca falha o bootstrap.
 launch_tui() {
   tty="${TOOLKIT_TTY:-/dev/tty}"
   if truthy "${TOOLKIT_NO_LAUNCH:-}" || in_ci; then return 0; fi
-  if ! ( : <"$tty" ) 2>/dev/null || ! ( : >>"$tty" ) 2>/dev/null; then
-    echo "Instalação concluída. Sem terminal para abrir a interface agora; para abri-la depois, rode: toolkit tui"
+  if ! stdout_is_tty || [ "$(stdin_kind)" = file ] || ! ( : <"$tty" ) 2>/dev/null; then
+    echo "Instalação concluída. Sem terminal interativo para abrir a interface agora; para abri-la depois, rode: toolkit tui"
     return 0
   fi
-  # shellcheck disable=SC2094  # é o mesmo terminal de propósito (stdin e stdout)
-  if ! "$1" tui <"$tty" >"$tty"; then
+  if ! "$1" tui <"$tty"; then
     echo "Instalação concluída, mas não foi possível abrir a interface. Para abri-la depois, rode: toolkit tui"
   fi
   return 0

@@ -13,6 +13,15 @@
 # Depois de instalar com sucesso, abre 'toolkit tui' na propria janela, so se a sessao for interativa
 # e tiver console real (nunca em CI, remoting ou com stdin/stdout redirecionados).
 
+# Mesma regra do envOn do Go: ligado = definido e, sem espacos e sem distinguir maiusculas, diferente de
+# vazio, 0, false, no e off.
+function Test-EnvOn {
+    param([string]$Value)
+    if ($null -eq $Value) { return $false }
+    $v = $Value.Trim().ToLowerInvariant()
+    return -not ($v -eq '' -or $v -eq '0' -or $v -eq 'false' -or $v -eq 'no' -or $v -eq 'off')
+}
+
 # Decisao pura (fatos injetados, testavel sem Windows): $true se deve abrir a TUI.
 function Test-ShouldLaunch {
     param(
@@ -25,10 +34,9 @@ function Test-ShouldLaunch {
         [hashtable]$Env = @{}
     )
     if ($NoLaunch) { return $false }
-    if ($NoLaunchEnv -and $NoLaunchEnv -ne '0' -and $NoLaunchEnv -ine 'false') { return $false }
+    if (Test-EnvOn $NoLaunchEnv) { return $false }
     foreach ($n in 'CI', 'GITHUB_ACTIONS', 'TF_BUILD', 'JENKINS_URL', 'GITLAB_CI', 'BUILDKITE', 'CIRCLECI', 'TEAMCITY_VERSION', 'APPVEYOR', 'TRAVIS', 'CODEBUILD_BUILD_ID') {
-        $v = $Env[$n]
-        if ($Env.ContainsKey($n) -and $v -and $v -ne '0' -and $v -ine 'false') { return $false }
+        if ($Env.ContainsKey($n) -and (Test-EnvOn ([string]$Env[$n]))) { return $false }
     }
     if ($Remote) { return $false }
     if (-not $UserInteractive) { return $false }

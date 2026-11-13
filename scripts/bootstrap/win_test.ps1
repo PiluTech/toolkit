@@ -10,7 +10,7 @@ function Fail($m) { throw "FALHOU: $m" }
 
 # Carrega so as funcoes puras do win.ps1 (sem rodar a instalacao), pela AST.
 $ast = [Management.Automation.Language.Parser]::ParseFile($script, [ref]$null, [ref]$null)
-foreach ($fn in $ast.FindAll({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in 'Test-ShouldLaunch', 'Start-ToolkitTui' }, $true)) {
+foreach ($fn in $ast.FindAll({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in 'Test-EnvOn', 'Test-ShouldLaunch', 'Start-ToolkitTui' }, $true)) {
     . ([scriptblock]::Create($fn.Extent.Text))
 }
 
@@ -26,6 +26,11 @@ Should $true 'TOOLKIT_NO_LAUNCH=0' @{ NoLaunchEnv = '0' }
 Should $true 'TOOLKIT_NO_LAUNCH=false' @{ NoLaunchEnv = 'false' }
 Should $true 'CI vazio' @{ Env = @{ CI = '' } }
 Should $true 'CI=0' @{ Env = @{ CI = '0' } }
+Should $true 'CI=no' @{ Env = @{ CI = 'No' } }
+Should $true 'CI=off com espacos' @{ Env = @{ CI = ' off ' } }
+Should $true 'CI so espacos' @{ Env = @{ CI = '   ' } }
+Should $true 'NO_LAUNCH=off' @{ NoLaunchEnv = 'OFF' }
+Should $true 'NO_LAUNCH=0 com espacos' @{ NoLaunchEnv = ' 0 ' }
 Should $true 'CI=false' @{ Env = @{ CI = 'FALSE' } }
 Should $false '-NoLaunch' @{ NoLaunch = $true }
 Should $false 'TOOLKIT_NO_LAUNCH=1' @{ NoLaunchEnv = '1' }

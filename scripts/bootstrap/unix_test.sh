@@ -144,7 +144,8 @@ launch() {
   rm -rf "${tmp:?}/home"; mkdir -p "$tmp/home"; : >"$log"
   env -u CI -u GITHUB_ACTIONS -u TF_BUILD -u TOOLKIT_NO_LAUNCH -u GITLAB_CI -u BUILDKITE -u JENKINS_URL \
     -u CIRCLECI -u TRAVIS -u TEAMCITY_VERSION -u CODEBUILD_BUILD_ID -u APPVEYOR \
-    HOME="$tmp/home" TOOLKIT_RELEASE_BASE="file://$rel" TOOLKIT_TEST_LOG="$log" "${envs[@]}" \
+    HOME="$tmp/home" TOOLKIT_RELEASE_BASE="file://$rel" TOOLKIT_TEST_LOG="$log" \
+    TOOLKIT_TEST_STDOUT=tty TOOLKIT_TEST_STDIN=pipe "${envs[@]}" \
     sh "$script" "$@" >"$tmp/out" 2>&1
 }
 opened() { grep -q '^args=tui$' "$log"; }
@@ -178,6 +179,30 @@ launch TOOLKIT_TTY="$tmp/launch/nao-existe" -- || fail "sem tty: bootstrap falho
 installed || fail "sem tty: não instalou"
 opened && fail "abriu a TUI sem tty"
 grep -q "toolkit tui" "$tmp/out" || fail "sem tty: faltou a dica de como abrir depois: $(cat "$tmp/out")"
+
+# stdout/stdin: o pipe do próprio curl | sh é a exceção atendida por /dev/tty; saída redirecionada (> log, | tee) ou
+# entrada de arquivo (sh unix.sh < arquivo) NÃO abre, mesmo com tty disponível: instala e só diz como abrir depois.
+launch TOOLKIT_TTY="$fake_tty" TOOLKIT_TEST_STDIN=pipe -- || fail "stdin pipe: falhou"
+opened || fail "stdin pipe (curl | sh) com tty deveria abrir"
+launch TOOLKIT_TTY="$fake_tty" TOOLKIT_TEST_STDIN=tty -- || fail "stdin tty: falhou"
+opened || fail "stdin terminal deveria abrir"
+launch TOOLKIT_TTY="$fake_tty" TOOLKIT_TEST_STDOUT=notty -- || fail "stdout redirecionado: falhou"
+installed || fail "stdout redirecionado: não instalou"
+opened && fail "abriu a TUI com a saída redirecionada (> log) mesmo com tty disponível"
+grep -q "toolkit tui" "$tmp/out" || fail "stdout redirecionado: faltou a dica"
+launch TOOLKIT_TTY="$fake_tty" TOOLKIT_TEST_STDIN=file -- || fail "stdin arquivo: falhou"
+installed || fail "stdin arquivo: não instalou"
+opened && fail "abriu a TUI com a entrada de arquivo redirecionado"
+launch TOOLKIT_TTY="$fake_tty" TOOLKIT_TEST_STDOUT=notty TOOLKIT_TEST_STDIN=file -- || fail "ambos redirecionados: falhou"
+opened && fail "abriu a TUI com entrada e saída redirecionadas"
+
+# semântica do envOn: espaços, caixa, no e off também desligam a variável (TOOLKIT_NO_LAUNCH/CI "desligados" abrem)
+for v in " 0 " NO off OFF " false"; do
+  launch TOOLKIT_TTY="$fake_tty" TOOLKIT_NO_LAUNCH="$v" -- || fail "NO_LAUNCH='$v' falhou"
+  opened || fail "TOOLKIT_NO_LAUNCH='$v' (desligado pelo envOn) deveria abrir"
+  launch TOOLKIT_TTY="$fake_tty" CI="$v" -- || fail "CI='$v' falhou"
+  opened || fail "CI='$v' (desligado pelo envOn) deveria abrir"
+done
 
 # falha da TUI não derruba o bootstrap: exit 0, mensagem em pt-BR, mensagem de instalação antes
 launch TOOLKIT_TTY="$fake_tty" TOOLKIT_TEST_FAIL=1 -- || fail "falha da TUI derrubou o bootstrap: $(cat "$tmp/out")"

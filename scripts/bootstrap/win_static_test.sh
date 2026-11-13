@@ -25,6 +25,7 @@ deny "SetEnvironmentVariable\('Path'" 'SetEnvironmentVariable no Path acharia o 
 need 'github\.com/PiluTech/toolkit/releases' 'repositorio PiluTech/toolkit'
 need 'TOOLKIT_VERSION' 'TOOLKIT_VERSION'
 need '-DryRun' 'modo dry-run'
+need 'function Test-EnvOn' 'regra envOn (vazio, 0, false, no, off)'
 need 'function Test-ShouldLaunch' 'decisao pura de abrir a TUI'
 need 'function Start-ToolkitTui' 'lancamento da TUI sem derrubar a instalacao'
 need 'TOOLKIT_NO_LAUNCH' 'TOOLKIT_NO_LAUNCH'

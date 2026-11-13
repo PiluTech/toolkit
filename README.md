@@ -43,9 +43,11 @@ faria: `curl -fsSL .../unix.sh | sh -s -- --dry-run` ou, no PowerShell,
 abre e executa com `sh unix.sh`.
 
 **Abre a TUI ao terminar.** Depois de instalar ou atualizar com sucesso, o bootstrap abre `toolkit tui` na própria
-janela (como o winutil). No `curl | sh` a entrada é o pipe, então o `unix.sh` liga a TUI ao `/dev/tty`. Só abre com
-terminal de verdade e **nunca em CI** (`CI`, `GITHUB_ACTIONS`, `TF_BUILD`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`,
-`TRAVIS`, `APPVEYOR`, `TEAMCITY_VERSION`, `JENKINS_URL`, `CODEBUILD_BUILD_ID`; vazio, `0` e `false` não contam),
+janela (como o winutil). No `curl | sh` a entrada é o pipe, então o `unix.sh` liga a TUI ao `/dev/tty` (só como entrada). Só abre com
+terminal de verdade: a saída tem de ser um terminal (com `> instalacao.log` ou `| tee` ele só instala e diz como abrir
+depois) e a entrada, um terminal ou o pipe do próprio `curl | sh` (a exceção atendida por `/dev/tty`); entrada vinda de
+arquivo (`sh unix.sh < arquivo`) não abre. E **nunca em CI** (`CI`, `GITHUB_ACTIONS`, `TF_BUILD`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`,
+`TRAVIS`, `APPVEYOR`, `TEAMCITY_VERSION`, `JENKINS_URL`, `CODEBUILD_BUILD_ID`; vazio, `0`, `false`, `no` e `off` não contam, sem espaços nem distinção de maiúsculas, como no `envOn` do Go),
 em sessão remota do PowerShell ou com entrada/saída redirecionada. Para não abrir: `TOOLKIT_NO_LAUNCH=1`
 (`$env:TOOLKIT_NO_LAUNCH='1'; irm .../win.ps1 | iex` no PowerShell), `--no-launch` (`curl ... | sh -s -- --no-launch`) ou,
 rodando o arquivo salvo, `.\win.ps1 -NoLaunch`. Se a TUI não abrir ou sair com erro, a instalação continua valendo
