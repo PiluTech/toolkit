@@ -115,8 +115,8 @@ func (d RecipeDeps) now() time.Time {
 }
 
 type recipeFlags struct {
-	yes, dryRun, verbose, noTUI, json bool
-	os                                string
+	yes, dryRun, verbose, noTUI, json, details bool
+	os                                         string
 }
 
 func newRecipeCmds(deps Deps) []*cobra.Command {
@@ -146,6 +146,7 @@ func newRecipeCmdsWith(deps Deps, rd RecipeDeps) []*cobra.Command {
 	run.Flags().BoolVarP(&rf.yes, "yes", "y", false, msg.FlagRecipeYes)
 	run.Flags().BoolVar(&rf.dryRun, "dry-run", false, msg.FlagRecipeDryRun)
 	run.Flags().BoolVar(&rf.verbose, "verbose", false, msg.FlagVerbose)
+	run.Flags().BoolVar(&rf.details, "detalhes", false, msg.FlagDetails)
 	run.Flags().BoolVar(&rf.noTUI, "no-tui", false, msg.FlagNoTUI)
 
 	var sf recipeFlags
@@ -465,6 +466,8 @@ func buildEngine(rt *recipeRuntime, deps Deps, rd RecipeDeps, f recipeFlags, log
 		LogPath:    logPath,
 		Clock:      rd.now,
 		Log:        logger,
+		Details:    f.details,
+		Getenv:     deps.UpdateCheck.env,
 	}
 	switch {
 	case prompter != nil:

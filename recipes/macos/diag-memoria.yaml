@@ -6,10 +6,19 @@ kind: diagnostic
 steps:
   - id: memoria
     name: Memória
-    run: { sh: "vm_stat" }
+    render: macos-memory
+    run:
+      sh: |
+        echo "### memsize"
+        sysctl -n hw.memsize
+        echo "### vm_stat"
+        vm_stat
+        echo "### profiler"
+        system_profiler SPMemoryDataType -json
   - id: discos
     name: Discos
-    run: { sh: "diskutil list" }
+    render: macos-disks
+    run: { sh: "system_profiler SPNVMeDataType SPSerialATADataType SPStorageDataType -json" }
   - id: espaco
     name: Espaço usado
     run: { sh: "df -h" }

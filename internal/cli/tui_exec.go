@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/diagfmt"
 	"github.com/PiluTech/toolkit/internal/exec"
 	"github.com/PiluTech/toolkit/internal/msg"
 	"github.com/PiluTech/toolkit/internal/platform"
@@ -424,6 +425,8 @@ type queueItem struct {
 	name   string
 	app    *installTarget
 	recipe *recipes.Recipe
+	// details: o diagnóstico mostra também a saída original (tecla d na aba Diagnóstico).
+	details bool
 }
 
 // Run executa o lote: apps primeiro, depois receitas, a que reinicia por último. Fecha ch ao terminar.
@@ -478,7 +481,7 @@ func (r *tuiRunner) Run(ctx context.Context, sel tui.Selection, ch chan<- tui.Ev
 		case it.app != nil:
 			status, errText, class = r.runApp(ctx, w, *it.app)
 		case it.recipe != nil:
-			status, errText, class, stop = r.runRecipe(ctx, w, it.recipe, eventPrompter{send: send})
+			status, errText, class, stop = r.runRecipe(ctx, w, it.recipe, eventPrompter{send: send}, it.details)
 		}
 		w.Flush()
 		if ctx.Err() != nil && status == tui.ItemFailed {
@@ -545,7 +548,7 @@ func (r *tuiRunner) buildQueue(ctx context.Context, sel tui.Selection) (items []
 				plain = append(plain, queueItem{name: m.Name})
 				continue
 			}
-			it := queueItem{name: rec.Name, recipe: rec}
+			it := queueItem{name: rec.Name, recipe: rec, details: m.Details}
 			if hasReboot(rec) {
 				rebooting = append(rebooting, it)
 			} else {
@@ -573,7 +576,7 @@ func (r *tuiRunner) runApp(ctx context.Context, w io.Writer, t installTarget) (t
 }
 
 // runRecipe roda a receita pela engine, com o prompter por evento. stop = a fila para (reinício pedido).
-func (r *tuiRunner) runRecipe(ctx context.Context, w io.Writer, rec *recipes.Recipe, prompter recipes.Prompter) (status tui.ItemStatus, errText, class string, stop bool) {
+func (r *tuiRunner) runRecipe(ctx context.Context, w io.Writer, rec *recipes.Recipe, prompter recipes.Prompter, details bool) (status tui.ItemStatus, errText, class string, stop bool) {
 	rt := r.rtCache
 	if rt == nil {
 		return tui.ItemFailed, "receitas indisponíveis", "error", false
@@ -581,14 +584,15 @@ func (r *tuiRunner) runRecipe(ctx context.Context, w io.Writer, rec *recipes.Rec
 	if err := recipePrecheck(rt, rec); err != nil {
 		return tui.ItemFailed, err.Error(), "precheck", false
 	}
-	eng, closeLog, err := buildEngine(rt, r.deps, r.rd, recipeFlags{}, rec.ID, prompter, r.approved, w, w)
+	eng, closeLog, err := buildEngine(rt, r.deps, r.rd, recipeFlags{details: details}, rec.ID, prompter, r.approved, w, w)
 	if err != nil {
 		return tui.ItemFailed, err.Error(), errClass(err), false
 	}
 	defer closeLog()
 	rep, err := eng.Run(ctx, rec, recipes.RunOptions{Yes: false, Verbose: true})
+	lang := diagfmt.LangFromEnv(r.deps.UpdateCheck.env)
 	for _, s := range rep.Steps {
-		_, _ = fmt.Fprintf(w, "etapa %s: %s\n", s.ID, s.Outcome)
+		_, _ = fmt.Fprintln(w, stepLine(lang, s))
 		for _, l := range strings.Split(s.Output, "\n") {
 			if l != "" {
 				_, _ = fmt.Fprintln(w, "  "+l)
@@ -659,4 +663,28 @@ func (l *fileLog) close() {
 	if l.f != nil {
 		_ = l.f.Close()
 	}
+}
+
+// stepLine é a linha de cada etapa no Log da TUI: símbolo + nome (no idioma do usuário), sem o id nem o "done" cru.
+func stepLine(l diagfmt.Lang, s recipes.StepReport) string {
+	name := s.Name
+	if name == "" {
+		name = s.ID
+	}
+	name = printable(name)
+	switch s.Outcome {
+	case recipes.OutcomeDone:
+		return tui.SymOK + " " + name
+	case recipes.OutcomeFailed:
+		return tui.SymFail + " " + name + " (" + diagfmt.T(l, "falhou", "failed", "falló") + ")"
+	case recipes.OutcomeSkipped:
+		return tui.SymSkipped + " " + name + " (" + diagfmt.T(l, "pulada: já estava feita", "skipped: already done", "omitida: ya estaba hecha") + ")"
+	case recipes.OutcomeAwaitingReboot:
+		return tui.SymWarn + " " + name + " (" + diagfmt.T(l, "aguardando reinício", "waiting for a restart", "esperando el reinicio") + ")"
+	case recipes.OutcomeWouldRun:
+		return tui.SymPending + " " + name + " (" + diagfmt.T(l, "seria executada", "would run", "se ejecutaría") + ")"
+	case recipes.OutcomeWouldSkip:
+		return tui.SymSkipped + " " + name + " (" + diagfmt.T(l, "seria pulada", "would be skipped", "se omitiría") + ")"
+	}
+	return tui.SymPending + " " + name + " (" + diagfmt.T(l, "não executada", "not run", "no ejecutada") + ")"
 }

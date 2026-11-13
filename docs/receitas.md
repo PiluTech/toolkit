@@ -22,6 +22,7 @@ steps:
     check: <ação>              # opcional: saiu com 0 = já está feito, etapa pulada
     run: <ação>                # exatamente um entre run e install
     install: [<app>, ...]      # ids do catálogo, aceita "python@3.12"
+    render: <nome>             # só diagnóstico, com run: resumo legível da saída (ver "Resumo legível")
     reboot: never | required | if-needed   # padrão: never
     timeout: 30m               # opcional
 ```
@@ -185,6 +186,37 @@ steps:
   - id: disco
     run: { powershell: "Get-PhysicalDisk | Select-Object FriendlyName,MediaType,HealthStatus,OperationalStatus | Format-Table -AutoSize" }
 ```
+
+### Resumo legível dos diagnósticos (`render`)
+
+Uma etapa de diagnóstico pode ter `render: <nome>`: a saída crua do comando (JSON do PowerShell, `/proc/meminfo`,
+`system_profiler`...) passa por um renderizador de `internal/diagfmt` e o relatório mostra um **resumo** em pt-BR, ou em
+`en`/`es` por `TOOLKIT_LANG`, `LC_ALL`, `LC_MESSAGES` ou `LANG` (o primeiro valor não vazio decide; outro idioma cai em
+pt-BR). A saída original só aparece no **modo detalhes**: tecla `d` na aba Diagnóstico da TUI (a dica mostra
+`d detalhes ✓` quando ligado; vale para os diagnósticos marcados na próxima execução) ou `toolkit recipe run <id>
+--detalhes`; ela vem depois do resumo, sob `-- Detalhes (saída original) --`. Se o renderizador não entender a saída (formato
+novo do sistema), a etapa NÃO falha: mostra a saída original com o aviso "não deu para resumir esta saída". O `render`
+só vale em etapa `run` de receita `kind: diagnostic`; um nome desconhecido é erro de carga. Renderizadores:
+
+| Nome | Entrada | Resumo |
+|---|---|---|
+| `windows-memory` | JSON de `Win32_PhysicalMemory`, `Win32_PhysicalMemoryArray` e `Win32_OperatingSystem` | `Memória: 8 GB no total (1 de 2 slots usados) · DDR4 2400 MT/s`, um `Slot N` por módulo (capacidade · fabricante · peça) e `Em uso agora: 5,1 de 7,9 GB (65%)` |
+| `windows-disks` | JSON de `Get-PhysicalDisk` | `Disco: LITEON CV8-CE256-HP · SSD · 256 GB · saudável` (Healthy = saudável, Warning = atenção, Unhealthy = com problema) |
+| `linux-memory` | linhas de `/proc/meminfo` | total, em uso (total menos `MemAvailable`) e swap; os pentes exigem root e não são mostrados |
+| `linux-disks` | JSON de `lsblk -b -d -J` | uma linha por disco (SSD/HDD/NVMe e tamanho); a saúde SMART exige root e não é verificada |
+| `macos-memory` | `sysctl hw.memsize`, `vm_stat` e `system_profiler SPMemoryDataType` | total, tipo quando o macOS informa, em uso aproximado |
+| `macos-disks` | `system_profiler` (NVMe, SATA, armazenamento) | `Disco: <modelo> · SSD · 500 GB · S.M.A.R.T.: verificado` |
+
+Capacidade de memória usa GB binário (8589934592 bytes = 8 GB, como o Windows mostra) e a de disco, GB decimal (como o
+fabricante anuncia); decimais com vírgula em pt-BR e es e com ponto em en. Fabricante da RAM no Windows vem de uma tabela de
+códigos JEDEC comuns (80AD SK hynix, 80CE Samsung, 802C Micron, 859B Crucial, 0198 Kingston, 029E Corsair, 04CB A-DATA, 04EF Team Group,
+04CD G.Skill, 830B Nanya); um código fora da tabela aparece como `JEDEC <código>`. As receitas continuam só de leitura e sem
+administrador. Cada etapa do Log da TUI sai como `✓ Memória` (no lugar de `etapa modulos: done`).
+
+Testes: `internal/diagfmt/*_test.go` (saídas falsas: código JEDEC desconhecido, slot vazio, 2+ módulos, formatos truncados,
+en/es), `internal/recipes/render_test.go` (engine: resumo, detalhes, idioma, renderizador que falha) e
+`internal/recipes/diagmemoria_real_test.go`, que roda a etapa de verdade (só leitura) no runner e confere que o renderizador
+entende a saída real (no Windows isto acontece no CI, no `windows-latest`).
 
 ### Diagnóstico de rede (Linux e macOS): `diag-rede`
 

@@ -14,6 +14,7 @@ const (
 	FlagRecipeYes          = "não pergunta antes de reiniciar o computador"
 	FlagRecipeDryRun       = "não altera nada: roda só os checks e mostra o plano"
 	FlagVerbose            = "mostra o log também no terminal"
+	FlagDetails            = "nos diagnósticos, mostra também a saída original (crua) de cada etapa, depois do resumo"
 	FlagNoTUI              = "sem interface interativa (sempre assim por enquanto)"
 	FlagRecipeOS           = "sistema a consultar: windows, linux ou macos (padrão: o atual)"
 	FlagRecipeJSON         = "saída em JSON"

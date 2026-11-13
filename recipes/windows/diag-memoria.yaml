@@ -1,12 +1,18 @@
 id: diag-memoria
 name: Diagnóstico de memória
-description: Lista os módulos de RAM e a saúde dos discos. Só leitura.
+description: Mostra os módulos de RAM, o uso da memória e a saúde dos discos. Só leitura, sem administrador.
 os: windows
 kind: diagnostic
 steps:
-  - id: modulos
-    name: Módulos de RAM
-    run: { powershell: "Get-CimInstance Win32_PhysicalMemory | Select-Object Manufacturer,PartNumber,Capacity,Speed | Format-Table -AutoSize | Out-String -Width 200" }
+  - id: memoria
+    name: Memória
+    timeout: 60s
+    render: windows-memory
+    run:
+      powershell: "$ErrorActionPreference='SilentlyContinue'; $m=@(Get-CimInstance Win32_PhysicalMemory | Select-Object BankLabel,DeviceLocator,Manufacturer,PartNumber,Capacity,Speed,ConfiguredClockSpeed,SMBIOSMemoryType,MemoryType); $a=@(Get-CimInstance Win32_PhysicalMemoryArray | Select-Object MemoryDevices); $o=Get-CimInstance Win32_OperatingSystem | Select-Object TotalVisibleMemorySize,FreePhysicalMemory; ConvertTo-Json -InputObject @{modules=$m;arrays=$a;os=$o} -Depth 4 -Compress"
   - id: disco
-    name: Saúde dos discos
-    run: { powershell: "Get-PhysicalDisk | Select-Object FriendlyName,MediaType,HealthStatus,OperationalStatus | Format-Table -AutoSize | Out-String -Width 200" }
+    name: Discos
+    timeout: 60s
+    render: windows-disks
+    run:
+      powershell: "$ErrorActionPreference='SilentlyContinue'; $d=@(Get-PhysicalDisk | ForEach-Object { [pscustomobject]@{FriendlyName=[string]$_.FriendlyName;MediaType=[string]$_.MediaType;HealthStatus=[string]$_.HealthStatus;OperationalStatus=[string]($_.OperationalStatus -join ',');Size=$_.Size;BusType=[string]$_.BusType} }); ConvertTo-Json -InputObject $d -Depth 4 -Compress"

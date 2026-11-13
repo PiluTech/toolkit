@@ -1,15 +1,17 @@
 id: diag-memoria
 name: Diagnóstico de memória e disco
-description: Mostra memória, discos e uso de espaço. Só leitura.
+description: Mostra memória, discos e uso de espaço. Só leitura, sem administrador.
 os: linux
 kind: diagnostic
 steps:
   - id: memoria
     name: Memória
-    run: { sh: "free -h" }
+    render: linux-memory
+    run: { sh: "grep -E '^(MemTotal|MemFree|MemAvailable|Buffers|Cached|SwapTotal|SwapFree):' /proc/meminfo" }
   - id: discos
     name: Discos
-    run: { sh: "lsblk -o NAME,SIZE,TYPE,MOUNTPOINT" }
+    render: linux-disks
+    run: { sh: "if command -v lsblk >/dev/null 2>&1; then lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN; else echo 'lsblk não encontrado neste sistema'; fi; exit 0" }
   - id: espaco
     name: Espaço usado
     run: { sh: "df -h" }

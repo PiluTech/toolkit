@@ -9,7 +9,7 @@ Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (
 - `docs/arquitetura.md`: pastas, interfaces Go, decisões técnicas e fontes (derivado da proposta, com as decisões aplicadas).
 - `docs/decisoes.md`: as 22 decisões sobre a proposta, uma por linha, com link para onde cada uma está detalhada.
 - `docs/catalogo.md`: formato do `catalog.yaml`, campos por provider, templates, exemplos.
-- `docs/receitas.md`: formato das receitas, ciclo de reboot e retomada, exemplos e a seção do `diag-rede` (Linux e macOS, só leitura, com máscara de dado sensível, alvos por `TOOLKIT_DIAG_*` e idioma por `TOOLKIT_LANG`/`LANG`).
+- `docs/receitas.md`: formato das receitas, ciclo de reboot e retomada, exemplos e a seção do `diag-rede` (Linux e macOS, só leitura, com máscara de dado sensível, alvos por `TOOLKIT_DIAG_*` e idioma por `TOOLKIT_LANG`/`LANG`). Resumo legível dos diagnósticos: campo `render` (renderizadores em `internal/diagfmt`: windows/linux/macos memory e disks), tecla `d` na aba Diagnóstico e `recipe run --detalhes` mostram a saída original; Log da TUI com `✓ nome`.
 - `SECURITY.md`: como reportar e as regras garantidas (hash obrigatório etc.).
 - `CONTRIBUTING.md`: como adicionar um app ou receita.
 - `docs/tui.md`: especificação da TUI (variante A adotada: abas, tokens, teclas, estados, mensagens Bubble Tea), decisões em aberto e pendências fora da TUI (update, menores da fase 5).
