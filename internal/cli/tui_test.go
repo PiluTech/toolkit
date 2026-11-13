@@ -42,9 +42,15 @@ func TestShouldOpenTUI(t *testing.T) {
 // rootRun executa `toolkit [args]` com terminais e TERM injetados e um tui.Run espião.
 func rootRun(t *testing.T, stdin, stdout bool, term string, args ...string) (out string, opened bool, tabs []tui.Tab) {
 	t.Helper()
+	return rootRunOS(t, "linux", stdin, stdout, term, args...)
+}
+
+// rootRunOS é o rootRun com o SO escolhido (no Windows o TERM não existe).
+func rootRunOS(t *testing.T, goos string, stdin, stdout bool, term string, args ...string) (out string, opened bool, tabs []tui.Tab) {
+	t.Helper()
 	var o, e bytes.Buffer
 	deps := Deps{
-		GOOS: "linux", EmbeddedYML: []byte(embedded), Interactive: func() bool { return stdin },
+		GOOS: goos, EmbeddedYML: []byte(embedded), Interactive: func() bool { return stdin },
 		TUI: TUIDeps{
 			StdoutIsTerminal: func() bool { return stdout },
 			Term:             func() string { return term },
@@ -377,5 +383,79 @@ func TestStdinAndStdoutShareTheSameTerminalDetection(t *testing.T) {
 	defer func() { os.Stdin = old }()
 	if stdinIsTerminal() != fileIsTerminal(zero) || stdinIsTerminal() {
 		t.Fatal("stdin=/dev/zero não é terminal, e stdin e saída usam a mesma detecção (fileIsTerminal)")
+	}
+}
+
+// Bug "toolkit tui não abre no Windows": cmd, PowerShell e Windows Terminal NÃO definem TERM, e a TUI
+// recusava abrir com TERM vazio (caía na ajuda em silêncio). No Windows o TERM não conta.
+func TestRootOpensTUIOnWindowsWithoutTERM(t *testing.T) {
+	for _, term := range []string{"", "  "} {
+		_, opened, tabs := rootRunOS(t, "windows", true, true, term)
+		if !opened || len(tabs) != 4 {
+			t.Fatalf("no Windows com TERM=%q a TUI deve abrir: opened=%v abas=%d", term, opened, len(tabs))
+		}
+	}
+}
+
+// Fora do Windows o TERM vazio continua recusando; no Windows --no-tui, entrada ou saída redirecionada também.
+func TestRootWindowsStillRespectsNoTUIAndRedirects(t *testing.T) {
+	for name, c := range map[string]struct {
+		stdin, stdout bool
+		args          []string
+	}{
+		"--no-tui":            {true, true, []string{"--no-tui"}},
+		"entrada sem console": {false, true, nil},
+		"saída redirecionada": {true, false, nil},
+	} {
+		_, opened, _ := rootRunOS(t, "windows", c.stdin, c.stdout, "", c.args...)
+		if opened {
+			t.Errorf("%s: abriu a TUI", name)
+		}
+	}
+	for _, goos := range []string{"linux", "darwin"} {
+		if _, opened, _ := rootRunOS(t, goos, true, true, ""); opened {
+			t.Errorf("%s com TERM vazio não abre a TUI", goos)
+		}
+	}
+}
+
+// `toolkit tui` abre a TUI de forma explícita (e diz por que não abriu, em vez de mostrar a ajuda).
+func TestTuiSubcommandOpensTUI(t *testing.T) {
+	for _, goos := range []string{"windows", "linux"} {
+		term := ""
+		if goos == "linux" {
+			term = "xterm"
+		}
+		_, opened, tabs := rootRunOS(t, goos, true, true, term, "tui")
+		if !opened || len(tabs) != 4 {
+			t.Fatalf("%s: `toolkit tui` deve abrir a TUI: opened=%v abas=%d", goos, opened, len(tabs))
+		}
+	}
+}
+
+func TestTuiSubcommandWithoutTerminalExplainsWhy(t *testing.T) {
+	for name, c := range map[string]struct {
+		goos          string
+		stdin, stdout bool
+		term, want    string
+	}{
+		"windows sem console":   {"windows", false, true, "", "Windows Terminal"},
+		"windows redirecionado": {"windows", true, false, "", "Windows Terminal"},
+		"linux TERM=dumb":       {"linux", true, true, "dumb", "TERM"},
+		"linux sem terminal":    {"linux", false, false, "xterm", "terminal"},
+	} {
+		var o, e bytes.Buffer
+		deps := Deps{GOOS: c.goos, EmbeddedYML: []byte(embedded), Interactive: func() bool { return c.stdin },
+			TUI: TUIDeps{StdoutIsTerminal: func() bool { return c.stdout }, Term: func() string { return c.term },
+				Run: func(context.Context, tui.Options, ...tui.Tab) error {
+					t.Errorf("%s: não deveria abrir", name)
+					return nil
+				}}}
+		cmd := NewRootCmdWith(&o, &e, deps)
+		cmd.SetArgs([]string{"tui"})
+		err := cmd.ExecuteContext(context.Background())
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: erro %v, quero mencionar %q", name, err, c.want)
+		}
 	}
 }
