@@ -5,6 +5,10 @@
 #   curl -fsSL https://github.com/PiluTech/toolkit/releases/latest/download/unix.sh | sh
 #   ... | sh -s -- --dry-run        # só mostra o que faria
 #   TOOLKIT_VERSION=v0.1.0 sh unix.sh   # fixa a versão (padrão: a última release)
+#   ... | sh -s -- --no-launch      # não abre a TUI no fim (ou TOOLKIT_NO_LAUNCH=1)
+#
+# Depois de instalar, abre "toolkit tui" na própria janela, mas só com terminal real (/dev/tty) e
+# nunca em CI. Se a TUI falhar, a instalação continua valendo (exit 0).
 #
 # Tudo roda dentro de main(), chamada na ÚLTIMA linha: se o download deste script for cortado no
 # meio (curl | sh), o shell não chega a executar nada.
@@ -29,6 +33,38 @@ fetch() {
   fi
 }
 
+# truthy VALOR: não vazio e diferente de 0/false (sem distinguir maiúsculas).
+truthy() {
+  case "$1" in
+    "" | 0) return 1 ;;
+    [Ff][Aa][Ll][Ss][Ee]) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# in_ci: algum sistema de CI conhecido está ativo.
+in_ci() {
+  truthy "${CI:-}" || truthy "${GITHUB_ACTIONS:-}" || truthy "${TF_BUILD:-}" || truthy "${GITLAB_CI:-}" ||
+    truthy "${BUILDKITE:-}" || truthy "${CIRCLECI:-}" || truthy "${TRAVIS:-}" || truthy "${APPVEYOR:-}" ||
+    truthy "${TEAMCITY_VERSION:-}" || truthy "${JENKINS_URL:-}" || truthy "${CODEBUILD_BUILD_ID:-}"
+}
+
+# launch_tui BINARIO: abre "toolkit tui" ligado ao terminal (no curl | sh a stdin é o pipe, então usa
+# /dev/tty; TOOLKIT_TTY só existe para testes). Nunca falha o bootstrap.
+launch_tui() {
+  tty="${TOOLKIT_TTY:-/dev/tty}"
+  if truthy "${TOOLKIT_NO_LAUNCH:-}" || in_ci; then return 0; fi
+  if ! ( : <"$tty" ) 2>/dev/null || ! ( : >>"$tty" ) 2>/dev/null; then
+    echo "Instalação concluída. Sem terminal para abrir a interface agora; para abri-la depois, rode: toolkit tui"
+    return 0
+  fi
+  # shellcheck disable=SC2094  # é o mesmo terminal de propósito (stdin e stdout)
+  if ! "$1" tui <"$tty" >"$tty"; then
+    echo "Instalação concluída, mas não foi possível abrir a interface. Para abri-la depois, rode: toolkit tui"
+  fi
+  return 0
+}
+
 sha256() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1
   elif command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1
@@ -37,10 +73,12 @@ sha256() {
 
 main() {
   DRY=0
+  NOLAUNCH=0
   for a in "$@"; do
     case "$a" in
       --dry-run) DRY=1 ;;
-      *) echo "toolkit: argumento desconhecido: $a (use --dry-run)" >&2; exit 2 ;;
+      --no-launch) NOLAUNCH=1 ;;
+      *) echo "toolkit: argumento desconhecido: $a (use --dry-run ou --no-launch)" >&2; exit 2 ;;
     esac
   done
 
@@ -103,6 +141,8 @@ main() {
     *":$dest:"*) ;;
     *) echo "Adicione ao PATH: export PATH=\"$dest:\$PATH\"" ;;
   esac
+  # O binário novo pode não estar no PATH desta sessão: abre pelo caminho completo.
+  if [ "$NOLAUNCH" = 0 ]; then launch_tui "$dest/toolkit"; fi
 }
 
 main "$@"

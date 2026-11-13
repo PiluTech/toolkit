@@ -30,7 +30,7 @@ printf '%s  %s\n' "$(hash_of "$rel/$asset")" "$asset" >"$rel/checksums.txt"
 run() {
   local base="$1"; shift
   rm -rf "${tmp:?}/home"; mkdir -p "$tmp/home"
-  HOME="$tmp/home" TOOLKIT_RELEASE_BASE="$base" sh "$script" "$@" >"$tmp/out" 2>&1
+  HOME="$tmp/home" TOOLKIT_NO_LAUNCH=1 TOOLKIT_RELEASE_BASE="$base" sh "$script" "$@" >"$tmp/out" 2>&1
 }
 installed() { [ -x "$tmp/home/.local/bin/toolkit" ]; }
 
@@ -115,14 +115,79 @@ grep -q "proto='=https'" "$script" || fail "política padrão não é só https"
 mkdir "$tmp/curlbin"
 printf '#!/bin/sh\necho "$*" >>"%s/curl.log"\nexec %s "$@"\n' "$tmp" "$(command -v curl)" >"$tmp/curlbin/curl"; chmod +x "$tmp/curlbin/curl"
 : >"$tmp/curl.log"; rm -rf "${tmp:?}/home"; mkdir -p "$tmp/home"
-PATH="$tmp/curlbin:$PATH" HOME="$tmp/home" TOOLKIT_RELEASE_BASE="file://$rel" sh "$script" >"$tmp/out" 2>&1 || fail "instalação com curl espião falhou"
+PATH="$tmp/curlbin:$PATH" HOME="$tmp/home" TOOLKIT_NO_LAUNCH=1 TOOLKIT_RELEASE_BASE="file://$rel" sh "$script" >"$tmp/out" 2>&1 || fail "instalação com curl espião falhou"
 grep -q -- '--proto =https,http,file' "$tmp/curl.log" || fail "curl sem --proto: $(cat "$tmp/curl.log")"
 
 # 12. SIGINT/SIGTERM durante o download: aborta (não segue para a instalação) e limpa o temporário
 # shellcheck disable=SC2016  # $PPID deve expandir no curl falso, não aqui
 printf '#!/bin/sh\nkill -TERM $PPID\nsleep 5\n' >"$tmp/curlbin/curl"; chmod +x "$tmp/curlbin/curl"
 rm -rf "${tmp:?}/home"; mkdir -p "$tmp/home"
-if PATH="$tmp/curlbin:$PATH" HOME="$tmp/home" TOOLKIT_RELEASE_BASE="file://$rel" sh "$script" >"$tmp/out" 2>&1; then fail "SIGTERM não abortou o bootstrap"; fi
+if PATH="$tmp/curlbin:$PATH" HOME="$tmp/home" TOOLKIT_NO_LAUNCH=1 TOOLKIT_RELEASE_BASE="file://$rel" sh "$script" >"$tmp/out" 2>&1; then fail "SIGTERM não abortou o bootstrap"; fi
 installed && fail "instalou após SIGTERM"
+
+# 13. abre a TUI depois de instalar: só com terminal real, nunca em CI nem com opt-out.
+# /dev/tty falso por TOOLKIT_TTY (arquivo comum); o binário falso registra os argumentos e se a stdin era o tty.
+mkdir -p "$tmp/launch"
+cat >"$rel/$asset" <<'FAKE'
+#!/bin/sh
+echo "args=$*" >>"$TOOLKIT_TEST_LOG"
+[ -z "${TOOLKIT_TEST_FAIL:-}" ] || exit 7
+FAKE
+printf '%s  %s\n' "$(hash_of "$rel/$asset")" "$asset" >"$rel/checksums.txt"
+fake_tty="$tmp/launch/tty"; : >"$fake_tty"
+log="$tmp/launch/log"
+# launch [VAR=valor...] -- [args]: sem variáveis de CI herdadas; devolve o status do bootstrap.
+launch() {
+  local envs=()
+  while [ "$1" != "--" ]; do envs+=("$1"); shift; done
+  shift
+  rm -rf "${tmp:?}/home"; mkdir -p "$tmp/home"; : >"$log"
+  env -u CI -u GITHUB_ACTIONS -u TF_BUILD -u TOOLKIT_NO_LAUNCH -u GITLAB_CI -u BUILDKITE -u JENKINS_URL \
+    -u CIRCLECI -u TRAVIS -u TEAMCITY_VERSION -u CODEBUILD_BUILD_ID -u APPVEYOR \
+    HOME="$tmp/home" TOOLKIT_RELEASE_BASE="file://$rel" TOOLKIT_TEST_LOG="$log" "${envs[@]}" \
+    sh "$script" "$@" >"$tmp/out" 2>&1
+}
+opened() { grep -q '^args=tui$' "$log"; }
+
+launch TOOLKIT_TTY="$fake_tty" -- || fail "instalação com tty falhou: $(cat "$tmp/out")"
+installed || fail "não instalou (launch)"
+opened || fail "não abriu a TUI com tty disponível: $(cat "$tmp/out")"
+grep -q "SHA-256 conferido" "$tmp/out" || fail "faltou a mensagem de instalação"
+
+launch TOOLKIT_TTY="$fake_tty" TOOLKIT_NO_LAUNCH=1 -- || fail "NO_LAUNCH=1 falhou"
+installed || fail "NO_LAUNCH=1 não instalou"
+opened && fail "abriu a TUI com TOOLKIT_NO_LAUNCH=1"
+launch TOOLKIT_TTY="$fake_tty" TOOLKIT_NO_LAUNCH=0 -- || fail "NO_LAUNCH=0 falhou"
+opened || fail "TOOLKIT_NO_LAUNCH=0 deveria abrir"
+launch TOOLKIT_TTY="$fake_tty" TOOLKIT_NO_LAUNCH=false -- || fail "NO_LAUNCH=false falhou"
+opened || fail "TOOLKIT_NO_LAUNCH=false deveria abrir"
+launch TOOLKIT_TTY="$fake_tty" TOOLKIT_NO_LAUNCH= -- || fail "NO_LAUNCH vazio falhou"
+opened || fail "TOOLKIT_NO_LAUNCH vazio deveria abrir"
+
+launch TOOLKIT_TTY="$fake_tty" -- --no-launch || fail "--no-launch falhou"
+installed || fail "--no-launch não instalou"
+opened && fail "abriu a TUI com --no-launch"
+
+for ci in CI=true GITHUB_ACTIONS=true TF_BUILD=True GITLAB_CI=true BUILDKITE=true JENKINS_URL=https://ci.example CIRCLECI=true; do
+  launch TOOLKIT_TTY="$fake_tty" "$ci" -- || fail "$ci: instalação falhou"
+  installed || fail "$ci: não instalou"
+  opened && fail "abriu a TUI com $ci"
+done
+
+launch TOOLKIT_TTY="$tmp/launch/nao-existe" -- || fail "sem tty: bootstrap falhou: $(cat "$tmp/out")"
+installed || fail "sem tty: não instalou"
+opened && fail "abriu a TUI sem tty"
+grep -q "toolkit tui" "$tmp/out" || fail "sem tty: faltou a dica de como abrir depois: $(cat "$tmp/out")"
+
+# falha da TUI não derruba o bootstrap: exit 0, mensagem em pt-BR, mensagem de instalação antes
+launch TOOLKIT_TTY="$fake_tty" TOOLKIT_TEST_FAIL=1 -- || fail "falha da TUI derrubou o bootstrap: $(cat "$tmp/out")"
+installed || fail "falha da TUI: binário não instalado"
+opened || fail "falha da TUI: não tentou abrir"
+grep -q "toolkit tui" "$tmp/out" || fail "falha da TUI: faltou a dica de como abrir depois: $(cat "$tmp/out")"
+[ "$(grep -n 'SHA-256 conferido' "$tmp/out" | head -n1 | cut -d: -f1)" -lt "$(grep -n 'toolkit tui' "$tmp/out" | head -n1 | cut -d: -f1)" ] || fail "mensagem de instalação deve vir antes"
+
+# dry-run nunca abre
+launch TOOLKIT_TTY="$fake_tty" -- --dry-run || fail "dry-run falhou"
+opened && fail "dry-run abriu a TUI"
 
 echo "ok unix_test"

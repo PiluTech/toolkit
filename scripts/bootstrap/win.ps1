@@ -7,9 +7,53 @@
 #   $env:TOOLKIT_DRYRUN = '1'; irm .../win.ps1 | iex     # so mostra o que faria
 #   $env:TOOLKIT_VERSION = 'v0.1.0'                      # fixa a versao (padrao: a ultima release)
 #   .\win.ps1 -DryRun                                    # equivalente, rodando o arquivo salvo
+#   $env:TOOLKIT_NO_LAUNCH = '1'                         # nao abre a TUI depois de instalar
+#   .\win.ps1 -NoLaunch                                  # equivalente, rodando o arquivo salvo
+#
+# Depois de instalar com sucesso, abre 'toolkit tui' na propria janela, so se a sessao for interativa
+# e tiver console real (nunca em CI, remoting ou com stdin/stdout redirecionados).
+
+# Decisao pura (fatos injetados, testavel sem Windows): $true se deve abrir a TUI.
+function Test-ShouldLaunch {
+    param(
+        [bool]$NoLaunch,
+        [string]$NoLaunchEnv,
+        [bool]$UserInteractive,
+        [bool]$InputRedirected,
+        [bool]$OutputRedirected,
+        [bool]$Remote,
+        [hashtable]$Env = @{}
+    )
+    if ($NoLaunch) { return $false }
+    if ($NoLaunchEnv -and $NoLaunchEnv -ne '0' -and $NoLaunchEnv -ine 'false') { return $false }
+    foreach ($n in 'CI', 'GITHUB_ACTIONS', 'TF_BUILD', 'JENKINS_URL', 'GITLAB_CI', 'BUILDKITE', 'CIRCLECI', 'TEAMCITY_VERSION', 'APPVEYOR', 'TRAVIS', 'CODEBUILD_BUILD_ID') {
+        $v = $Env[$n]
+        if ($Env.ContainsKey($n) -and $v -and $v -ne '0' -and $v -ine 'false') { return $false }
+    }
+    if ($Remote) { return $false }
+    if (-not $UserInteractive) { return $false }
+    if ($InputRedirected -or $OutputRedirected) { return $false }
+    return $true
+}
+
+# Abre a TUI na propria janela pelo caminho completo (o PATH desta sessao pode nao ter o binario).
+# Falha ao abrir ou saida com erro nunca derruba a instalacao: so avisa como abrir depois.
+function Start-ToolkitTui {
+    param([string]$Exe)
+    $ok = $false
+    try {
+        & $Exe tui
+        $ok = ($LASTEXITCODE -eq 0)
+    } catch {
+        $ok = $false
+    }
+    if (-not $ok) {
+        Write-Host "A instalacao terminou, mas a TUI nao abriu. Para abrir depois, rode: toolkit tui"
+    }
+}
 
 function Install-Toolkit {
-    param([switch]$DryRun)
+    param([switch]$DryRun, [switch]$NoLaunch)
     Set-StrictMode -Version Latest
     $ErrorActionPreference = 'Stop'
     $ProgressPreference = 'SilentlyContinue'   # o 5.1 fica muito lento com a barra de progresso
@@ -94,6 +138,23 @@ function Install-Toolkit {
         }
         if (($env:Path -split ';') -inotcontains $dest) { $env:Path = "$env:Path;$dest" }
     }
+
+    # Instalacao concluida (a mensagem acima ja saiu): abre a TUI se a sessao permitir.
+    $remote = Test-Path -LiteralPath variable:PSSenderInfo
+    $ci = @{}
+    foreach ($n in 'CI', 'GITHUB_ACTIONS', 'TF_BUILD', 'JENKINS_URL', 'GITLAB_CI', 'BUILDKITE', 'CIRCLECI', 'TEAMCITY_VERSION', 'APPVEYOR', 'TRAVIS', 'CODEBUILD_BUILD_ID') {
+        $ci[$n] = [Environment]::GetEnvironmentVariable($n)
+    }
+    try {
+        $inRedir = [Console]::IsInputRedirected
+        $outRedir = [Console]::IsOutputRedirected
+    } catch {
+        $inRedir = $true
+        $outRedir = $true
+    }
+    if (Test-ShouldLaunch -NoLaunch ([bool]$NoLaunch) -NoLaunchEnv $env:TOOLKIT_NO_LAUNCH -UserInteractive ([Environment]::UserInteractive) -InputRedirected $inRedir -OutputRedirected $outRedir -Remote $remote -Env $ci) {
+        Start-ToolkitTui -Exe "$dest\toolkit.exe"
+    }
 }
 
-Install-Toolkit -DryRun:($env:TOOLKIT_DRYRUN -eq '1' -or ($args -contains '-DryRun'))
+Install-Toolkit -DryRun:($env:TOOLKIT_DRYRUN -eq '1' -or ($args -contains '-DryRun')) -NoLaunch:($args -contains '-NoLaunch')

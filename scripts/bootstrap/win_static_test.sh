@@ -25,11 +25,24 @@ deny "SetEnvironmentVariable\('Path'" 'SetEnvironmentVariable no Path acharia o 
 need 'github\.com/PiluTech/toolkit/releases' 'repositorio PiluTech/toolkit'
 need 'TOOLKIT_VERSION' 'TOOLKIT_VERSION'
 need '-DryRun' 'modo dry-run'
+need 'function Test-ShouldLaunch' 'decisao pura de abrir a TUI'
+need 'function Start-ToolkitTui' 'lancamento da TUI sem derrubar a instalacao'
+need 'TOOLKIT_NO_LAUNCH' 'TOOLKIT_NO_LAUNCH'
+need '-NoLaunch' 'parametro -NoLaunch'
+need 'IsInputRedirected' 'so abrir com stdin real'
+need 'IsOutputRedirected' 'so abrir com stdout real'
+need 'UserInteractive' 'so abrir em sessao interativa'
+need 'PSSenderInfo' 'nao abrir em remoting'
+need 'GITHUB_ACTIONS' 'nao abrir em CI'
+need 'TF_BUILD' 'nao abrir em Azure Pipelines'
+need 'toolkit tui' 'dica de como abrir depois'
+need '& [$]Exe tui' 'abrir pelo caminho completo instalado'
 
 deny '\bexit\b' "'exit' fecharia o terminal de quem usa irm | iex"
 deny 'Invoke-Expression|\biex\b' 'avaliar texto baixado'
 deny "'Machine'|ProgramData|RunAs|-Verb" 'caminho de administrador'
 deny 'ignore-security|-SkipCertificateCheck|ServerCertificateValidationCallback' 'desligar verificacao'
+deny 'Start-Process' 'a TUI roda na propria janela, nao em processo novo'
 deny 'PiluVitu' 'repositorio antigo'
 
 echo "ok win_static_test"
