@@ -8,6 +8,48 @@ $script = Join-Path $PSScriptRoot 'win.ps1'
 
 function Fail($m) { throw "FALHOU: $m" }
 
+# Carrega so as funcoes puras do win.ps1 (sem rodar a instalacao), pela AST.
+$ast = [Management.Automation.Language.Parser]::ParseFile($script, [ref]$null, [ref]$null)
+foreach ($fn in $ast.FindAll({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in 'Test-EnvOn', 'Test-ShouldLaunch', 'Start-ToolkitTui' }, $true)) {
+    . ([scriptblock]::Create($fn.Extent.Text))
+}
+
+# Decisao de abrir a TUI: base interativa e console real; cada veto individual.
+function Should($want, $what, $over) {
+    $a = @{ NoLaunch = $false; NoLaunchEnv = ''; UserInteractive = $true; InputRedirected = $false; OutputRedirected = $false; Remote = $false; Env = @{} }
+    foreach ($k in $over.Keys) { $a[$k] = $over[$k] }
+    $got = Test-ShouldLaunch @a
+    if ($got -ne $want) { Fail "Test-ShouldLaunch ($what): esperado $want, veio $got" }
+}
+Should $true 'sessao interativa com console' @{}
+Should $true 'TOOLKIT_NO_LAUNCH=0' @{ NoLaunchEnv = '0' }
+Should $true 'TOOLKIT_NO_LAUNCH=false' @{ NoLaunchEnv = 'false' }
+Should $true 'CI vazio' @{ Env = @{ CI = '' } }
+Should $true 'CI=0' @{ Env = @{ CI = '0' } }
+Should $true 'CI=no' @{ Env = @{ CI = 'No' } }
+Should $true 'CI=off com espacos' @{ Env = @{ CI = ' off ' } }
+Should $true 'CI so espacos' @{ Env = @{ CI = '   ' } }
+Should $true 'NO_LAUNCH=off' @{ NoLaunchEnv = 'OFF' }
+Should $true 'NO_LAUNCH=0 com espacos' @{ NoLaunchEnv = ' 0 ' }
+Should $true 'CI=false' @{ Env = @{ CI = 'FALSE' } }
+Should $false '-NoLaunch' @{ NoLaunch = $true }
+Should $false 'TOOLKIT_NO_LAUNCH=1' @{ NoLaunchEnv = '1' }
+Should $false 'TOOLKIT_NO_LAUNCH=sim' @{ NoLaunchEnv = 'sim' }
+Should $false 'CI' @{ Env = @{ CI = 'true' } }
+Should $false 'GITHUB_ACTIONS' @{ Env = @{ GITHUB_ACTIONS = 'true' } }
+Should $false 'TF_BUILD' @{ Env = @{ TF_BUILD = 'True' } }
+Should $false 'CI=1' @{ Env = @{ CI = '1' } }
+Should $false 'CODEBUILD_BUILD_ID' @{ Env = @{ CODEBUILD_BUILD_ID = 'x' } }
+Should $false 'remoting' @{ Remote = $true }
+Should $false 'sessao nao interativa' @{ UserInteractive = $false }
+Should $false 'stdin redirecionado' @{ InputRedirected = $true }
+Should $false 'stdout redirecionado' @{ OutputRedirected = $true }
+
+# TUI que nao abre: nao lanca excecao e imprime a dica em pt-BR.
+$msg = (Start-ToolkitTui -Exe (Join-Path ([IO.Path]::GetTempPath()) 'toolkit-inexistente.exe') 6>&1 | Out-String)
+if ($msg -notmatch 'toolkit tui') { Fail "sem a dica de como abrir depois: $msg" }
+if ($msg -notmatch 'instalacao terminou') { Fail "sem aviso de instalacao concluida: $msg" }
+
 $root = Join-Path ([IO.Path]::GetTempPath()) ('toolkit-test-' + [Guid]::NewGuid().ToString('N'))
 $rel = Join-Path $root 'release'
 New-Item -ItemType Directory -Path $rel | Out-Null
@@ -60,6 +102,9 @@ try {
     $d1 = "$root\ok"
     if (-not (Invoke-Bootstrap $d1 @())) { Fail "instalacao valida: $(Get-Content -Raw "$root\out.txt")" }
     if (-not (Test-Path "$d1\toolkit.exe")) { Fail 'binario nao instalado' }
+    # saida redirecionada (como aqui): nao abre a TUI, e a mensagem de instalacao aparece.
+    if ((Get-Content -Raw "$root\out.txt") -notmatch 'toolkit instalado em') { Fail 'sem mensagem de instalacao' }
+    if ((Get-Content -Raw "$root\out.txt") -match 'TUI nao abriu') { Fail 'tentou abrir a TUI sem console' }
 
     # 2. checksums adulterado: falha e nao instala
     Write-Release $true

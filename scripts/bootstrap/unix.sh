@@ -5,6 +5,10 @@
 #   curl -fsSL https://github.com/PiluTech/toolkit/releases/latest/download/unix.sh | sh
 #   ... | sh -s -- --dry-run        # só mostra o que faria
 #   TOOLKIT_VERSION=v0.1.0 sh unix.sh   # fixa a versão (padrão: a última release)
+#   ... | sh -s -- --no-launch      # não abre a TUI no fim (ou TOOLKIT_NO_LAUNCH=1)
+#
+# Depois de instalar, abre "toolkit tui" na própria janela, mas só com terminal real (/dev/tty) e
+# nunca em CI. Se a TUI falhar, a instalação continua valendo (exit 0).
 #
 # Tudo roda dentro de main(), chamada na ÚLTIMA linha: se o download deste script for cortado no
 # meio (curl | sh), o shell não chega a executar nada.
@@ -29,6 +33,53 @@ fetch() {
   fi
 }
 
+# truthy VALOR: mesma regra do envOn do Go: ligado = definido e, sem espaços NAS PONTAS e sem distinguir
+# maiúsculas, diferente de vazio, 0, false, no e off ("f alse" não é "false").
+truthy() {
+  v="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  v="${v#"${v%%[![:space:]]*}"}"
+  v="${v%"${v##*[![:space:]]}"}"
+  case "$v" in
+    "" | 0 | false | no | off) return 1 ;;
+  esac
+  return 0
+}
+
+# in_ci: algum sistema de CI conhecido está ativo.
+in_ci() {
+  truthy "${CI:-}" || truthy "${GITHUB_ACTIONS:-}" || truthy "${TF_BUILD:-}" || truthy "${GITLAB_CI:-}" ||
+    truthy "${BUILDKITE:-}" || truthy "${CIRCLECI:-}" || truthy "${TRAVIS:-}" || truthy "${APPVEYOR:-}" ||
+    truthy "${TEAMCITY_VERSION:-}" || truthy "${JENKINS_URL:-}" || truthy "${CODEBUILD_BUILD_ID:-}"
+}
+
+# stdout_is_tty: a saída deste script é um terminal? Sem nenhum gancho de ambiente: os testes trocam esta função
+# numa CÓPIA do script (scripts/bootstrap/unix_test.sh), nunca no script distribuído.
+stdout_is_tty() { [ -t 1 ]; }
+
+# stdin_kind: tty, pipe ou file. O pipe é o do próprio "curl | sh" (a exceção atendida por /dev/tty); uma
+# entrada de arquivo ("sh unix.sh < arquivo") ou /dev/null não é alguém para usar a interface.
+stdin_kind() {
+  if [ -t 0 ]; then echo tty
+  elif [ -p /dev/stdin ]; then echo pipe
+  else echo file; fi
+}
+
+# launch_tui BINARIO: abre "toolkit tui" depois de instalar. Só com saída E entrada de terminal: a saída tem de
+# ser um terminal (com "> log" ou "| tee" não abre) e a entrada, um terminal ou o pipe do próprio curl | sh; neste
+# caso a TUI lê de /dev/tty (só como stdin; a saída continua sendo a do script). Nunca falha o bootstrap.
+launch_tui() {
+  tty="/dev/tty"
+  if truthy "${TOOLKIT_NO_LAUNCH:-}" || in_ci; then return 0; fi
+  if ! stdout_is_tty || [ "$(stdin_kind)" = file ] || ! ( : <"$tty" ) 2>/dev/null; then
+    echo "Instalação concluída. Sem terminal interativo para abrir a interface agora; para abri-la depois, rode: toolkit tui"
+    return 0
+  fi
+  if ! "$1" tui <"$tty"; then
+    echo "Instalação concluída, mas não foi possível abrir a interface. Para abri-la depois, rode: toolkit tui"
+  fi
+  return 0
+}
+
 sha256() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1
   elif command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1
@@ -37,10 +88,12 @@ sha256() {
 
 main() {
   DRY=0
+  NOLAUNCH=0
   for a in "$@"; do
     case "$a" in
       --dry-run) DRY=1 ;;
-      *) echo "toolkit: argumento desconhecido: $a (use --dry-run)" >&2; exit 2 ;;
+      --no-launch) NOLAUNCH=1 ;;
+      *) echo "toolkit: argumento desconhecido: $a (use --dry-run ou --no-launch)" >&2; exit 2 ;;
     esac
   done
 
@@ -103,6 +156,8 @@ main() {
     *":$dest:"*) ;;
     *) echo "Adicione ao PATH: export PATH=\"$dest:\$PATH\"" ;;
   esac
+  # O binário novo pode não estar no PATH desta sessão: abre pelo caminho completo.
+  if [ "$NOLAUNCH" = 0 ]; then launch_tui "$dest/toolkit"; fi
 }
 
 main "$@"
