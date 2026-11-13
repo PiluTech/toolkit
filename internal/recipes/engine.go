@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/PiluTech/toolkit/internal/diagfmt"
 	"github.com/PiluTech/toolkit/internal/exec"
 	"github.com/PiluTech/toolkit/internal/platform"
 	"github.com/PiluTech/toolkit/internal/resume"
@@ -113,6 +115,10 @@ type Engine struct {
 	Clock      func() time.Time
 	NewRunID   func() string
 	Log        *slog.Logger
+	// Details: etapas com render mostram também a saída original (tecla d na TUI, --detalhes na CLI).
+	Details bool
+	// Getenv escolhe o idioma do resumo (nil = os.Getenv): TOOLKIT_LANG, LC_ALL, LC_MESSAGES, LANG.
+	Getenv func(string) string
 }
 
 const maxOutput = 64 << 10
@@ -287,6 +293,25 @@ func (e *Engine) runAction(ctx context.Context, r *Recipe, st Step, a *Action, r
 	return res.ExitCode, clean(out), nil
 }
 
+// render resume a saída crua da etapa (campo render): o resumo no idioma do usuário e, no modo detalhes, a saída
+// original logo depois. Se o resumo não puder ser feito, mostra a original com um aviso: o diagnóstico nunca some.
+func (e *Engine) render(st Step, raw string) string {
+	get := e.Getenv
+	if get == nil {
+		get = os.Getenv
+	}
+	l := diagfmt.LangFromEnv(get)
+	summary, err := diagfmt.Render(st.Render, raw, l)
+	if err != nil || strings.TrimSpace(summary) == "" {
+		return clean(diagfmt.T(l, "(não deu para resumir esta saída; mostrando a original)", "(could not summarize this output; showing the original)", "(no se pudo resumir esta salida; se muestra la original)") + "\n" + raw)
+	}
+	summary = clean(summary)
+	if !e.Details {
+		return summary
+	}
+	return summary + "\n" + diagfmt.T(l, "-- Detalhes (saída original) --", "-- Details (original output) --", "-- Detalles (salida original) --") + "\n" + raw
+}
+
 // clean tira controles (ESC etc.), deixa \n e \t e limita o tamanho: a saída vai para o terminal e o log.
 func clean(s string) string {
 	if len(s) > maxOutput {
@@ -400,6 +425,9 @@ func (e *Engine) execStep(ctx context.Context, r *Recipe, st Step) (StepReport, 
 		sr.ExitCode = code
 		if !st.Run.OKExit(code) {
 			return fail(code, "saiu com código %d", code)
+		}
+		if st.Render != "" {
+			sr.Output = e.render(st, out)
 		}
 		rebootNeeded = rebootNeeded || (st.Reboot == RebootIfNeeded && code == 3010)
 	}
