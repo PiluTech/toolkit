@@ -62,6 +62,24 @@ steps:
           es) m_conf="Servidores DNS en uso"; m_noconf="no se encontró configuración de DNS"; m_resolve="Resolución de nombre"; m_ok="ok"; m_fail="falló"; m_nores="el comando 'dscacheutil' no está disponible"; m_badname="TOOLKIT_DIAG_NAME inválido (use letras, dígitos, punto, guion)" ;;
           *) m_conf="Servidores DNS em uso"; m_noconf="nenhuma configuração de DNS encontrada"; m_resolve="Resolução de nome"; m_ok="ok"; m_fail="falhou"; m_nores="o comando 'dscacheutil' não existe"; m_badname="TOOLKIT_DIAG_NAME inválido (use letras, dígitos, ponto, hífen)" ;;
         esac
+        mask() {
+          awk '
+            function priv(a, b) { return a == 10 || a == 127 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168) || (a == 169 && b == 254) || (a == 100 && b >= 64 && b <= 127) }
+            {
+              s = $0; o = ""
+              while (match(s, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
+                ip = substr(s, RSTART, RLENGTH); split(ip, p, ".")
+                o = o substr(s, 1, RSTART - 1) (priv(p[1] + 0, p[2] + 0) ? ip : p[1] ".x.x.x")
+                s = substr(s, RSTART + RLENGTH)
+              }
+              s = o s; o = ""
+              while (match(s, /[23][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]:[0-9a-fA-F:]+/)) {
+                o = o substr(s, 1, RSTART - 1) substr(s, RSTART, 4) ":x:x"
+                s = substr(s, RSTART + RLENGTH)
+              }
+              print o s
+            }'
+        }
         name="${TOOLKIT_DIAG_NAME:-example.com}"
         case "$name" in ''|-*|*[!A-Za-z0-9._-]*) printf '%s\n' "$m_badname"; exit 0 ;; esac
         printf '== %s\n' "$m_conf"
@@ -70,7 +88,7 @@ steps:
         printf '\n== %s: %s\n' "$m_resolve" "$name"
         if ! command -v dscacheutil >/dev/null 2>&1; then printf '%s\n' "$m_nores"; exit 0; fi
         res="$(dscacheutil -q host -a name "$name" 2>/dev/null | awk '/^(ip_address|ipv6_address):/ { print $2 }' | sort -u | head -n 6)"
-        if [ -n "$res" ]; then printf '%s\n%s\n' "$m_ok" "$res"; else printf '%s\n' "$m_fail"; fi
+        if [ -n "$res" ]; then printf '%s\n' "$m_ok"; printf '%s\n' "$res" | mask; else printf '%s\n' "$m_fail"; fi
     timeout: 30s
   - id: alcance
     name: Alcance por ping e por HTTPS
@@ -83,6 +101,24 @@ steps:
           es) m_ok="ok"; m_fail="falló"; m_gw="Gateway (ping)"; m_nogw="sin gateway predeterminado para probar"; m_ping="Ping"; m_noping="el comando 'ping' no está disponible"; m_https="HTTPS"; m_nocurl="el comando 'curl' no está disponible"; m_unexpected="respuesta inesperada"; m_badhost="TOOLKIT_DIAG_HOST inválido (use letras, dígitos, punto, dos puntos, guion)"; m_badurl="TOOLKIT_DIAG_URL inválida (use https:// seguido de host y ruta con letras, dígitos, . _ ~ : / -)" ;;
           *) m_ok="ok"; m_fail="falhou"; m_gw="Gateway (ping)"; m_nogw="sem gateway padrão para testar"; m_ping="Ping"; m_noping="o comando 'ping' não existe"; m_https="HTTPS"; m_nocurl="o comando 'curl' não existe"; m_unexpected="resposta inesperada"; m_badhost="TOOLKIT_DIAG_HOST inválido (use letras, dígitos, ponto, dois-pontos, hífen)"; m_badurl="TOOLKIT_DIAG_URL inválida (use https:// seguido de host e caminho com letras, dígitos, . _ ~ : / -)" ;;
         esac
+        mask() {
+          awk '
+            function priv(a, b) { return a == 10 || a == 127 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168) || (a == 169 && b == 254) || (a == 100 && b >= 64 && b <= 127) }
+            {
+              s = $0; o = ""
+              while (match(s, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
+                ip = substr(s, RSTART, RLENGTH); split(ip, p, ".")
+                o = o substr(s, 1, RSTART - 1) (priv(p[1] + 0, p[2] + 0) ? ip : p[1] ".x.x.x")
+                s = substr(s, RSTART + RLENGTH)
+              }
+              s = o s; o = ""
+              while (match(s, /[23][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]:[0-9a-fA-F:]+/)) {
+                o = o substr(s, 1, RSTART - 1) substr(s, RSTART, 4) ":x:x"
+                s = substr(s, RSTART + RLENGTH)
+              }
+              print o s
+            }'
+        }
         host="${TOOLKIT_DIAG_HOST:-1.1.1.1}"
         url="${TOOLKIT_DIAG_URL:-https://example.com/}"
         case "$host" in ''|-*|*[!A-Za-z0-9._:-]*) printf '%s\n' "$m_badhost"; exit 0 ;; esac
@@ -91,7 +127,7 @@ steps:
         probe() {
           if out="$(ping -c 3 -t 6 "$2" 2>&1)"; then st="$m_ok"; else st="$m_fail"; fi
           printf '%s: %s\n' "$1" "$st"
-          printf '%s\n' "$out" | tail -n 2
+          printf '%s\n' "$out" | tail -n 2 | mask
         }
         if command -v ping >/dev/null 2>&1; then
           gw="$(route -n get default 2>/dev/null | awk '/gateway:/ { print $2; exit }')"
@@ -103,13 +139,13 @@ steps:
         fi
         printf '\n'
         if command -v curl >/dev/null 2>&1; then
-          if res="$(curl -sS -L --proto '=https' --proto-redir '=https' --max-redirs 3 --connect-timeout 5 --max-time 10 -o /dev/null -w '%{http_code} %{time_connect} %{time_appconnect} %{time_total}' "$url" 2>&1)"; then
+          if res="$(env -u SSLKEYLOGFILE curl -q -sS -L --proto '=https' --proto-redir '=https' --max-redirs 3 --connect-timeout 5 --max-time 10 -o /dev/null -w '%{http_code} %{time_connect} %{time_appconnect} %{time_total}' "$url" 2>&1)"; then
             set -- $res
             case "$1" in 2*|3*) st="$m_ok" ;; *) st="$m_unexpected" ;; esac
             printf '%s %s: %s (HTTP %s; tcp %s s; tls %s s; total %s s)\n' "$m_https" "$url" "$st" "$1" "$2" "$3" "$4"
           else
             printf '%s %s: %s\n' "$m_https" "$url" "$m_fail"
-            printf '%s\n' "$res" | tail -n 1
+            printf '%s\n' "$res" | tail -n 1 | mask
           fi
         else
           printf '%s\n' "$m_nocurl"

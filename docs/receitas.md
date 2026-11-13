@@ -208,14 +208,18 @@ etapa sem chamar nada):
 | `TOOLKIT_DIAG_NAME` | `example.com` | letras, dígitos, `.`, `_`, `-`; nunca começa com `-` |
 | `TOOLKIT_DIAG_URL` | `https://example.com/` | só `https://`, com host e caminho em letras, dígitos e `. _ ~ : / -` |
 
-O `curl` só segue redirecionamentos para `https` (`--proto-redir =https`), no máximo 3, com `--connect-timeout 5` e
-`--max-time 10`. O corpo da resposta é descartado.
+O `curl` roda como `env -u SSLKEYLOGFILE curl -q ...`: o `-q` (primeiro argumento) impede a leitura da `.curlrc` do usuário
+(que poderia mandar corpo, `Authorization`, `request`, gravar `cookie-jar` ou `trace`) e a variável de chave TLS não
+chega a ele; só segue redirecionamentos para `https` (`--proto-redir =https`), no máximo 3, com `--connect-timeout 5` e
+`--max-time 10`. O corpo da resposta é descartado. O `nslookup` (último recurso no Linux) roda com `HOME=/`, sem ler o
+`~/.nslookuprc`; `ping`, `ip`, `ss`, `getent`, `nmcli`, `route` e `netstat` não leem configuração do usuário.
 
 **Dados sensíveis.** A saída mostra no terminal (a engine nunca grava a saída dos comandos no log) e mesmo assim:
 o MAC nunca aparece; o nome da rede Wi-Fi (SSID) vira `[nome oculto]`; endereços IPv4 públicos viram `A.x.x.x`
 (privados, loopback, link-local e CGNAT continuam) e IPv6 globais viram `2001:x:x`; não há consulta de "meu IP
-público"; as portas aparecem sem endereço (só "só esta máquina" ou "toda a rede"). Os alvos configurados, os servidores
-DNS e o gateway aparecem como são.
+público"; as portas aparecem sem endereço (só "só esta máquina" ou "toda a rede"). As respostas da resolução de DNS e as
+caudas de erro do ping e do curl passam pela mesma máscara (se o nome resolver para a própria máquina, o IP público
+não reaparece). Exceção documentada: os alvos configurados, os servidores DNS e o gateway aparecem como são.
 
 **Idioma.** A saída sai em pt-BR por padrão e em `en` ou `es` por `TOOLKIT_LANG`, `LC_ALL`, `LC_MESSAGES` ou `LANG`
 (nessa ordem; `pt_BR`, `en_US`, `es_ES`... e qualquer outro idioma cai em pt-BR). Cada etapa tem um bloco

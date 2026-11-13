@@ -149,7 +149,7 @@ func TestDiagRedeChavesDeIdiomaIguaisNosTresIdiomas(t *testing.T) {
 
 // ---- execução com ferramentas falsas ----
 
-var realTools = []string{"awk", "sed", "sort", "uniq", "head", "tail", "grep", "tr", "cut", "cat"}
+var realTools = []string{"awk", "sed", "sort", "uniq", "head", "tail", "grep", "tr", "cut", "cat", "env"}
 
 type fakeEnv struct {
 	dir string // PATH
@@ -191,7 +191,7 @@ func (f fakeEnv) runStep(t *testing.T, script string, env ...string) (out string
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", script)
 	cmd.Dir = t.TempDir()
-	cmd.Env = append([]string{"PATH=" + f.dir, "STUB_LOG=" + f.log, "HOME=" + cmd.Dir}, env...)
+	cmd.Env = append([]string{"PATH=" + f.dir, "STUB_LOG=" + f.log, "STUB_ENVLOG=" + f.log + ".env", "HOME=" + cmd.Dir}, env...)
 	var b bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &b, &b
 	err := cmd.Run()
@@ -224,8 +224,8 @@ func stepScript(t *testing.T, r *recipes.Recipe, id string) string {
 
 const linuxIP = `case "$*" in
 "-brief address show") cat <<'E'
-lo               UNKNOWN        127.0.0.1/8 ::1/128 
-eth0             UP             192.168.1.10/24 203.0.113.7/32 2001:db8:abcd:12::5/64 fe80::1c2:3dff:fe4e:5f60/64 
+lo               UNKNOWN        127.0.0.1/8 ::1/128
+eth0             UP             192.168.1.10/24 203.0.113.7/32 2001:db8:abcd:12::5/64 fe80::1c2:3dff:fe4e:5f60/64
 E
 ;;
 "-o link show") cat <<'E'
@@ -237,9 +237,12 @@ E
 "-6 route show default") echo "default via fe80::1 dev eth0 proto ra metric 1024 expires 1700sec" ;;
 esac`
 
-const pingOK = `printf 'PING x (x) 56(84) bytes of data.\n64 bytes from x: icmp_seq=1 ttl=57 time=10.1 ms\n\n--- x ping statistics ---\n3 packets transmitted, 3 received, 0%% packet loss, time 2003ms\nrtt min/avg/max/mdev = 10.1/11.2/12.3/0.9 ms\n'`
+const pingOK = `if [ -n "${STUB_PING_ERR:-}" ]; then printf 'From 203.0.113.7 icmp_seq=1 Destination Host Unreachable\n3 packets transmitted, 0 received, +3 errors, 100%% packet loss, time 2003ms\n'; exit 1; fi
+printf 'PING x (x) 56(84) bytes of data.\n64 bytes from x: icmp_seq=1 ttl=57 time=10.1 ms\n\n--- x ping statistics ---\n3 packets transmitted, 3 received, 0%% packet loss, time 2003ms\nrtt min/avg/max/mdev = 10.1/11.2/12.3/0.9 ms\n'`
 
-const curlOK = `printf '200 0.011 0.045 0.098'`
+const curlOK = `printf 'ENV SSLKEYLOGFILE=%s\n' "${SSLKEYLOGFILE:-}" >>"$STUB_ENVLOG"
+if [ -n "${STUB_CURL_ERR:-}" ]; then echo "curl: (7) Failed to connect to 203.0.113.7 port 443" >&2; exit 7; fi
+printf '200 0.011 0.045 0.098'`
 
 func linuxFakes() map[string]string {
 	return map[string]string{
@@ -311,7 +314,7 @@ func re(ss ...string) []*regexp.Regexp {
 	return out
 }
 
-const curlArgs = `curl -sS -L --proto =https --proto-redir =https --max-redirs 3 --connect-timeout 5 --max-time 10 -o /dev/null -w %\{http_code\} %\{time_connect\} %\{time_appconnect\} %\{time_total\} https://[A-Za-z0-9._~:/-]+`
+const curlArgs = `curl -q -sS -L --proto =https --proto-redir =https --max-redirs 3 --connect-timeout 5 --max-time 10 -o /dev/null -w %\{http_code\} %\{time_connect\} %\{time_appconnect\} %\{time_total\} https://[A-Za-z0-9._~:/-]+`
 
 var diagCases = []osCase{
 	{platform.Linux, linuxFakes, re(
@@ -517,5 +520,122 @@ func TestDiagRedeSemFerramentasOpcionaisAvisaEContinua(t *testing.T) {
 		if !strings.Contains(outs["alcance"], "o comando 'ping' não existe") || !strings.Contains(outs["alcance"], "o comando 'curl' não existe") {
 			t.Errorf("%v: alcance sem ping/curl: %q", c.os, outs["alcance"])
 		}
+	}
+}
+
+// Lupa #55 (1): o curl NUNCA lê a .curlrc do usuário (data-binary, Authorization, request=POST, cookie-jar, trace) nem
+// grava chave TLS (SSLKEYLOGFILE). Prova com o curl REAL contra uma porta recusada (sem rede) e uma .curlrc fictícia
+// em HOME e em CURL_HOME: nada de trace, cookie-jar nem corpo gravado; sem -q o curl criaria esses arquivos.
+func TestDiagRedeCurlIgnoraConfiguracaoDoUsuario(t *testing.T) {
+	real, err := exec.LookPath("curl")
+	if err != nil {
+		t.Skip("curl real ausente")
+	}
+	for _, c := range diagCases {
+		r := diagRecipe(t, c.os)
+		script := stepScript(t, r, "alcance")
+		for _, withQ := range []bool{true, false} {
+			f := newToolbox(t, map[string]string{"ping": pingOK}) // sem curl falso
+			if err := os.Symlink(real, filepath.Join(f.dir, "curl")); err != nil {
+				t.Fatal(err)
+			}
+			home := t.TempDir()
+			trace, jar, body, keylog := filepath.Join(home, "trace.log"), filepath.Join(home, "cookies.txt"), filepath.Join(home, "saida.bin"), filepath.Join(home, "keys.log")
+			rc := "trace = \"" + trace + "\"\ncookie-jar = \"" + jar + "\"\nrequest = \"POST\"\ndata-binary = \"segredo=1\"\nheader = \"Authorization: Bearer SEGREDO\"\noutput = \"" + body + "\"\n"
+			for _, name := range []string{".curlrc", "_curlrc"} {
+				if err := os.WriteFile(filepath.Join(home, name), []byte(rc), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			sc := script
+			if !withQ { // controle: sem o -q a mesma .curlrc É lida (o teste tem de pegar a regressão)
+				sc = strings.Replace(sc, "curl -q ", "curl ", 1)
+			}
+			out, _, code := f.runStep(t, sc, "HOME="+home, "CURL_HOME="+home, "SSLKEYLOGFILE="+keylog, "TOOLKIT_DIAG_URL=https://127.0.0.1:1/")
+			if code != 0 {
+				t.Fatalf("%v: status %d:\n%s", c.os, code, out)
+			}
+			var leaked []string
+			for _, p := range []string{trace, jar, body, keylog} {
+				if _, err := os.Stat(p); err == nil {
+					leaked = append(leaked, filepath.Base(p))
+				}
+			}
+			if withQ && len(leaked) != 0 {
+				t.Errorf("%v: com -q o curl não pode ler a .curlrc nem gravar nada, mas criou %v", c.os, leaked)
+			}
+			if !withQ && len(leaked) == 0 {
+				t.Errorf("%v: o controle sem -q deveria ler a .curlrc fictícia (senão o teste não prova nada)", c.os)
+			}
+		}
+	}
+}
+
+// -q é o PRIMEIRO argumento do curl, e a chave TLS (SSLKEYLOGFILE) não chega ao curl.
+func TestDiagRedeCurlComQPrimeiroESemSSLKEYLOGFILE(t *testing.T) {
+	for _, c := range diagCases {
+		f := newToolbox(t, c.fakes())
+		_, calls, _ := f.runStep(t, stepScript(t, diagRecipe(t, c.os), "alcance"), "SSLKEYLOGFILE=/tmp/nao-pode.log")
+		found := false
+		for _, call := range calls {
+			if strings.HasPrefix(call, "curl ") {
+				found = true
+				if !strings.HasPrefix(call, "curl -q ") {
+					t.Errorf("%v: -q deve ser o primeiro argumento do curl: %q", c.os, call)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("%v: curl não foi chamado", c.os)
+		}
+		data, _ := os.ReadFile(f.log + ".env")
+		if strings.Contains(string(data), "/tmp/nao-pode.log") || !strings.Contains(string(data), "SSLKEYLOGFILE=\n") {
+			t.Errorf("%v: SSLKEYLOGFILE chegou ao curl: %q", c.os, data)
+		}
+	}
+}
+
+// Lupa #55 (2): se o DNS devolve o IP público da própria máquina (o mesmo que a etapa interfaces mascarou), ele não
+// reaparece; o mesmo vale para as caudas de erro do ping e do curl. Alvo, servidor DNS e gateway continuam como são.
+func TestDiagRedeMascaraRespostasDeDNSEErrosDeRede(t *testing.T) {
+	for _, c := range diagCases {
+		fakes := c.fakes()
+		own4, own6 := "203.0.113.7", "2001:db8:abcd:12::5"
+		if c.os == platform.Linux {
+			fakes["getent"] = "printf '" + own4 + "   STREAM example.com\n" + own6 + " STREAM example.com\n192.168.1.50 STREAM example.com\n'"
+		} else {
+			fakes["dscacheutil"] = "printf 'name: example.com\nipv6_address: " + own6 + "\n\nname: example.com\nip_address: " + own4 + "\n\nname: example.com\nip_address: 192.168.1.50\n'"
+		}
+		f := newToolbox(t, fakes)
+		r := diagRecipe(t, c.os)
+		dns, _, _ := f.runStep(t, stepScript(t, r, "dns"))
+		if strings.Contains(dns, own4) || strings.Contains(dns, own6) || strings.Contains(dns, "2001:db8") {
+			t.Errorf("%v: o IP público da própria máquina reapareceu no DNS:\n%s", c.os, dns)
+		}
+		if !strings.Contains(dns, "203.x.x.x") || !strings.Contains(dns, "2001:x:x") || !strings.Contains(dns, "192.168.1.50") || !strings.Contains(dns, "192.168.1.1") {
+			t.Errorf("%v: máscara/preservação do DNS erradas:\n%s", c.os, dns)
+		}
+		alc, _, code := f.runStep(t, stepScript(t, r, "alcance"), "STUB_PING_ERR=1", "STUB_CURL_ERR=1")
+		if code != 0 || strings.Contains(alc, "203.0.113.7") {
+			t.Errorf("%v: cauda de erro do ping/curl com IP público (status %d):\n%s", c.os, code, alc)
+		}
+		if !strings.Contains(alc, "203.x.x.x") || !strings.Contains(alc, "falhou") {
+			t.Errorf("%v: erro mascarado ausente:\n%s", c.os, alc)
+		}
+		// o alvo configurado continua visível (exceção documentada)
+		if !strings.Contains(alc, "https://example.com/") || !strings.Contains(alc, "1.1.1.1") {
+			t.Errorf("%v: alvo deveria aparecer como é:\n%s", c.os, alc)
+		}
+	}
+}
+
+// nslookup (terceira opção no Linux) não lê o ~/.nslookuprc do usuário: roda com HOME=/.
+func TestDiagRedeLinuxNslookupNaoLeConfigDoUsuario(t *testing.T) {
+	fakes := map[string]string{"nslookup": `printf 'HOME=%s\n' "$HOME" >>"$STUB_ENVLOG"; printf 'Server: 192.168.1.1\nAddress: 192.168.1.1#53\n\nName: example.com\nAddress: 93.184.216.34\n'`}
+	f := newToolbox(t, fakes)
+	out, _, code := f.runStep(t, stepScript(t, diagRecipe(t, platform.Linux), "dns"))
+	data, _ := os.ReadFile(f.log + ".env")
+	if code != 0 || !strings.Contains(string(data), "HOME=/\n") || !strings.Contains(out, "93.x.x.x") {
+		t.Errorf("nslookup deve rodar com HOME=/ e a resposta sair mascarada (status %d):\n%s\n%s", code, data, out)
 	}
 }
