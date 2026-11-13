@@ -33,10 +33,12 @@ fetch() {
   fi
 }
 
-# truthy VALOR: mesma regra do envOn do Go: ligado = definido e, sem espaços e sem distinguir maiúsculas,
-# diferente de vazio, 0, false, no e off.
+# truthy VALOR: mesma regra do envOn do Go: ligado = definido e, sem espaços NAS PONTAS e sem distinguir
+# maiúsculas, diferente de vazio, 0, false, no e off ("f alse" não é "false").
 truthy() {
-  v="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d ' \t')"
+  v="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  v="${v#"${v%%[![:space:]]*}"}"
+  v="${v%"${v##*[![:space:]]}"}"
   case "$v" in
     "" | 0 | false | no | off) return 1 ;;
   esac
@@ -50,17 +52,13 @@ in_ci() {
     truthy "${TEAMCITY_VERSION:-}" || truthy "${JENKINS_URL:-}" || truthy "${CODEBUILD_BUILD_ID:-}"
 }
 
-# stdout_is_tty: a saída deste script é um terminal? (TOOLKIT_TEST_STDOUT=tty|notty só existe para testes)
-stdout_is_tty() {
-  case "${TOOLKIT_TEST_STDOUT:-}" in tty) return 0 ;; notty) return 1 ;; esac
-  [ -t 1 ]
-}
+# stdout_is_tty: a saída deste script é um terminal? Sem nenhum gancho de ambiente: os testes trocam esta função
+# numa CÓPIA do script (scripts/bootstrap/unix_test.sh), nunca no script distribuído.
+stdout_is_tty() { [ -t 1 ]; }
 
 # stdin_kind: tty, pipe ou file. O pipe é o do próprio "curl | sh" (a exceção atendida por /dev/tty); uma
 # entrada de arquivo ("sh unix.sh < arquivo") ou /dev/null não é alguém para usar a interface.
-# (TOOLKIT_TEST_STDIN só existe para testes.)
 stdin_kind() {
-  case "${TOOLKIT_TEST_STDIN:-}" in tty | pipe | file) echo "$TOOLKIT_TEST_STDIN"; return 0 ;; esac
   if [ -t 0 ]; then echo tty
   elif [ -p /dev/stdin ]; then echo pipe
   else echo file; fi
@@ -68,10 +66,9 @@ stdin_kind() {
 
 # launch_tui BINARIO: abre "toolkit tui" depois de instalar. Só com saída E entrada de terminal: a saída tem de
 # ser um terminal (com "> log" ou "| tee" não abre) e a entrada, um terminal ou o pipe do próprio curl | sh; neste
-# caso a TUI lê de /dev/tty (só como stdin; a saída continua sendo a do script). TOOLKIT_TTY só existe para
-# testes. Nunca falha o bootstrap.
+# caso a TUI lê de /dev/tty (só como stdin; a saída continua sendo a do script). Nunca falha o bootstrap.
 launch_tui() {
-  tty="${TOOLKIT_TTY:-/dev/tty}"
+  tty="/dev/tty"
   if truthy "${TOOLKIT_NO_LAUNCH:-}" || in_ci; then return 0; fi
   if ! stdout_is_tty || [ "$(stdin_kind)" = file ] || ! ( : <"$tty" ) 2>/dev/null; then
     echo "Instalação concluída. Sem terminal interativo para abrir a interface agora; para abri-la depois, rode: toolkit tui"
