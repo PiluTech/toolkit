@@ -105,3 +105,13 @@ const (
 	InstallFlatpakNote     = "aviso: o flatpak baixa também os runtimes e as dependências do app (podem ser GB) e só instala no sistema (--system); \"já instalado\" vale também para a instalação --user"
 	FlagNoUpdateCheck      = "não consulta nem avisa de versão nova (também: TOOLKIT_NO_UPDATE_CHECK=1)"
 )
+
+// Textos do comando tui.
+const (
+	TUIShort = "Abre a interface de terminal (TUI)"
+	TUILong  = "Abre a interface de terminal: apps, receitas, diagnósticos e log. É o mesmo que rodar o toolkit sem argumentos, mas diz por que não abriu quando não há terminal interativo."
+
+	ErrTUITerm             = "a TUI precisa da variável TERM com um terminal de verdade (ela está vazia ou é \"dumb\"): rode num terminal comum ou use os comandos (list, install, recipe) sem a TUI"
+	ErrTUINoTerminal       = "a TUI precisa de um terminal interativo na entrada e na saída (nada redirecionado ou em pipe): rode direto no terminal, ou use os comandos (list, install, recipe) sem a TUI"
+	ErrTUINoConsoleWindows = "a TUI precisa de um console interativo do Windows (entrada e saída sem redirecionamento): abra o Windows Terminal, o PowerShell ou o cmd e rode \"toolkit tui\"; no Git Bash (mintty) use \"winpty toolkit.exe tui\"; ou use os comandos (list, install, recipe) sem a TUI"
+)
