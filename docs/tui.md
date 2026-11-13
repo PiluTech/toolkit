@@ -7,7 +7,9 @@ redimensionar). A A é a única que mostra o plano inteiro em 80 × 24 e funcion
 
 A TUI nunca é o único caminho: tudo existe sem ela (`toolkit list`, `install`, `--dry-run`, `--yes`,
 `recipe list|run|status|reset`, `resume`, `--no-tui`, log em arquivo). `toolkit` sem argumentos abre a TUI
-só com terminal; com `--no-tui`, sem terminal ou com `TERM=dumb`, mostra a ajuda.
+só com terminal; com `--no-tui`, sem terminal ou (fora do Windows) com `TERM` vazio ou `dumb`, mostra a ajuda. No Windows o
+`TERM` não existe (cmd, PowerShell, Windows Terminal) e por isso não conta: basta um console interativo na entrada e na
+saída. `toolkit tui` abre a TUI de forma explícita e, se não puder, diz por quê (no Git Bash/mintty use `winpty toolkit.exe tui`).
 
 ## Pacotes
 

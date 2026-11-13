@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -33,7 +34,7 @@ func TestShouldOpenTUI(t *testing.T) {
 		{"TERM só com espaços", true, true, false, "  ", false},
 	}
 	for _, c := range cases {
-		if got := shouldOpenTUI(c.stdin, c.stdout, c.no, c.term); got != c.want {
+		if got := shouldOpenTUI("linux", c.stdin, c.stdout, c.no, c.term); got != c.want {
 			t.Errorf("%s: %v, quero %v", c.name, got, c.want)
 		}
 	}
@@ -457,5 +458,25 @@ func TestTuiSubcommandWithoutTerminalExplainsWhy(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: erro %v, quero mencionar %q", name, err, c.want)
 		}
+	}
+}
+
+// Com as dependências REAIS (GOOS e detecção de console do próprio SO), `toolkit tui` sem console devolve o erro
+// explicativo do SO, nunca a ajuda em silêncio. No runner do Windows isto exercita o caminho real do bug.
+func TestTuiSubcommandRealDepsWithoutConsole(t *testing.T) {
+	if fileIsTerminal(os.Stdin) {
+		t.Skip("o teste roda com a entrada ligada a um terminal de verdade")
+	}
+	var o, e bytes.Buffer
+	code := ExecuteWith(context.Background(), &o, &e, DefaultDeps(), []string{"tui", "--no-update-check"})
+	if code == 0 {
+		t.Fatalf("sem console `toolkit tui` deve falhar:\n%s%s", o.String(), e.String())
+	}
+	want := "terminal interativo"
+	if runtime.GOOS == "windows" {
+		want = "console interativo do Windows"
+	}
+	if !strings.Contains(e.String(), want) {
+		t.Fatalf("erro sem %q:\n%s", want, e.String())
 	}
 }

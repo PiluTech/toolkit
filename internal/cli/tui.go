@@ -13,19 +13,67 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/PiluTech/toolkit/internal/buildinfo"
+	"github.com/PiluTech/toolkit/internal/msg"
 	"github.com/PiluTech/toolkit/internal/providers"
 	"github.com/PiluTech/toolkit/internal/recipes"
 	"github.com/PiluTech/toolkit/internal/tui"
 )
 
-// shouldOpenTUI decide se `toolkit` sem argumentos abre a TUI: só com terminal de verdade (entrada E saída),
-// sem --no-tui e sem TERM=dumb (ou vazio). Em qualquer outro caso o chamador mostra a ajuda.
-func shouldOpenTUI(stdinTTY, stdoutTTY bool, noTUI bool, term string) bool {
-	if noTUI || !stdinTTY || !stdoutTTY {
-		return false
+// Motivos pelos quais a TUI não abre (tuiBlocked).
+const (
+	blockNone   = ""
+	blockStdin  = "stdin"
+	blockStdout = "stdout"
+	blockTerm   = "term"
+)
+
+// tuiBlocked diz por que a TUI não pode abrir ("" = pode): precisa de terminal de verdade na entrada E na saída
+// e, fora do Windows, de TERM definido e diferente de dumb. No Windows (cmd, PowerShell, Windows Terminal) o
+// TERM não existe e o console é detectado pelo próprio SO, então a variável não conta.
+func tuiBlocked(goos string, stdinTTY, stdoutTTY bool, term string) string {
+	switch {
+	case !stdinTTY:
+		return blockStdin
+	case !stdoutTTY:
+		return blockStdout
+	case goos == "windows":
+		return blockNone
 	}
 	t := strings.ToLower(strings.TrimSpace(term))
-	return t != "" && t != "dumb"
+	if t == "" || t == "dumb" {
+		return blockTerm
+	}
+	return blockNone
+}
+
+// shouldOpenTUI decide se `toolkit` sem argumentos abre a TUI: com terminal de verdade, sem --no-tui e
+// (fora do Windows) sem TERM=dumb ou vazio. Em qualquer outro caso o chamador mostra a ajuda.
+func shouldOpenTUI(goos string, stdinTTY, stdoutTTY bool, noTUI bool, term string) bool {
+	return !noTUI && tuiBlocked(goos, stdinTTY, stdoutTTY, term) == blockNone
+}
+
+// newTUICmd é `toolkit tui`: abre a TUI de forma explícita e, se não puder, diz por quê (o `toolkit` sem
+// argumentos só mostra a ajuda).
+func newTUICmd(deps Deps, rd RecipeDeps, notifier *updateNotifier) *cobra.Command {
+	return &cobra.Command{
+		Use:   "tui",
+		Short: msg.TUIShort,
+		Long:  msg.TUILong,
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			switch tuiBlocked(deps.GOOS, deps.interactive(), deps.TUI.stdoutTTY(), deps.TUI.term()) {
+			case blockNone:
+				return openTUI(cmd, deps, rd, notifier)
+			case blockTerm:
+				return errors.New(msg.ErrTUITerm)
+			default:
+				if deps.GOOS == "windows" {
+					return errors.New(msg.ErrTUINoConsoleWindows)
+				}
+				return errors.New(msg.ErrTUINoTerminal)
+			}
+		},
+	}
 }
 
 func stdoutIsTerminal() bool { return fileIsTerminal(os.Stdout) }
@@ -65,9 +113,14 @@ func (d TUIDeps) run(ctx context.Context, o tui.Options, tabs ...tui.Tab) error 
 
 // runRoot é o `toolkit` sem argumentos: abre a TUI quando há terminal, senão mostra a ajuda.
 func runRoot(cmd *cobra.Command, deps Deps, rd RecipeDeps, noTUI bool, notifier *updateNotifier) error {
-	if !shouldOpenTUI(deps.interactive(), deps.TUI.stdoutTTY(), noTUI, deps.TUI.term()) {
+	if !shouldOpenTUI(deps.GOOS, deps.interactive(), deps.TUI.stdoutTTY(), noTUI, deps.TUI.term()) {
 		return cmd.Help()
 	}
+	return openTUI(cmd, deps, rd, notifier)
+}
+
+// openTUI monta as abas e abre a TUI (a decisão de abrir já foi tomada).
+func openTUI(cmd *cobra.Command, deps Deps, rd RecipeDeps, notifier *updateNotifier) error {
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
