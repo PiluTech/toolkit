@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -33,7 +34,7 @@ func TestShouldOpenTUI(t *testing.T) {
 		{"TERM só com espaços", true, true, false, "  ", false},
 	}
 	for _, c := range cases {
-		if got := shouldOpenTUI(c.stdin, c.stdout, c.no, c.term); got != c.want {
+		if got := shouldOpenTUI("linux", c.stdin, c.stdout, c.no, c.term); got != c.want {
 			t.Errorf("%s: %v, quero %v", c.name, got, c.want)
 		}
 	}
@@ -42,9 +43,16 @@ func TestShouldOpenTUI(t *testing.T) {
 // rootRun executa `toolkit [args]` com terminais e TERM injetados e um tui.Run espião.
 func rootRun(t *testing.T, stdin, stdout bool, term string, args ...string) (out string, opened bool, tabs []tui.Tab) {
 	t.Helper()
+	return rootRunOS(t, "linux", stdin, stdout, term, args...)
+}
+
+// rootRunOS é o rootRun com o SO escolhido (no Windows o TERM não existe).
+func rootRunOS(t *testing.T, goos string, stdin, stdout bool, term string, args ...string) (out string, opened bool, tabs []tui.Tab) {
+	t.Helper()
 	var o, e bytes.Buffer
 	deps := Deps{
-		GOOS: "linux", EmbeddedYML: []byte(embedded), Interactive: func() bool { return stdin },
+		GOOS: goos, EmbeddedYML: []byte(embedded), Interactive: func() bool { return stdin },
+		UpdateCheck: UpdateCheckDeps{Env: func(string) string { return "" }}, // hermético: o CI do runner não vaza
 		TUI: TUIDeps{
 			StdoutIsTerminal: func() bool { return stdout },
 			Term:             func() string { return term },
@@ -377,5 +385,161 @@ func TestStdinAndStdoutShareTheSameTerminalDetection(t *testing.T) {
 	defer func() { os.Stdin = old }()
 	if stdinIsTerminal() != fileIsTerminal(zero) || stdinIsTerminal() {
 		t.Fatal("stdin=/dev/zero não é terminal, e stdin e saída usam a mesma detecção (fileIsTerminal)")
+	}
+}
+
+// Bug "toolkit tui não abre no Windows": cmd, PowerShell e Windows Terminal NÃO definem TERM, e a TUI
+// recusava abrir com TERM vazio (caía na ajuda em silêncio). No Windows o TERM não conta.
+func TestRootOpensTUIOnWindowsWithoutTERM(t *testing.T) {
+	for _, term := range []string{"", "  "} {
+		_, opened, tabs := rootRunOS(t, "windows", true, true, term)
+		if !opened || len(tabs) != 4 {
+			t.Fatalf("no Windows com TERM=%q a TUI deve abrir: opened=%v abas=%d", term, opened, len(tabs))
+		}
+	}
+}
+
+// Fora do Windows o TERM vazio continua recusando; no Windows --no-tui, entrada ou saída redirecionada também.
+func TestRootWindowsStillRespectsNoTUIAndRedirects(t *testing.T) {
+	for name, c := range map[string]struct {
+		stdin, stdout bool
+		args          []string
+	}{
+		"--no-tui":            {true, true, []string{"--no-tui"}},
+		"entrada sem console": {false, true, nil},
+		"saída redirecionada": {true, false, nil},
+	} {
+		_, opened, _ := rootRunOS(t, "windows", c.stdin, c.stdout, "", c.args...)
+		if opened {
+			t.Errorf("%s: abriu a TUI", name)
+		}
+	}
+	for _, goos := range []string{"linux", "darwin"} {
+		if _, opened, _ := rootRunOS(t, goos, true, true, ""); opened {
+			t.Errorf("%s com TERM vazio não abre a TUI", goos)
+		}
+	}
+}
+
+// `toolkit tui` abre a TUI de forma explícita (e diz por que não abriu, em vez de mostrar a ajuda).
+func TestTuiSubcommandOpensTUI(t *testing.T) {
+	for _, goos := range []string{"windows", "linux"} {
+		term := ""
+		if goos == "linux" {
+			term = "xterm"
+		}
+		_, opened, tabs := rootRunOS(t, goos, true, true, term, "tui")
+		if !opened || len(tabs) != 4 {
+			t.Fatalf("%s: `toolkit tui` deve abrir a TUI: opened=%v abas=%d", goos, opened, len(tabs))
+		}
+	}
+}
+
+func TestTuiSubcommandWithoutTerminalExplainsWhy(t *testing.T) {
+	for name, c := range map[string]struct {
+		goos          string
+		stdin, stdout bool
+		term, want    string
+	}{
+		"windows sem console":   {"windows", false, true, "", "Windows Terminal"},
+		"windows redirecionado": {"windows", true, false, "", "Windows Terminal"},
+		"linux TERM=dumb":       {"linux", true, true, "dumb", "TERM"},
+		"linux sem terminal":    {"linux", false, false, "xterm", "terminal"},
+	} {
+		var o, e bytes.Buffer
+		deps := Deps{GOOS: c.goos, EmbeddedYML: []byte(embedded), Interactive: func() bool { return c.stdin },
+			TUI: TUIDeps{StdoutIsTerminal: func() bool { return c.stdout }, Term: func() string { return c.term },
+				Run: func(context.Context, tui.Options, ...tui.Tab) error {
+					t.Errorf("%s: não deveria abrir", name)
+					return nil
+				}}}
+		cmd := NewRootCmdWith(&o, &e, deps)
+		cmd.SetArgs([]string{"tui"})
+		err := cmd.ExecuteContext(context.Background())
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: erro %v, quero mencionar %q", name, err, c.want)
+		}
+	}
+}
+
+// Com as dependências REAIS (GOOS e detecção de console do próprio SO), `toolkit tui` sem console devolve o erro
+// explicativo do SO, nunca a ajuda em silêncio. No runner do Windows isto exercita o caminho real do bug.
+func TestTuiSubcommandRealDepsWithoutConsole(t *testing.T) {
+	if fileIsTerminal(os.Stdin) {
+		t.Skip("o teste roda com a entrada ligada a um terminal de verdade")
+	}
+	var o, e bytes.Buffer
+	code := ExecuteWith(context.Background(), &o, &e, DefaultDeps(), []string{"tui", "--no-update-check"})
+	if code == 0 {
+		t.Fatalf("sem console `toolkit tui` deve falhar:\n%s%s", o.String(), e.String())
+	}
+	want := "terminal interativo"
+	if runtime.GOOS == "windows" {
+		want = "console interativo do Windows"
+	}
+	if !strings.Contains(e.String(), want) {
+		t.Fatalf("erro sem %q:\n%s", want, e.String())
+	}
+}
+
+// Lupa #51: em CI a abertura AUTOMÁTICA nunca abre a TUI, mesmo com console/PTY do executor (no Windows o TERM
+// vazio também passa). Mostra a ajuda e nunca chama Run. Semântica de envOn: vazio/0/false não ativam.
+func TestRootNeverAutoOpensTUIInCI(t *testing.T) {
+	run := func(goos, term string, env map[string]string) (out string, opened bool) {
+		var o, e bytes.Buffer
+		deps := Deps{GOOS: goos, EmbeddedYML: []byte(embedded), Interactive: func() bool { return true },
+			UpdateCheck: UpdateCheckDeps{Env: func(k string) string { return env[k] }},
+			TUI: TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return term },
+				Run: func(context.Context, tui.Options, ...tui.Tab) error { opened = true; return nil }}}
+		cmd := NewRootCmdWith(&o, &e, deps)
+		cmd.SetArgs([]string{"--no-update-check"})
+		if err := cmd.ExecuteContext(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		return o.String(), opened
+	}
+	for _, v := range []string{"CI", "GITHUB_ACTIONS", "TF_BUILD", "GITLAB_CI", "BUILDKITE", "CIRCLECI", "TRAVIS", "APPVEYOR", "TEAMCITY_VERSION", "JENKINS_URL", "CODEBUILD_BUILD_ID"} {
+		for _, c := range []struct{ goos, term string }{{"windows", ""}, {"linux", "xterm"}, {"darwin", "xterm-256color"}} {
+			out, opened := run(c.goos, c.term, map[string]string{v: "1"})
+			if opened {
+				t.Errorf("%s=1 em %s: a TUI abriu em CI", v, c.goos)
+			}
+			if !strings.Contains(out, "install") {
+				t.Errorf("%s=1 em %s: sem ajuda:\n%s", v, c.goos, out)
+			}
+		}
+	}
+	// vazio, 0 e false NÃO ativam (a TUI abre normalmente)
+	for _, val := range []string{"", "0", "false", "FALSE"} {
+		if _, opened := run("windows", "", map[string]string{"CI": val}); !opened {
+			t.Errorf("CI=%q não deveria bloquear", val)
+		}
+	}
+}
+
+// `toolkit tui` explícito é pedido do usuário: ignora CI (continua recusando descritor que não é terminal).
+func TestTuiSubcommandIgnoresCIButNeedsTerminal(t *testing.T) {
+	var o, e bytes.Buffer
+	opened := false
+	deps := Deps{GOOS: "windows", EmbeddedYML: []byte(embedded), Interactive: func() bool { return true },
+		UpdateCheck: UpdateCheckDeps{Env: func(k string) string {
+			if k == "CI" {
+				return "1"
+			}
+			return ""
+		}},
+		TUI: TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return "" },
+			Run: func(context.Context, tui.Options, ...tui.Tab) error { opened = true; return nil }}}
+	cmd := NewRootCmdWith(&o, &e, deps)
+	cmd.SetArgs([]string{"tui", "--no-update-check"})
+	if err := cmd.ExecuteContext(context.Background()); err != nil || !opened {
+		t.Fatalf("`toolkit tui` explícito abre mesmo com CI=1: err=%v opened=%v", err, opened)
+	}
+	deps.Interactive = func() bool { return false }
+	opened = false
+	cmd = NewRootCmdWith(&o, &e, deps)
+	cmd.SetArgs([]string{"tui", "--no-update-check"})
+	if err := cmd.ExecuteContext(context.Background()); err == nil || opened {
+		t.Fatalf("sem terminal na entrada o `toolkit tui` recusa, mesmo explícito")
 	}
 }
