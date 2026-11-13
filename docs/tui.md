@@ -9,7 +9,7 @@ A TUI nunca é o único caminho: tudo existe sem ela (`toolkit list`, `install`,
 `recipe list|run|status|reset`, `resume`, `--no-tui`, log em arquivo). `toolkit` sem argumentos abre a TUI
 só com terminal; com `--no-tui`, sem terminal ou (fora do Windows) com `TERM` vazio ou `dumb`, mostra a ajuda. No Windows o
 `TERM` não existe (cmd, PowerShell, Windows Terminal) e por isso não conta: basta um console interativo na entrada e na
-saída. `toolkit tui` abre a TUI de forma explícita e, se não puder, diz por quê (no Git Bash/mintty use `winpty toolkit.exe tui`).
+saída. Em CI (`CI`, `GITHUB_ACTIONS`, `TF_BUILD` e semelhantes ligadas; vazio, `0` e `false` não ativam) o `toolkit` sem argumentos NUNCA abre a TUI sozinho: mostra a ajuda. `toolkit tui` abre a TUI de forma explícita (ignora o CI, é pedido do usuário; só recusa descritor que não é terminal) e, se não puder, diz por quê (no Git Bash/mintty use `winpty toolkit.exe tui`).
 
 ## Pacotes
 

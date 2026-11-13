@@ -52,6 +52,21 @@ func shouldOpenTUI(goos string, stdinTTY, stdoutTTY bool, noTUI bool, term strin
 	return !noTUI && tuiBlocked(goos, stdinTTY, stdoutTTY, term) == blockNone
 }
 
+// ciVars são as variáveis dos sistemas de CI conhecidos (as mesmas dos bootstraps win.ps1 e unix.sh).
+var ciVars = []string{"CI", "GITHUB_ACTIONS", "TF_BUILD", "GITLAB_CI", "BUILDKITE", "CIRCLECI", "TRAVIS", "APPVEYOR", "TEAMCITY_VERSION", "JENKINS_URL", "CODEBUILD_BUILD_ID"}
+
+// inCI diz se a execução é de CI (qualquer variável ligada pela regra de envOn: vazio, 0 e false não ativam).
+// A abertura AUTOMÁTICA da TUI (`toolkit` sem argumentos) nunca acontece em CI, mesmo com console/PTY do
+// executor; o `toolkit tui` explícito é pedido do usuário e ignora o CI (só recusa descritor que não é terminal).
+func inCI(env func(string) string) bool {
+	for _, v := range ciVars {
+		if envOn(env(v)) {
+			return true
+		}
+	}
+	return false
+}
+
 // newTUICmd é `toolkit tui`: abre a TUI de forma explícita e, se não puder, diz por quê (o `toolkit` sem
 // argumentos só mostra a ajuda).
 func newTUICmd(deps Deps, rd RecipeDeps, notifier *updateNotifier) *cobra.Command {
@@ -113,7 +128,7 @@ func (d TUIDeps) run(ctx context.Context, o tui.Options, tabs ...tui.Tab) error 
 
 // runRoot é o `toolkit` sem argumentos: abre a TUI quando há terminal, senão mostra a ajuda.
 func runRoot(cmd *cobra.Command, deps Deps, rd RecipeDeps, noTUI bool, notifier *updateNotifier) error {
-	if !shouldOpenTUI(deps.GOOS, deps.interactive(), deps.TUI.stdoutTTY(), noTUI, deps.TUI.term()) {
+	if !shouldOpenTUI(deps.GOOS, deps.interactive(), deps.TUI.stdoutTTY(), noTUI, deps.TUI.term()) || inCI(deps.UpdateCheck.env) {
 		return cmd.Help()
 	}
 	return openTUI(cmd, deps, rd, notifier)
