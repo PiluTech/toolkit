@@ -10,6 +10,12 @@ export PATH="$PATH:$HOME/.local/bin"
 
 step() { printf '\n==> %s\n' "$*"; }
 
+# Git Bash/MSYS (runner windows-latest): os scripts de release, de assinatura (macOS) e do ícone dependem de
+# permissões POSIX (chmod 600), de ferramentas do macOS e de node/python da máquina do Paulo; no Windows rodam só no
+# macOS/Linux. O que é do Windows (win.ps1, go test, build) continua no gate.
+is_windows=0
+case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*) is_windows=1 ;; esac
+
 step "go mod verify / tidy"
 go mod verify
 go mod tidy -diff
@@ -38,9 +44,13 @@ else
 fi
 ./scripts/bootstrap/unix_test.sh
 ./scripts/bootstrap/win_static_test.sh
-./scripts/release_test.sh
-./scripts/release-sign-macos_test.sh
-./scripts/gerar-icone_test.sh
+if [ "$is_windows" = 1 ]; then
+  echo "Windows: pulando release_test, release-sign-macos_test e gerar-icone_test (permissões POSIX, macOS e node/python)"
+else
+  ./scripts/release_test.sh
+  ./scripts/release-sign-macos_test.sh
+  ./scripts/gerar-icone_test.sh
+fi
 
 step "workflows do GitHub Actions (actionlint quando existe + regras de supply chain do release.yml)"
 ./scripts/check-workflows_test.sh
