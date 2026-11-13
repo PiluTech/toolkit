@@ -527,7 +527,7 @@ func TestDiagRedeSemFerramentasOpcionaisAvisaEContinua(t *testing.T) {
 // grava chave TLS (SSLKEYLOGFILE). Prova com o curl REAL contra uma porta recusada (sem rede) e uma .curlrc fictícia
 // em HOME e em CURL_HOME: nada de trace, cookie-jar nem corpo gravado; sem -q o curl criaria esses arquivos.
 func TestDiagRedeCurlIgnoraConfiguracaoDoUsuario(t *testing.T) {
-	real, err := exec.LookPath("curl")
+	curlBin, err := exec.LookPath("curl")
 	if err != nil {
 		t.Skip("curl real ausente")
 	}
@@ -536,7 +536,7 @@ func TestDiagRedeCurlIgnoraConfiguracaoDoUsuario(t *testing.T) {
 		script := stepScript(t, r, "alcance")
 		for _, withQ := range []bool{true, false} {
 			f := newToolbox(t, map[string]string{"ping": pingOK}) // sem curl falso
-			if err := os.Symlink(real, filepath.Join(f.dir, "curl")); err != nil {
+			if err := os.Symlink(curlBin, filepath.Join(f.dir, "curl")); err != nil {
 				t.Fatal(err)
 			}
 			home := t.TempDir()
