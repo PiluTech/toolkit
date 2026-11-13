@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -79,7 +80,7 @@ func TestInstallURLZipPlanoSoComNota(t *testing.T) {
 	if err := cmd.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("%v\n%s", err, e.String())
 	}
-	if !strings.Contains(o.String(), "extrair o zip em /apps/exemplo") {
+	if !strings.Contains(o.String(), "extrair o zip em "+filepath.Join("/apps", "exemplo")) {
 		t.Fatalf("saída:\n%s", o.String())
 	}
 }
@@ -103,7 +104,7 @@ func TestInstallGitHubReleaseDryRunLeAAPIMasNaoBaixaOAsset(t *testing.T) {
 	if err := cmd.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("%v\n%s", err, e.String())
 	}
-	if hits.Load() != 1 || !strings.Contains(o.String(), "baixar https://github.com/o/r/releases/download/v1.0.0/tool_linux.tar.gz (sha256 "+hashOf(z)) || !strings.Contains(o.String(), "extrair o tar.gz em /apps/tool") {
+	if hits.Load() != 1 || !strings.Contains(o.String(), "baixar https://github.com/o/r/releases/download/v1.0.0/tool_linux.tar.gz (sha256 "+hashOf(z)) || !strings.Contains(o.String(), "extrair o tar.gz em "+filepath.Join("/apps", "tool")) {
 		t.Fatalf("hits=%d\n%s", hits.Load(), o.String())
 	}
 }

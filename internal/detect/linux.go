@@ -4,7 +4,6 @@ import (
 	"context"
 	"io/fs"
 	"path"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -54,7 +53,7 @@ func (d *Detector) tool(name string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	if filepath.IsAbs(p) && !strings.ContainsAny(p, "\x00\n") {
+	if path.IsAbs(p) && !strings.ContainsAny(p, "\x00\n") {
 		return p, true
 	}
 	return name, true

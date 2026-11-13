@@ -79,7 +79,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 			t.Fatalf("sobra no diretório: %s", e.Name())
 		}
 	}
-	if fi, _ := os.Stat(s.Path()); fi.Mode().Perm() != 0o600 {
+	if fi, _ := os.Stat(s.Path()); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 { // Windows não tem permissões POSIX
 		t.Fatalf("permissão %v, quer 0600", fi.Mode().Perm())
 	}
 }

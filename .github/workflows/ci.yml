@@ -30,13 +30,9 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        # O Windows nunca rodou este gate em máquina de verdade (scripts bash sob o Git Bash): enquanto isso, a falha
-        # dele aparece mas não reprova o PR. Tire o experimental quando ele passar a primeira vez.
-        include:
-          - os: windows-latest
-            experimental: true
+        # O Windows roda o mesmo ci.sh sob o Git Bash e reprova o PR como os outros (os testes que dependem de
+        # permissões POSIX, do macOS e de node/python ficam fora dele, dentro do próprio ci.sh).
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.experimental == true }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

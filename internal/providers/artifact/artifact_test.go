@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -444,6 +445,9 @@ func TestDefaultAppsDir(t *testing.T) {
 		{"darwin", nil, "/Users/u", "/Users/u/Library/Application Support/toolkit/apps"},
 	}
 	for _, c := range cases {
+		if runtime.GOOS == "windows" {
+			continue // os caminhos do Linux e do macOS (/home/u) não são absolutos no Windows
+		}
 		got, err := DefaultAppsDir(c.goos, env(c.env), c.home)
 		if err != nil || filepath.ToSlash(got) != c.want {
 			t.Errorf("%s: %q %v", c.goos, got, err)
