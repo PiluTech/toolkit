@@ -36,19 +36,24 @@ O toolkit é CLI + TUI de terminal (Bubble Tea), não site nem app gráfico. Por
 
 ## Achados de acessibilidade
 
-### A1 · Cores de aviso e de OK não atingem 4,5:1 em temas claros comuns — M
+### A1 · Cores de aviso, OK e dica não atingem 4,5:1 em temas claros comuns — M
 - **Onde:** `internal/tui/theme.go` (`pick(light, dark)`): em fundo claro `Warn`=ANSI 3 (amarelo), `OK`=ANSI 2 (verde),
-  `Muted`=ANSI 8.
-- **Medido** (seção abaixo): xterm claro, Warn 1,70:1, OK 2,16:1, Muted 4,00:1; Terminal.app Basic, Warn 3,04, OK 3,25;
-  Solarized Dark, OK 2,79 e Warn 3,37 (as cores de índice alto do Solarized são cinzas de baixo contraste); Solarized
-  Light, OK 2,97, Warn 2,98, Accent 3,41. Em Campbell escuro e xterm escuro tudo passa (≥ 5,09).
-- **Atenuante:** o estado também tem símbolo e palavra, então a informação não se perde; o requisito 1.4.3 vale para o
+  `Muted`=ANSI 8 (dicas, horários, cabeçalho de colunas).
+- **Medido** (seção abaixo, 16 cores de cada esquema + script): Terminal.app Basic (padrão atual do macOS) Muted 3,81,
+  OK 2,53, Warn 2,39; xterm fundo branco Muted 4,00, OK 2,16, Warn 1,70; Solarized Dark OK 2,79, Warn 3,37, Err 3,26;
+  Solarized Light Accent 3,41, OK 2,97, Warn 2,98, Err 4,29. Em Campbell e xterm escuros tudo passa (≥ 5,09).
+- **Atenuante:** o estado também tem símbolo e palavra, então a informação não se perde; o critério 1.4.3 vale para o
   texto colorido mesmo assim.
-- **Corrigir:** (a) para `OK`/`Warn`, usar negrito e deixar a cor só no símbolo (símbolo de ≥ 3:1 vale como
-  componente gráfico) e a palavra na cor padrão do terminal; ou (b) pedir `--theme high-contrast` que troca para
-  texto em cor padrão + negrito. Não dá para "consertar" a paleta do usuário.
-- **Medir:** teste Go com as paletas de referência (Campbell, xterm, Terminal.app Basic/Pro, Solarized, One Half
-  Light/Dark) falhando abaixo de 4,5:1 para texto e 3:1 para símbolos. Esforço: P–M.
+- **Negrito não resolve:** `Warn` e `Err` já são negrito (`Bold(!t.Mono)`), e negrito não muda a razão de contraste
+  (só ajuda a legibilidade de texto fino). A correção tem de mudar a cor, não o peso.
+- **Corrigir (escolher uma, decisão do Paulo):** (a) texto sem cor (cor padrão do terminal, que o usuário já ajustou
+  para ser legível) e cor só no símbolo; o símbolo continua com a palavra ao lado, então o 1.4.11 é atendido pela
+  palavra. `Muted` passa a ser a cor padrão com a hierarquia dada pela posição, nunca por cor mais clara; (b) tokens
+  em cor fixa (256 cores ou RGB) validados em ≥ 4,5:1 contra os fundos extremos de cada tema (claro e escuro já são
+  detectados por `IsDark`), com `NO_COLOR` e o modo Mono intactos; custa o princípio de "só paleta ANSI do usuário";
+  (c) `--high-contrast`/`TOOLKIT_HIGH_CONTRAST=1` que liga (a) sob demanda. Recomendação: (a) por padrão.
+- **Medir:** teste Go com as paletas de referência (as da seção abaixo, mais One Half Light/Dark e Terminal.app Pro)
+  que falha abaixo de 4,5:1 para texto e 3:1 para símbolos em cada token do modo escolhido. Esforço: P–M.
 
 ### A2 · Sem opção de reduzir movimento — M
 - **Onde:** `internal/tui/apps.go:70` (`tickEvery = 100ms`, spinner `spinnerFrames`), `logtab.go`, `apps.go:298`.
@@ -158,24 +163,89 @@ literais acentuados fora dele (contagem de linhas com literal acentuado, testes 
 - README e `docs/` em pt-BR; para um repositório público, um `README.en.md`/`README.es.md` curto (o que é, instalar,
   `toolkit update`) amplia o alcance. Texto público: precisa de OK. Esforço: P.
 
+### L10 · Texto com espaço para crescer ~35% (colunas fixas na aba Apps) — M
+- **Onde:** `internal/tui/apps.go:714` (`columns`): estado 24 (32 a partir de 100 colunas), versão 10 e via 7 são
+  larguras fixas; só o nome é flexível (mínimo 12). `cell` corta com `…` (`apps.go:838`). Em 60–69 colunas a versão
+  vai junto do estado (22) e some a coluna via. Hoje cabe porque os textos pt-BR são curtos ("não instalado",
+  "instalado (fora do Homebrew)" só a partir de 100 colunas).
+- **Problema:** a skill exige ~35% de folga para as traduções. Frases como "installed (outside Homebrew)",
+  "no se pudo verificar" ou os cabeçalhos "INSTALLED"/"INSTALADO" passam das larguras e viram `…`, perdendo a palavra
+  que carrega o estado (e o estado nunca pode depender só do símbolo).
+- **Corrigir:** (a) larguras calculadas pelo texto mais largo do idioma ativo (`ansi.StringWidth` por catálogo), não por
+  constante; (b) palavra de estado curta e estável por idioma (a explicação longa vai para a linha de estado); (c)
+  quebra de linha em vez de reticências onde o estado for a única informação.
+- **Teste:** tabela de largura (80, 70, 60 colunas e o mínimo 60×16) × idiomas (pt-BR, en, es) × estados (instalado,
+  fora do gerenciador com versão, não instalado, não deu para verificar, erro) que falha se a palavra do estado for
+  cortada (`…` dentro da célula de estado) ou a linha passar da largura. Depende de L1 (catálogo de idiomas) para
+  rodar nos três idiomas; antes disso, rodar em pt-BR com o texto alargado em 35% como simulação. Esforço: M.
+
 ## Medição de contraste
 
 Fórmula do WCAG 2.2: `L = 0,2126 R + 0,7152 G + 0,0722 B` (canais linearizados); razão = `(L1 + 0,05) / (L2 + 0,05)`.
 Fundo = fundo padrão do esquema; cada token usa o índice ANSI que `theme.go` escolhe para o tema detectado
 (claro: `Muted` 8, `Accent` 4, `OK` 2, `Warn` 3, `Err` 1; escuro: 7, 14, 10, 11, 9). **Meta: 4,5:1 (texto).**
+Em negrito = abaixo da meta. Cada célula mostra a cor usada (hex) e a razão.
 
 | Esquema (fundo) | Muted | Accent | OK | Warn | Err |
 |---|---|---|---|---|---|
-| Windows Terminal Campbell (0C0C0C, escuro) | 12,18 | 11,27 | 8,49 | 16,91 | 5,09 |
-| xterm (000000, escuro) | 16,67 | 16,75 | 15,30 | 19,56 | 5,25 |
-| Terminal.app Basic (FFFFFF, claro) | 5,74 | 12,78 | **3,25** | **3,04** | 8,92 |
-| xterm (FFFFFF, claro) | **4,00** | 9,40 | **2,16** | **1,70** | 5,84 |
-| Solarized Dark (002B36, escuro) | 12,25 | 5,61 | **2,79** | **3,37** | **3,26** |
-| Solarized Light (FDF6E3, claro) | 13,92 | **3,41** | **2,97** | **2,98** | **4,29** |
+| Windows Terminal Campbell (`0C0C0C`, escuro) | 7 `CCCCCC` 12,18 | 14 `61D6D6` 11,27 | 10 `16C60C` 8,49 | 11 `F9F1A5` 16,91 | 9 `E74856` 5,09 |
+| xterm (`000000`, escuro) | 7 `E5E5E5` 16,67 | 14 `00FFFF` 16,75 | 10 `00FF00` 15,30 | 11 `FFFF00` 19,56 | 9 `FF0000` 5,25 |
+| Terminal.app Basic, padrão atual do macOS (`FFFFFF`, claro) | 8 `818383` **3,81** | 4 `492EE1` 7,61 | 2 `25BC24` **2,53** | 3 `ADAD27` **2,39** | 1 `C23621` 5,46 |
+| xterm (`FFFFFF`, claro) | 8 `7F7F7F` **4,00** | 4 `0000EE` 9,40 | 2 `00CD00` **2,16** | 3 `CDCD00` **1,70** | 1 `CD0000` 5,84 |
+| Solarized Dark (`002B36`, escuro) | 7 `EEE8D5` 12,25 | 14 `93A1A1` 5,61 | 10 `586E75` **2,79** | 11 `657B83` **3,37** | 9 `CB4B16` **3,26** |
+| Solarized Light (`FDF6E3`, claro) | 8 `002B36` 13,92 | 4 `268BD2` **3,41** | 2 `859900` **2,97** | 3 `B58900` **2,98** | 1 `DC322F` **4,29** |
 
-Negrito = abaixo de 4,5:1. As paletas são os valores publicados dos esquemas padrão; a conferência final deve usar o
-terminal real (o usuário pode ter mudado as cores). Itens que ainda faltam medir: One Half Light/Dark, Terminal.app
-Pro, iTerm2 Default, GNOME Terminal, e o modo de alto contraste do Windows.
+**Correção da v1 deste relatório:** a linha do Terminal.app tinha vindo de uma tabela antiga do perfil Basic (Muted
+5,74, Accent 12,78, OK 3,25, Warn 3,04, Err 8,92). A paleta do macOS atual é a da tabela acima (`C23621`, `25BC24`,
+`ADAD27`, `492EE1`… e `818383` para o preto brilhante), que dá 3,81 / 7,61 / 2,53 / 2,39 / 5,46, como o Crivo mediu.
+Conferi nesta máquina: o perfil Basic não guarda cores ANSI próprias (`ANSI*Color` ausente no plist de
+`com.apple.Terminal`), ou seja, usa o padrão do sistema, que é essa paleta. Se o Terminal.app de outra versão do
+macOS usar valores diferentes, o script abaixo refaz a conta com os 16 hex dele.
+
+As 16 cores de cada esquema (índices 0–15), como usadas no script:
+
+- Campbell: `0C0C0C C50F1F 13A10E C19C00 0037DA 881798 3A96DD CCCCCC 767676 E74856 16C60C F9F1A5 3B78FF B4009E 61D6D6 F2F2F2`
+- xterm: `000000 CD0000 00CD00 CDCD00 0000EE CD00CD 00CDCD E5E5E5 7F7F7F FF0000 00FF00 FFFF00 5C5CFF FF00FF 00FFFF FFFFFF`
+- Terminal.app Basic (atual): `000000 C23621 25BC24 ADAD27 492EE1 D338D3 33BBC8 CBCCCD 818383 FC391F 31E722 EAEC23 5833FF F935F8 14F0F0 E9EBEB`
+- Solarized (Dark e Light, só muda o fundo): `073642 DC322F 859900 B58900 268BD2 D33682 2AA198 EEE8D5 002B36 CB4B16 586E75 657B83 839496 6C71C4 93A1A1 FDF6E3`
+
+Script para repetir a medição (`python3 -I medir.py`; foi o que gerou a tabela):
+
+```python
+#!/usr/bin/env python3
+# Contraste WCAG 2.2 dos tokens da TUI (internal/tui/theme.go) sobre paletas ANSI. Uso: python3 -I medir.py
+def lum(h):
+    f = lambda c: c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (f(int(h[i:i + 2], 16) / 255) for i in (0, 2, 4))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+def ratio(a, b):
+    hi, lo = sorted((lum(a), lum(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+# índices ANSI que theme.go usa: (claro, escuro)
+TOKENS = {"Muted": (8, 7), "Accent": (4, 14), "OK": (2, 10), "Warn": (3, 11), "Err": (1, 9)}
+X = "000000 CD0000 00CD00 CDCD00 0000EE CD00CD 00CDCD E5E5E5 7F7F7F FF0000 00FF00 FFFF00 5C5CFF FF00FF 00FFFF FFFFFF"
+SOL = "073642 DC322F 859900 B58900 268BD2 D33682 2AA198 EEE8D5 002B36 CB4B16 586E75 657B83 839496 6C71C4 93A1A1 FDF6E3"
+PALETAS = [  # (nome, fundo, escuro?, 16 cores)
+    ("Windows Terminal Campbell", "0C0C0C", True, "0C0C0C C50F1F 13A10E C19C00 0037DA 881798 3A96DD CCCCCC 767676 E74856 16C60C F9F1A5 3B78FF B4009E 61D6D6 F2F2F2"),
+    ("xterm (fundo preto)", "000000", True, X),
+    ("Terminal.app Basic (padrão do macOS atual)", "FFFFFF", False, "000000 C23621 25BC24 ADAD27 492EE1 D338D3 33BBC8 CBCCCD 818383 FC391F 31E722 EAEC23 5833FF F935F8 14F0F0 E9EBEB"),
+    ("xterm (fundo branco)", "FFFFFF", False, X),
+    ("Solarized Dark", "002B36", True, SOL),
+    ("Solarized Light", "FDF6E3", False, SOL),
+]
+for nome, fundo, escuro, p in PALETAS:
+    p = p.split()
+    linha = []
+    for tok, (claro, esc) in TOKENS.items():
+        i = esc if escuro else claro
+        r = ratio(p[i], fundo)
+        linha.append(f"{tok} {i}={p[i]} {r:.2f}{'' if r >= 4.5 else ' <4,5'}")
+    print(f"{nome} (fundo {fundo}): " + " | ".join(linha))
+```
+
+As paletas são os valores publicados dos esquemas padrão; a conferência final deve usar o terminal real (o usuário
+pode ter mudado as cores). Ainda faltam medir: One Half Light/Dark, Terminal.app Pro, iTerm2 Default, GNOME Terminal
+e o modo de alto contraste do Windows.
 
 ## Ordem sugerida das correções (PRs pequenos)
 
@@ -184,7 +254,7 @@ Pro, iTerm2 Default, GNOME Terminal, e o modo de alto contraste do Windows.
 3. **A4**: verificação com leitor de tela (roteiro manual do Paulo ou de quem tiver o leitor) e, conforme o
    resultado, modo `--accessible` (M–G).
 4. **L1 + L2 (+ L3)**: mecanismo de idiomas, teste de chaves e plural, migrando `internal/msg` (1º PR de l10n).
-5. **L1 (migração)** da TUI e dos demais pacotes, um por PR.
+5. **L1 (migração)** da TUI e dos demais pacotes, um por PR; **L10** (larguras e teste nos 3 idiomas) junto da migração da TUI.
 6. **L4** (datas/números; decidir antes sobre `golang.org/x/text`), **L5** (catálogo/receitas), **L7** (bootstraps e
    notas).
 7. **A6, A7, A8, L6, L9** (baixo risco, polimento) e **L8** no repo do site.

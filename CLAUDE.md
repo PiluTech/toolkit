@@ -14,7 +14,7 @@ Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (
 - `CONTRIBUTING.md`: como adicionar um app ou receita.
 - `docs/tui.md`: especificação da TUI (variante A adotada: abas, tokens, teclas, estados, mensagens Bubble Tea), decisões em aberto e pendências fora da TUI (update, menores da fase 5).
 - `docs/roadmap.md`: o que vem depois da v0.1.0 (update, aviso de versão, ícone, localização pt-BR/en/es, acessibilidade da TUI, smoke) e os padrões de produto da PiluTech (skill `padroes-produto-pilutech`).
-- `docs/auditoria-a11y-l10n.md`: auditoria de acessibilidade e localização (2026-11-13) contra a skill `padroes-produto-pilutech`: achados A1–A8 e L1–L9, o que já cumpre, medição de contraste e ordem sugerida das correções.
+- `docs/auditoria-a11y-l10n.md`: auditoria de acessibilidade e localização (2026-11-13) contra a skill `padroes-produto-pilutech`: achados A1–A8 e L1–L10, o que já cumpre, medição de contraste e ordem sugerida das correções.
 - `docs/release.md`: pipeline de release no GitHub Actions (tag `v*.*.*` → build ubuntu → codesign/notarização macOS no environment `release` → rascunho), cadastro dos segredos, custo e plano B manual.
 - `docs/smoke.md`: roteiro de smoke manual da fase 2 (saídas reais a capturar, Windows 11, Mac, Linux), sempre `--dry-run` primeiro.
 - `docs/briefing.md`: pedido original do Paulo (fases 1–6, requisitos). Não editar.
