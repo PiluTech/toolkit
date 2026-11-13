@@ -186,6 +186,59 @@ steps:
     run: { powershell: "Get-PhysicalDisk | Select-Object FriendlyName,MediaType,HealthStatus,OperationalStatus | Format-Table -AutoSize" }
 ```
 
+### Diagnóstico de rede (Linux e macOS): `diag-rede`
+
+`toolkit recipe run diag-rede` (ou a aba Diagnóstico da TUI). **Só leitura**: nada de `sudo`, nada que mude rede, DNS,
+firewall ou rotas, nada gravado em arquivo. Cinco etapas, cada uma com saída resumida:
+
+| Etapa | Linux | macOS |
+|---|---|---|
+| `interfaces` | `ip -brief address`, estado e MTU (`ip -o link`), rota padrão (IPv4 e IPv6) | `ifconfig -a` (estado, MTU e endereços das interfaces com endereço), `route -n get default` |
+| `dns` | servidores em uso (`resolvectl status` ou `/etc/resolv.conf`) e resolução de um nome (`getent`, `host` ou `nslookup`) | servidores do `scutil --dns` (sem os resolvedores com escopo) e resolução por `dscacheutil` |
+| `alcance` | ping ao gateway e a um alvo, e uma requisição HTTPS (`curl`) com tempos de TCP, TLS e total | o mesmo (`ping -t 6`) |
+| `wifi` | adaptador e sinal/canal/taxa pelo NetworkManager (`nmcli`); sem NetworkManager, avisa e segue | adaptador e energia (`networksetup`); o nome da rede não aparece |
+| `portas` | portas TCP em escuta (`ss -ltn`) | portas TCP em escuta (`netstat -an -p tcp`) |
+
+**Alvos externos** (variáveis de ambiente, todas opcionais; o valor é validado e um valor inválido é recusado na
+etapa sem chamar nada):
+
+| Variável | Padrão | Aceita |
+|---|---|---|
+| `TOOLKIT_DIAG_HOST` | `1.1.1.1` | letras, dígitos, `.`, `:`, `_`, `-`; nunca começa com `-` |
+| `TOOLKIT_DIAG_NAME` | `example.com` | letras, dígitos, `.`, `_`, `-`; nunca começa com `-` |
+| `TOOLKIT_DIAG_URL` | `https://example.com/` | só `https://`, com host e caminho em letras, dígitos e `. _ ~ : / -` |
+
+O `curl` roda como `env -u SSLKEYLOGFILE curl -q ...`: o `-q` (primeiro argumento) impede a leitura da `.curlrc` do usuário
+(que poderia mandar corpo, `Authorization`, `request`, gravar `cookie-jar` ou `trace`) e a variável de chave TLS não
+chega a ele; só segue redirecionamentos para `https` (`--proto-redir =https`), no máximo 3, com `--connect-timeout 5` e
+`--max-time 10`. O corpo da resposta é descartado. O `nslookup` (último recurso no Linux) roda com `HOME=/`, sem ler o
+`~/.nslookuprc`; `ping`, `ip`, `ss`, `getent`, `nmcli`, `route` e `netstat` não leem configuração do usuário.
+
+**Dados sensíveis.** A saída mostra no terminal (a engine nunca grava a saída dos comandos no log) e mesmo assim:
+o MAC nunca aparece; o nome da rede Wi-Fi (SSID) vira `[nome oculto]`; endereços IPv4 públicos viram `A.x.x.x`
+(privados, loopback, link-local e CGNAT continuam) e IPv6 globais viram `2001:x:x`; não há consulta de "meu IP
+público"; as portas aparecem sem endereço (só "só esta máquina" ou "toda a rede"). As respostas da resolução de DNS e as
+caudas de erro do ping e do curl passam pela mesma máscara (se o nome resolver para a própria máquina, o IP público
+não reaparece). Exceção documentada: os alvos configurados, os servidores DNS e o gateway aparecem como são.
+
+**Idioma.** A saída sai em pt-BR por padrão e em `en` ou `es` por `TOOLKIT_LANG`, `LC_ALL`, `LC_MESSAGES` ou `LANG`
+(nessa ordem; `pt_BR`, `en_US`, `es_ES`... e qualquer outro idioma cai em pt-BR). Cada etapa tem um bloco
+`case "$lang"` com as mesmas chaves `m_*` nos três idiomas (um teste confere que as chaves são idênticas e que toda
+`$m_x` usada está traduzida). O nome e a descrição da receita no YAML ainda são só pt-BR (o formato de receita não tem
+campo de idioma; ver `docs/auditoria-a11y-l10n.md`, L5).
+
+**Limites.** Um diagnóstico nunca falha por causa do achado: rede fora do ar, ping sem resposta ou falta de uma
+ferramenta aparecem na saída (`falhou`, "o comando 'x' não existe") e a etapa termina com status 0. No macOS, o nome
+da rede Wi-Fi não é lido de propósito; o sistema também pode dizer "sem conexão" quando a permissão de Localização não
+foi dada. A `diag-rede` do Windows é mais simples (adaptadores, endereços e DNS) e ainda não mascara nem aceita alvos.
+
+**Testes** (`internal/recipes/diagrede_test.go`, sem rede real): validação do YAML por plataforma; lista de comandos
+proibidos (nada de `sudo`, escrita de rede, redirecionamento para arquivo); sintaxe `sh -n`; chaves de idioma; e a
+execução de cada etapa em `/bin/sh` com um PATH que só tem ferramentas de texto reais e `ip`, `ping`, `curl`,
+`networksetup` etc. FALSAS, que registram cada chamada (toda chamada tem de estar na lista de leitura permitida):
+máscara de IP/MAC/SSID, idioma, alvos configurados, alvos inválidos recusados, falha de rede sem erro e ausência de
+ferramentas. Os testes dos scripts não rodam no Windows.
+
 ## Regras para receitas
 
 - Nada de `curl | bash` de terceiros. Scripts só do próprio repositório, na versão do binário em
