@@ -487,10 +487,10 @@ func rebootSteps(r RecipeInfo) int {
 }
 
 // recipeState devolve símbolo+palavra do último andamento (vazio = nunca rodou) e o estilo.
-func (t *RecipesTab) recipeState(r RecipeInfo) (string, lipgloss.Style) {
+func (t *RecipesTab) recipeState(r RecipeInfo) (string, Paint) {
 	run, ok := t.data.Runs[r.ID]
 	if !ok {
-		return "", lipgloss.NewStyle()
+		return "", Paint{}
 	}
 	switch run.Status {
 	case "done":
@@ -502,7 +502,7 @@ func (t *RecipesTab) recipeState(r RecipeInfo) (string, lipgloss.Style) {
 	case "running":
 		return t.spin() + " em andamento", t.theme.Accent()
 	}
-	return "", lipgloss.NewStyle()
+	return "", Paint{}
 }
 
 // panelRule: a régua com o título do painel e o resumo "N de M · exige administrador · reinicia 1 vez".
@@ -604,7 +604,7 @@ func firstSentence(s string) string {
 	return s
 }
 
-func stepState(th Theme, status string) (string, lipgloss.Style) {
+func stepState(th Theme, status string) (string, Paint) {
 	switch status {
 	case "done":
 		return SymOK + " feita", th.OK()
@@ -617,5 +617,5 @@ func stepState(th Theme, status string) (string, lipgloss.Style) {
 	case "running":
 		return "| executando", th.Accent()
 	}
-	return SymPending + " pendente", lipgloss.NewStyle()
+	return SymPending + " pendente", Paint{}
 }
