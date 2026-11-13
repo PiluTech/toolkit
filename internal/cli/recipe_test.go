@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -206,7 +207,7 @@ func TestRecipeRunSimpleWritesLogAndState(t *testing.T) {
 	if len(logs) != 1 {
 		t.Fatalf("log esperado: %v", logs)
 	}
-	if fi, _ := os.Stat(logs[0]); fi.Mode().Perm() != 0o600 {
+	if fi, _ := os.Stat(logs[0]); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 { // Windows não tem permissões POSIX
 		t.Errorf("log com permissão %v", fi.Mode().Perm())
 	}
 	b, _ := os.ReadFile(logs[0])

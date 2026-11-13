@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -484,7 +485,7 @@ func TestFileLogHasOnlyLifecycleAndWarnsWhenItCannotWrite(t *testing.T) {
 		t.Fatalf("um log por execução: %v", files)
 	}
 	fi, _ := os.Stat(files[0])
-	if fi.Mode().Perm() != 0o600 {
+	if runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 { // Windows não tem permissões POSIX
 		t.Fatalf("modo %v", fi.Mode().Perm())
 	}
 	b, _ := os.ReadFile(files[0])

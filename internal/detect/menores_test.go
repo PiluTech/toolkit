@@ -3,7 +3,7 @@ package detect
 import (
 	"context"
 	"io/fs"
-	"path/filepath"
+	"path"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -24,7 +24,7 @@ func TestFlatpakAndSnapRunByTheAbsolutePathFoundByLookPath(t *testing.T) {
 	var names []string
 	for _, c := range s.calls {
 		names = append(names, c.Name)
-		if !filepath.IsAbs(c.Name) {
+		if !path.IsAbs(c.Name) {
 			t.Errorf("o comando deve ir por caminho absoluto: %q", c.Name)
 		}
 	}
