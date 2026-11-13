@@ -9,10 +9,10 @@ steps:
     timeout: 60s
     render: windows-memory
     run:
-      powershell: "$ErrorActionPreference='SilentlyContinue'; $m=@(Get-CimInstance Win32_PhysicalMemory | Select-Object BankLabel,DeviceLocator,Manufacturer,PartNumber,Capacity,Speed,ConfiguredClockSpeed,SMBIOSMemoryType,MemoryType); $a=@(Get-CimInstance Win32_PhysicalMemoryArray | Select-Object MemoryDevices); $o=Get-CimInstance Win32_OperatingSystem | Select-Object TotalVisibleMemorySize,FreePhysicalMemory; ConvertTo-Json -InputObject @{modules=$m;arrays=$a;os=$o} -Depth 4 -Compress"
+      powershell: "$ErrorActionPreference='SilentlyContinue'; $ProgressPreference='SilentlyContinue'; $m=@(Get-CimInstance Win32_PhysicalMemory | Select-Object BankLabel,DeviceLocator,Manufacturer,PartNumber,Capacity,Speed,ConfiguredClockSpeed,SMBIOSMemoryType,MemoryType); $a=@(Get-CimInstance Win32_PhysicalMemoryArray | Select-Object MemoryDevices); $o=Get-CimInstance Win32_OperatingSystem | Select-Object TotalVisibleMemorySize,FreePhysicalMemory; ConvertTo-Json -InputObject @{modules=$m;arrays=$a;os=$o} -Depth 4 -Compress"
   - id: disco
     name: Discos
     timeout: 60s
     render: windows-disks
     run:
-      powershell: "$ErrorActionPreference='SilentlyContinue'; $d=@(Get-PhysicalDisk | ForEach-Object { [pscustomobject]@{FriendlyName=[string]$_.FriendlyName;MediaType=[string]$_.MediaType;HealthStatus=[string]$_.HealthStatus;OperationalStatus=[string]($_.OperationalStatus -join ',');Size=$_.Size;BusType=[string]$_.BusType} }); ConvertTo-Json -InputObject $d -Depth 4 -Compress"
+      powershell: "$ErrorActionPreference='SilentlyContinue'; $ProgressPreference='SilentlyContinue'; $d=@(Get-PhysicalDisk | ForEach-Object { [pscustomobject]@{FriendlyName=[string]$_.FriendlyName;MediaType=[string]$_.MediaType;HealthStatus=[string]$_.HealthStatus;OperationalStatus=[string]($_.OperationalStatus -join ',');Size=$_.Size;BusType=[string]$_.BusType} }); ConvertTo-Json -InputObject $d -Depth 4 -Compress"

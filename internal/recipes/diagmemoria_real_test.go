@@ -1,6 +1,7 @@
 package recipes_test
 
 import (
+	"bytes"
 	"context"
 	"os/exec"
 	"runtime"
@@ -46,10 +47,16 @@ func TestDiagMemoriaRealOutputIsUnderstoodByTheRenderers(t *testing.T) {
 			t.Fatal(err)
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-		out, err := exec.CommandContext(ctx, cmd.Name, cmd.Args...).CombinedOutput()
+		// só o stdout, como a engine (o stderr só entra no relatório quando o comando falha): o PowerShell do runner
+		// escreve registros CLIXML de progresso no stderr
+		var stdout, stderr bytes.Buffer
+		c := exec.CommandContext(ctx, cmd.Name, cmd.Args...)
+		c.Stdout, c.Stderr = &stdout, &stderr
+		err = c.Run()
 		cancel()
+		out := stdout.Bytes()
 		if err != nil {
-			t.Logf("%s: o comando saiu com erro (%v); a saída é avaliada mesmo assim", st.ID, err)
+			t.Logf("%s: o comando saiu com erro (%v); a saída é avaliada mesmo assim\nstderr: %.500s", st.ID, err, stderr.String())
 		}
 		summary, rerr := diagfmt.Render(st.Render, string(out), diagfmt.PT)
 		if rerr != nil || strings.TrimSpace(summary) == "" {
