@@ -248,10 +248,11 @@ func TestDiagnosticoJSONPreservaChavesETiposEMascaraValores(t *testing.T) {
 	}
 }
 
-// Regressão do CI do Windows: o caminho do relatório numa pasta de usuário (C:\Users\NOME, /Users/NOME, /home/NOME)
-// aparece mascarado na confirmação, em qualquer SO, e o arquivo é gravado no caminho REAL.
-func TestDiagnosticoRelatorioEmPastaDeUsuarioConfirmaCaminhoMascarado(t *testing.T) {
-	for _, home := range []string{"Users", "home"} {
+// Regressão do CI do Windows: o caminho do relatório em pastas com cara de pasta pessoal aparece na confirmação EXATAMENTE
+// como a máscara o devolve (a expectativa é a própria MaskText, em qualquer SO: no Windows o temp fica sob
+// C:\\Users\\<usuário>\\ e o caminho cru nunca é o que o comando mostra), e o arquivo é gravado no caminho REAL.
+func TestDiagnosticoRelatorioConfirmaOCaminhoMascarado(t *testing.T) {
+	for _, home := range []string{"Users", "home", "pasta-comum"} {
 		dir := filepath.Join(t.TempDir(), home, "ana")
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
@@ -263,11 +264,8 @@ func TestDiagnosticoRelatorioEmPastaDeUsuarioConfirmaCaminhoMascarado(t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(out, "ana") && strings.Contains(out, "salvo em") && strings.Contains(strings.SplitN(out, "salvo em ", 2)[1], "ana") {
-			t.Errorf("%s: o nome na pasta pessoal sai mascarado: %s", home, out)
-		}
-		if !strings.Contains(out, "[usuário]") {
-			t.Errorf("%s: esperava [usuário] no caminho: %s", home, out)
+		if want := "Relatório completo salvo em " + diagnostico.MaskText(path, nil); !strings.Contains(out, want) {
+			t.Errorf("%s: a confirmação mostra o caminho mascarado (%q):\n%s", home, want, out)
 		}
 		if _, err := os.Stat(path); err != nil {
 			t.Errorf("%s: o arquivo é gravado no caminho real: %v", home, err)
