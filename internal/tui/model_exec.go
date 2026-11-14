@@ -91,7 +91,7 @@ func (m *Model) startReview() tea.Cmd {
 	return tea.Batch(func() tea.Msg {
 		plan, err := p.Plan(ctx, sel)
 		return planReadyMsg{id: id, plan: plan, err: err}
-	}, tick())
+	}, m.theme.Tick())
 }
 
 func (m *Model) reviewKey(k string) (tea.Model, tea.Cmd, bool) {
@@ -150,7 +150,7 @@ func (m *Model) execute() tea.Cmd {
 	}
 	r := m.runner
 	go r.Run(ctx, sel, ch)
-	return tea.Batch(waitEvent(ch), tick())
+	return tea.Batch(waitEvent(ch), m.theme.Tick())
 }
 
 func waitEvent(ch <-chan Event) tea.Cmd {

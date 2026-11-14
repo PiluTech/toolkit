@@ -127,7 +127,7 @@ func (t *RecipesTab) Init() tea.Cmd {
 	return tea.Batch(func() tea.Msg {
 		d, err := be.Load(ctx)
 		return recipesLoadedMsg{data: d, err: err}
-	}, tick())
+	}, t.theme.Tick())
 }
 
 // Capturing diz que só a busca recebe todas as teclas.
@@ -200,7 +200,7 @@ func (t *RecipesTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 	case tickMsg:
 		t.frame++
 		if t.loading {
-			return t, tick()
+			return t, t.theme.Tick()
 		}
 	case tea.KeyPressMsg:
 		return t, t.key(msg)
@@ -387,7 +387,7 @@ func (t *RecipesTab) More() int {
 	return max(len(sr.lines)-(t.stp+t.stepRows()), 0)
 }
 
-func (t *RecipesTab) spin() string { return spinnerFrames[t.frame%len(spinnerFrames)] }
+func (t *RecipesTab) spin() string { return t.theme.Spin(t.frame) }
 
 func (t *RecipesTab) emptyText() string {
 	if t.diagnostic {

@@ -36,6 +36,7 @@ func newRoot(out, errOut io.Writer, deps Deps) (*cobra.Command, *updateNotifier)
 	}
 	var noTUI, noUpdateCheck bool
 	root.Flags().BoolVar(&noTUI, "no-tui", false, msg.RootNoTUI)
+	addMotionFlag(root)
 	root.PersistentFlags().BoolVar(&noUpdateCheck, "no-update-check", false, msg.FlagNoUpdateCheck)
 	root.PersistentPreRun = func(cmd *cobra.Command, _ []string) { notifier.start(cmd, noUpdateCheck) }
 	root.Args = cobra.NoArgs

@@ -5,6 +5,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
@@ -15,6 +16,10 @@ import (
 type Theme struct {
 	Mono bool // sem cor, negrito nem reverso
 	Dark bool // fundo escuro (detectado pelo terminal; padrão escuro)
+	// NoMotion: "reduzir movimento" (TOOLKIT_REDUCE_MOTION=1 ou --no-motion): o spinner vira o símbolo fixo "~" e nenhum
+	// quadro é agendado, então a tela só muda quando o ESTADO muda (nada é redesenhado a cada 100 ms, o que também
+	// poupa leitores de tela).
+	NoMotion bool
 }
 
 func (t Theme) pick(light, dark int) lipgloss.Style {
@@ -33,6 +38,25 @@ func (t Theme) attr(bold, reverse bool) lipgloss.Style {
 		return lipgloss.NewStyle()
 	}
 	return lipgloss.NewStyle().Bold(bold).Reverse(reverse)
+}
+
+// SymBusy é o símbolo fixo de "em andamento" quando o movimento está reduzido (sempre com a palavra do estado ao lado).
+const SymBusy = "~"
+
+// Spin devolve o quadro do spinner (ou o símbolo fixo com o movimento reduzido).
+func (t Theme) Spin(frame int) string {
+	if t.NoMotion {
+		return SymBusy
+	}
+	return spinnerFrames[frame%len(spinnerFrames)]
+}
+
+// Tick agenda o próximo quadro do spinner; com o movimento reduzido não agenda nada.
+func (t Theme) Tick() tea.Cmd {
+	if t.NoMotion {
+		return nil
+	}
+	return tick()
 }
 
 // Paint pinta um trecho com cor SÓ no símbolo inicial (✓ ✗ ! ○ [x], o spinner), nunca na palavra ao lado: as cores

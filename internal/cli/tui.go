@@ -70,7 +70,7 @@ func inCI(env func(string) string) bool {
 // newTUICmd é `toolkit tui`: abre a TUI de forma explícita e, se não puder, diz por quê (o `toolkit` sem
 // argumentos só mostra a ajuda).
 func newTUICmd(deps Deps, rd RecipeDeps, notifier *updateNotifier) *cobra.Command {
-	return &cobra.Command{
+	c := &cobra.Command{
 		Use:   "tui",
 		Short: msg.TUIShort,
 		Long:  msg.TUILong,
@@ -89,6 +89,8 @@ func newTUICmd(deps Deps, rd RecipeDeps, notifier *updateNotifier) *cobra.Comman
 			}
 		},
 	}
+	addMotionFlag(c)
+	return c
 }
 
 func stdoutIsTerminal() bool { return fileIsTerminal(os.Stdout) }
@@ -134,15 +136,24 @@ func runRoot(cmd *cobra.Command, deps Deps, rd RecipeDeps, noTUI bool, notifier 
 	return openTUI(cmd, deps, rd, notifier)
 }
 
+// addMotionFlag liga o --no-motion (a variável TOOLKIT_REDUCE_MOTION faz o mesmo).
+func addMotionFlag(c *cobra.Command) { c.Flags().Bool("no-motion", false, msg.FlagNoMotion) }
+
+// reduceMotion: --no-motion ou TOOLKIT_REDUCE_MOTION ligada (regra do envOn: vazio, 0, false, no e off não ligam).
+func reduceMotion(cmd *cobra.Command, env func(string) string) bool {
+	flag, _ := cmd.Flags().GetBool("no-motion")
+	return flag || envOn(env("TOOLKIT_REDUCE_MOTION"))
+}
+
 // openTUI monta as abas e abre a TUI (a decisão de abrir já foi tomada).
 func openTUI(cmd *cobra.Command, deps Deps, rd RecipeDeps, notifier *updateNotifier) error {
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	th := tui.Theme{Mono: os.Getenv("NO_COLOR") != "", Dark: true}
+	th := tui.Theme{Mono: os.Getenv("NO_COLOR") != "", Dark: true, NoMotion: reduceMotion(cmd, deps.UpdateCheck.env)}
 	opts := tui.Options{
-		Version: buildinfo.Version, Mono: th.Mono,
+		Version: buildinfo.Version, Mono: th.Mono, NoMotion: th.NoMotion,
 		Planner: &tuiPlanner{deps: deps, rd: rd},
 		Runner:  &tuiRunner{deps: deps, rd: rd, logDir: func() string { return runLogDir(deps, rd) }},
 	}
