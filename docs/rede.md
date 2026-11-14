@@ -173,7 +173,7 @@ exibido (uso único): se a configuração mudar depois, o envio continua sendo o
 sem proxy implícito (variáveis `HTTP(S)_PROXY` não valem), sem cookies, sem seguir redirecionamento (devolve o 3xx), sem
 compressão nem conexão reaproveitada, prazo de 5 s, corpo limitado a 1 KiB (mais que isso é "resposta inesperada") e recusa
 conectar a endereço não público (um nome que resolva para a rede local, loopback ou CGNAT: proteção contra SSRF). Nada é
-gravado em disco.
+gravado em disco. A verificação do certificado é testada com TLS real (autoassinado, nome errado, expirado e TLS 1.1 são recusados; o confiável é aceito).
 
 **IP público.** A resposta tem de ser SÓ um endereço IPv4 ou IPv6 (`netip`), público (não loopback, privado, link-local,
 CGNAT, não especificado nem multicast) e sem zona; qualquer outra coisa é "resposta inesperada" e o corpo nunca é mostrado

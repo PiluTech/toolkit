@@ -67,8 +67,8 @@ memória e de espaço livre são os mesmos do [diagnóstico](diagnostico.md): as
 | Arquivo de paginação muito usado | em uso `>= 80%` do alocado | info |
 | Disco do sistema é HDD | tipo lido igual a `HDD` (SSD e desconhecido não geram) | atenção |
 | Pouco espaço livre no disco do sistema | livre `< 10%` do tamanho (atenção) e `< 5%` (problema); livre desconhecido não gera | atenção / problema |
-| Fila alta no disco | fila média `>= 2`, calculada pelos contadores BRUTOS: `(q1-q0)/(t1-t0)` com `AvgDiskQueueLength` (PERF_COUNTER_100NS_QUEUELEN_TYPE) e `Timestamp_Sys100NS`; o valor formatado do CIM é inteiro e truncaria (1,9 viraria 1). Amostra única, tempo parado ou contador que voltou = sem leitura (nunca 0) | atenção |
-| Disco lento para responder | latência média `>= 25 ms` | atenção |
+| Fila alta no disco | fila média `>= 2`, calculada pelos contadores BRUTOS: `(q1-q0)/(t1-t0)` com `AvgDiskQueueLength` (PERF_COUNTER_100NS_QUEUELEN_TYPE) e `Timestamp_Sys100NS`; o valor formatado do CIM é inteiro e truncaria (1,9 viraria 1). Amostra única, tempo parado ou contador que voltou = sem leitura (nunca 0). A média é PONDERADA pelo tempo (delta total da integral / delta total do tempo, não a média simples dos intervalos) e UM intervalo inválido, mesmo só no meio, invalida a medida inteira (nada de média parcial) | atenção |
+| Disco lento para responder | latência média `>= 25 ms`, ponderada pelas transferências (delta total dos contadores / delta total das bases); cada intervalo é validado (contador e base monotônicos, frequência > 0 e constante) e um inválido no meio invalida a medida inteira | atenção |
 | Muitos itens registrados para iniciar | mais de 10 | info |
 | Muitos serviços automáticos fora da pasta do Windows | mais de 25 | info |
 | Serviço automático parado com erro | qualquer um (informativo) | info |
@@ -142,7 +142,7 @@ backup; se algo falha no meio, o que não foi restaurado fica no backup.
 
 **Revalidação depois da confirmação (CLI).** Depois do `[s/N]` (e também com `--yes`, logo antes de aplicar) e ANTES de qualquer
 backup ou escrita, o comando recalcula o plano e exige o MESMO texto e as mesmas pendências do que foi mostrado; no desfazer
-reconfere também o backup (mesmo conteúdo). Divergência (outro processo mexeu no valor durante a pergunta) =
+reconfere também o backup (mesmo conteúdo). Isso vale também para o desfazer com ZERO pendências: pergunta "Tudo já está como antes. Remover o backup? [s/N]" (sem terminal exige `--yes`), revalida e só então remove o backup; `--dry-run` nunca remove. Divergência (outro processo mexeu no valor durante a pergunta) =
 `o estado mudou desde o plano mostrado; nada foi alterado; veja o plano de novo`, zero mutações e backup intacto.
 
 **Leitura do registro.** Pelo mesmo `reg.exe` da privacidade (caminho absoluto, `ReadOnlyRunner` para ler e `MutatingRunner` para
@@ -172,3 +172,7 @@ confirmação são recusadas: nunca há plano armado fora da tela (só `c` e `m`
   ou o Explorer? A reversão devolve o mesmo estado visual?
 - A pasta do backup quando o usuário que eleva é outro (SID e `%LOCALAPPDATA%` diferentes): coberto pelo dono gravado no arquivo,
   mas não testado numa máquina real.
+
+## Acompanhamento: janela entre a revalidação e a remoção do backup
+
+No desfazer com zero pendências o CLI pergunta "Tudo já está como antes. Remover o backup? [s/N]", relê o backup e o estado depois da confirmação e só então remove; a frase "O backup foi removido." só sai DEPOIS de `Remove()` retornar sem erro (cancelar, sem terminal, estado ou backup alterado e erro de `Remove()` deixam o backup e não anunciam remoção). Resta uma janela mínima entre a revalidação e o `Remove()`: o `Store` não tem remoção condicional nem trava compartilhada com `Save`, então o arquivo removido pode não ser exatamente a versão revalidada se outro processo gravar nesse intervalo. Acompanhamento: uma trava compartilhada Save/Remove (ou remoção condicional por conteúdo/versão) no `Store`.
