@@ -169,6 +169,7 @@ func (t *PrivacyTab) loadCmd() tea.Cmd {
 		return privLoadedMsg{info: info, err: err}
 	}
 }
+
 // Capturing implementa Tab: durante a confirmação [s/N] e a aplicação, todas as teclas são da aba (q, Tab e os números não saem).
 // Capturing diz que, durante a confirmação [s/N] e a aplicação, todas as teclas são da aba (q, Tab e os números não saem).
 func (t *PrivacyTab) Capturing() bool { return t.asking || t.busy == busyApply }
