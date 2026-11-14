@@ -7,8 +7,8 @@
  →         etapas — foco nas etapas da receita; ← ou Esc volta à lista.
  e         detalhes — liga e desliga os detalhes: o relatório traz também a
            saída original de cada etapa.
- Enter     revisar — abre a Revisão dos marcados (sem marcados, do item sob o
-           cursor); nada roda antes do plano e do s.
+ Enter     revisar — abre a Revisão dos itens marcados (marque com espaço; sem
+           marcados, só avisa); nada roda antes do plano e do s.
  m         máquina — alterna para a visão Máquina: o que o sistema informa (só
            leitura); m ou Esc volta.
 

@@ -368,7 +368,7 @@ func (t *RecipesTab) HelpKeys() []KeyDef {
 	} else {
 		out = append(out, navDef("/", "buscar", "filtra a lista; Enter fixa, Esc limpa."))
 	}
-	return append(out, navDef("Enter", "revisar", "abre a Revisão dos marcados (sem marcados, do item sob o cursor); nada roda antes do plano e do s."))
+	return append(out, navDef("Enter", "revisar", "abre a Revisão dos itens marcados (marque com espaço; sem marcados, só avisa); nada roda antes do plano e do s."))
 }
 
 // Status implementa Tab.

@@ -183,6 +183,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+		// Modal aberto (ajuda, versão nova): ele tem PRIORIDADE no despacho das teclas, antes da execução e das perguntas, e as
+		// consome sozinho (q só fecha a ajuda). Única exceção: Ctrl+C durante a execução fecha o modal e deixa a pergunta
+		// "Interromper?" aparecer VISÍVEL (uma pergunta nunca fica escondida atrás de um modal nem é respondida às cegas).
+		if m.modal != modalNone {
+			if msg.String() == "ctrl+c" && m.mode == modeRun {
+				m.modal = modalNone
+			} else {
+				next, cmd, _ := m.global(msg.String())
+				return next, cmd
+			}
+		}
 		// a seção que usa Enter e os números para si (Início) os recebe antes da Revisão e da troca de área, mas só na
 		// navegação normal: com Revisão, execução, modal ou pergunta aberta valem as regras da raiz.
 		if m.modal == modalNone && m.mode == modeNav && m.asking == askNone {

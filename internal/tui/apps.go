@@ -615,7 +615,7 @@ func (t *AppsTab) HelpKeys() []KeyDef {
 		navDef("↑↓", "mover", "move o cursor pela lista."),
 		act("espaço").says("marca ou desmarca o app para a Revisão."),
 		navDef("/", "buscar", "filtra por nome, id ou categoria; Enter fixa, Esc limpa."),
-		navDef("Enter", "revisar", "abre a Revisão dos marcados (sem marcados, do app sob o cursor); nada roda antes do plano e do s."),
+		navDef("Enter", "revisar", "abre a Revisão dos apps marcados (marque com espaço; sem marcados, só avisa); nada roda antes do plano e do s."),
 		act("v").says("abre a lista de versões (apps marcados com ▾)."),
 	}
 }
