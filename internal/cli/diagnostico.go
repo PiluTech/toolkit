@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -120,11 +122,24 @@ func runDiagnostico(ctx context.Context, out, errOut io.Writer, deps Deps, f dia
 		for _, x := range findings {
 			doc.Findings = append(doc.Findings, diagFindingJSON{Area: x.Area, Severity: severityName(x.Severity), Title: x.Title, Detail: x.Detail, Action: x.Action})
 		}
-		b, err := json.MarshalIndent(doc, "", "  ")
+		raw, err := json.Marshal(doc)
 		if err != nil {
 			return err
 		}
-		_, err = fmt.Fprintln(out, mask(string(b)))
+		// Mascara os VALORES de texto do documento já decodificado e só então serializa: chaves, números e tipos do
+		// contrato ficam intactos (um nome pessoal como "report" ou "Source" não toca as chaves) e os escapes do JSON
+		// (aspas e barras de um serial ou de um caminho do Windows) nunca são quebrados.
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.UseNumber()
+		var generic any
+		if err := dec.Decode(&generic); err != nil {
+			return err
+		}
+		b, err := json.MarshalIndent(diagnostico.MaskDocument(generic, names), "", "  ")
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(out, string(b))
 		return err
 	}
 
@@ -133,10 +148,11 @@ func runDiagnostico(ctx context.Context, out, errOut io.Writer, deps Deps, f dia
 	case f.report != "":
 		full := summary + "\n" + diagnostico.Full(rep, lang)
 		if err := writeReport(f.report, mask(full)); err != nil {
-			return err
+			// o erro do Open/Write/Close repete o caminho (PathError) e o caminho pode ter o nome da pessoa: tudo mascarado
+			return errors.New(mask(err.Error()))
 		}
 		_, _ = fmt.Fprint(out, mask(summary))
-		_, _ = fmt.Fprintf(out, "\n"+msg.DiagSaved+"\n", printable(f.report))
+		_, _ = fmt.Fprintf(out, "\n"+msg.DiagSaved+"\n", mask(printable(f.report)))
 	case f.full:
 		_, _ = fmt.Fprint(out, mask(summary+"\n"+diagnostico.Full(rep, lang)))
 	default:

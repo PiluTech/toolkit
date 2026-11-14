@@ -25,17 +25,13 @@ func privateIPv4(a, b int) bool {
 // informados (usuário e nome da máquina, sem diferenciar maiúsculas), compartilhamentos de rede (\\SERVIDOR\) e IPs
 // públicos (IPv4 vira A.x.x.x; IPv6 global vira 2001:x:x; IPs privados ficam).
 func MaskText(s string, personal []string) string {
-	s = diagfmt.Redact(s)
+	s = diagfmt.RedactText(s)
 	s = reEmail.ReplaceAllString(s, "[e-mail]")
 	s = reWinUser.ReplaceAllString(s, "${1}[usuário]")
 	s = reUnixHom.ReplaceAllString(s, "${1}[usuário]")
 	s = reWinHost.ReplaceAllString(s, "${1}[servidor]${2}")
 	for _, n := range personal {
-		n = strings.TrimSpace(n)
-		if len(n) < 3 { // nomes curtos demais (ex.: "a") mascarariam texto comum
-			continue
-		}
-		s = regexp.MustCompile(`(?i)`+regexp.QuoteMeta(n)).ReplaceAllString(s, "[pessoal]")
+		s = maskName(s, strings.TrimSpace(n))
 	}
 	s = reIPv4.ReplaceAllStringFunc(s, func(m string) string {
 		p := reIPv4.FindStringSubmatch(m)
@@ -60,4 +56,48 @@ func atoi(s string) int {
 		n = n*10 + int(r-'0')
 	}
 	return n
+}
+
+// maskName mascara um nome pessoal. Nome com 3 caracteres ou mais: em qualquer posição, sem diferenciar maiúsculas
+// (um nome de usuário aparece dentro de caminhos, domínios e frases). Nome curto (1 a 2 caracteres, ex.: usuário "Li",
+// máquina "PC"): por TOKEN, ou seja, só quando é a palavra inteira (delimitada por algo que não é letra, dígito ou _),
+// com a MESMA caixa informada, para "PC" não mascarar "PCI" nem "list" virar "[pessoal]st". Nome de 1 caractere não
+// dá para distinguir de texto comum ("a") e é ignorado (limite documentado em docs/diagnostico.md).
+func maskName(s, n string) string {
+	switch {
+	case n == "" || len([]rune(n)) < 2:
+		return s
+	case len([]rune(n)) >= 3:
+		return regexp.MustCompile(`(?i)`+regexp.QuoteMeta(n)).ReplaceAllString(s, "[pessoal]")
+	}
+	re := regexp.MustCompile(`(^|[^\p{L}\p{N}_])` + regexp.QuoteMeta(n) + `($|[^\p{L}\p{N}_])`)
+	for i := 0; i < 8; i++ { // o delimitador entre dois tokens vizinhos ("Li Li") é consumido por um só casamento
+		out := re.ReplaceAllString(s, "${1}[pessoal]${2}")
+		if out == s {
+			break
+		}
+		s = out
+	}
+	return s
+}
+
+// MaskDocument aplica MaskText a todo VALOR de texto de um documento já decodificado (mapas, listas e strings) e
+// devolve o documento: as chaves, os números e os tipos ficam exatamente como estão. É o que o --json usa, ANTES de
+// serializar (mascarar o JSON já serializado poderia trocar chaves do contrato ou quebrar escapes).
+func MaskDocument(v any, personal []string) any {
+	switch x := v.(type) {
+	case map[string]any:
+		for k, val := range x {
+			x[k] = MaskDocument(val, personal)
+		}
+		return x
+	case []any:
+		for i := range x {
+			x[i] = MaskDocument(x[i], personal)
+		}
+		return x
+	case string:
+		return MaskText(x, personal)
+	}
+	return v
 }

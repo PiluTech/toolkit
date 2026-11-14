@@ -67,7 +67,15 @@ usuário e nome da máquina (e variáveis `USER`, `USERNAME`, `COMPUTERNAME`, `H
 identificadores da máquina (número de série, UUID/GUID, UDID, ECID, WWN, IMEI, MAC: `diagfmt.Redact`) como `[***]`; e IPs
 públicos (`A.x.x.x`; IPv6 global `2001:x:x`; IPs privados ficam). Os coletores nem pedem série/UUID/MAC/hostname ao sistema,
 mensagens de evento entram só na primeira linha e os relatórios de falha do macOS nunca são abertos. O arquivo de
-`--relatorio` é criado com permissão 0600 e o comando **nunca sobrescreve** um arquivo que já existe.
+`--relatorio` é criado com permissão 0600 e o comando **nunca sobrescreve** um arquivo que já existe; o caminho que o comando
+mostra (confirmação e erros do Open/Write/Close, que repetem o caminho) também sai mascarado.
+
+Detalhes da máscara: o `--json` mascara os **valores de texto já decodificados** e só então serializa (`MaskDocument`): as
+chaves, os números e os tipos do contrato nunca mudam (um nome pessoal como `report` ou `Source` não toca as chaves) e os
+escapes do JSON (aspas e barras de um serial ou de um caminho do Windows) nunca se perdem. Nomes pessoais de 3 caracteres ou
+mais são mascarados em qualquer posição; nomes curtos (2 caracteres, ex.: usuário "Li", máquina "PC") por TOKEN, só quando são a
+palavra inteira e com a mesma caixa (`PCI` e `list` ficam). Um nome de 1 caractere não dá para distinguir de texto comum e é
+ignorado (limite).
 
 ## Testes
 

@@ -167,3 +167,81 @@ func TestDiagnosticoSoSemSuporteNaoExecutaNada(t *testing.T) {
 		t.Fatalf("%v\n%s", err, out)
 	}
 }
+
+// Lupa #60 (1): o caminho pessoal do --relatorio sai MASCARADO na confirmação e nos erros (o PathError do Open repete o
+// caminho). Pelo ExecuteWith: o que o usuário vê no stdout e no stderr.
+func TestDiagnosticoCaminhoPessoalMascaradoNaConfirmacaoENosErros(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "paulo")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run := func(path string) (code int, out, errOut string) {
+		var o, e bytes.Buffer
+		code = ExecuteWith(context.Background(), &o, &e, diagDeps(t, nil), []string{"diagnostico", "--no-update-check", "--relatorio", path})
+		return code, o.String(), e.String()
+	}
+	// sucesso: a confirmação não traz o nome
+	ok := filepath.Join(home, "rel.txt")
+	code, out, errOut := run(ok)
+	if code != 0 || strings.Contains(out, "paulo") || !strings.Contains(out, "Relatório completo salvo em ") || !strings.Contains(out, "[pessoal]") {
+		t.Fatalf("confirmação sem o nome (code %d):\n%s\n%s", code, out, errOut)
+	}
+	// erro do Open (arquivo já existe: PathError com o caminho) e pasta inexistente
+	for name, path := range map[string]string{"já existe": ok, "pasta inexistente": filepath.Join(base, "paulo", "nao-existe", "rel.txt")} {
+		code, out, errOut = run(path)
+		if code == 0 || !strings.Contains(errOut, "não deu para gravar o relatório") || strings.Contains(errOut, "paulo") || strings.Contains(out+errOut, "PAULO") {
+			t.Errorf("%s: o erro não pode trazer o nome (code %d):\n%s", name, code, errOut)
+		}
+	}
+}
+
+// Lupa #60 (2): o --json mascara os VALORES já decodificados e só então serializa: chaves e tipos do contrato intactos
+// mesmo com nomes pessoais como "report" e "Source", serial com aspas e barra, e caminhos do Windows escapados.
+func TestDiagnosticoJSONPreservaChavesETiposEMascaraValores(t *testing.T) {
+	deps := diagDeps(t, nil)
+	deps.Diag.Names = func() []string { return []string{"report", "Source", "paulo"} }
+	deps.Diag.Collect = func(context.Context, string, diagnostico.Deps) *diagnostico.Report {
+		r := diagReport()
+		r.Events = []diagnostico.Event{{Source: "report-service", Level: "erro", Count: 3,
+			Message: `falha: serial: SN"12\34 em C:\Users\paulo\AppData\x.dll e \\SERVIDOR\pasta`}}
+		r.Hardware.Model = "report Source Note"
+		return r
+	}
+	out, _, err := runDiag(t, deps, "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Report   map[string]any   `json:"report"`
+		Findings []map[string]any `json:"findings"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("o JSON mascarado precisa continuar válido: %v\n%s", err, out)
+	}
+	if doc.Report == nil || len(doc.Findings) == 0 {
+		t.Fatalf("chaves do contrato (report, findings) preservadas:\n%s", out)
+	}
+	evs, _ := doc.Report["Events"].([]any)
+	if len(evs) != 1 {
+		t.Fatalf("Events: %v", doc.Report["Events"])
+	}
+	ev, _ := evs[0].(map[string]any)
+	for _, k := range []string{"When", "Source", "ID", "Level", "Message", "Count"} {
+		if _, ok := ev[k]; !ok {
+			t.Errorf("a chave %q do evento foi alterada ou sumiu: %v", k, ev)
+		}
+	}
+	if c, _ := ev["Count"].(float64); c != 3 {
+		t.Errorf("o tipo numérico de Count foi preservado: %v", ev["Count"])
+	}
+	for _, sentinel := range []string{`SN"12`, `12\34`, "SN\\\"12", "paulo", "SERVIDOR", "report-service", "report Source"} {
+		if strings.Contains(out, sentinel) {
+			t.Errorf("a sentinela %q sobrou no JSON:\n%s", sentinel, out)
+		}
+	}
+	msg, _ := ev["Message"].(string)
+	if !strings.Contains(msg, "serial: [***]") || !strings.Contains(msg, `C:\Users\[usuário]\AppData\x.dll`) {
+		t.Errorf("valores decodificados mascarados: %q", msg)
+	}
+}

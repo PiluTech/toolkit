@@ -26,7 +26,7 @@ var (
 	// linhas "Chave: valor" ou "Chave = valor" (a chave não tem aspas nem chaves: o JSON é da regra de cima)
 	redactLine = regexp.MustCompile(`(?im)^([ \t]*[^\n:="{}\[\]]*(?:` + idKeys + `)[^\n:="{}\[\]]*[:=][ \t]*)\S.*$`)
 	// "serial: X", "uuid=X" no MEIO de uma frase (mensagem de log): o valor vira [***]
-	redactInline = regexp.MustCompile(`(?i)(\b(?:serial(?:[ _-]?(?:number|no\.?))?|uuid|guid|udid|ecid|wwn|imei|meid)\b\s*[:=]\s*)[^\s,;"')\]]+`)
+	redactInline = regexp.MustCompile(`(?i)(\b(?:serial(?:[ _-]?(?:number|no\.?))?|uuid|guid|udid|ecid|wwn|imei|meid)\b\s*[:=]\s*)[^\s,;]+`)
 	redactUUID   = regexp.MustCompile(`\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b`)
 	redactMAC    = regexp.MustCompile(`\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b`)
 	dashLine     = regexp.MustCompile(`^\s*-+(?:\s+-+)*\s*$`)
@@ -34,11 +34,18 @@ var (
 	wordStart    = regexp.MustCompile(`\S+`)
 )
 
-// Redact devolve s sem os identificadores da máquina.
+// Redact devolve s sem os identificadores da máquina. JSON válido é redigido por chave E por valor ANTES de ser
+// serializado de novo (o resultado continua JSON válido, com as mesmas chaves e tipos); o resto passa por RedactText.
 func Redact(s string) string {
 	if out, ok := redactJSONDocument(s); ok {
-		return redactTokens(out)
+		return out
 	}
+	return RedactText(s)
+}
+
+// RedactText é o caminho de TEXTO (sem tentar ler JSON): tabelas, JSON truncado, linhas "Chave: valor", identificadores
+// no meio de uma frase e UUIDs e MACs soltos. É o que se usa em texto corrido e em cada valor de string já decodificado.
+func RedactText(s string) string {
 	s = redactTables(s)
 	s = redactJSONish.ReplaceAllString(s, `${1}"`+redactedValue+`"`)
 	s = redactLine.ReplaceAllString(s, `${1}`+redactedValue)
@@ -89,6 +96,9 @@ func redactValue(v any) any {
 			x[k] = redactValue(val)
 		}
 		return x
+	case string:
+		// o valor JÁ DECODIFICADO (sem as barras de escape do JSON): é aqui que "serial: SN\"12\\34" é redigido inteiro
+		return redactTokens(x)
 	case []any:
 		for i := range x {
 			x[i] = redactValue(x[i])
