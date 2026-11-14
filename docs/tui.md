@@ -279,7 +279,11 @@ Gerada (`layout.go helpBody`, `keys.go`): três blocos, na ordem **Nesta seção
 ## Pior caso de dados
 
 Nome longo corta no fim com `…` (inteiro na linha de estado). Versão longa (`1:2.43.0-1ubuntu7.3+esm2~24.04.1`)
-nunca corta: o estado vira símbolo e versão, o nome cede e a coluna VERSÃO some. 2000 apps: só as linhas
+nunca corta: a coluna VERSÃO se alarga até a maior versão visível e as outras cedem na ordem via, depois nome
+(piso de 12 colunas); se ainda assim não cabe (lista estreita com o painel de detalhe, 110 a 119 colunas), o
+estado vira símbolo e versão, a coluna VERSÃO some e o nome cede até 6 colunas (inteiro no painel e na linha de
+estado). Na Privacidade a descrição do perfil e o título do ajuste quebram na largura com recuo, e o aviso "Nunca
+rodou" e o erro de etapa das Receitas também: texto de frase nunca leva reticências, só nome de item. 2000 apps: só as linhas
 visíveis são desenhadas, o estado é lido primeiro para o que está na tela. Contagens no singular e plural
 ("1 marcado"/"3 marcados", "5 de 2000 apps" com filtro). Mais de 300 versões rolam no modal, `/` filtra.
 Comando de 140+ colunas quebra em espaços com recuo (argumento sem espaço quebra com `\`). Receita de 14

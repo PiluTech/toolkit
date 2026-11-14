@@ -2,12 +2,12 @@
  Instalar › [Apps]  Receitas                                                                                 admin: sim
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  DEV                                                                       │ Python
-   [ ] Git                             ✓ instalado               1:2.43.0-…│ python · dev
- > [ ] Python                       ▾  ○ não instalado                     │
+   [ ] Git                      ✓ instalado               1:2.43.0-1ubuntu7│ python · dev
+ > [ ] Python                ▾  ○ não instalado                            │
  MIDIA                                                                     │ ESTADO
-   [ ] VLC                             - sem instalador                    │ ○ não instalado
+   [ ] VLC                      - sem instalador                           │ ○ não instalado
  NAVEGADORES                                                               │
-   [ ] Firefox                         ✓ instalado               133.0     │ INSTALAÇÃO
+   [ ] Firefox                  ✓ instalado               133.0            │ INSTALAÇÃO
                                                                            │ - apt: o primeiro que o toolkit tenta
                                                                            │   usa sudo -n (rode sudo -v antes; o
                                                                            │   toolkit nunca pede senha)

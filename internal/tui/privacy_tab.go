@@ -635,7 +635,7 @@ func (t *PrivacyTab) mainLines(w int) []string {
 		if i == t.cur {
 			cursor, name = ">", t.theme.Bold().Render(name)
 		}
-		out = append(out, clip(" "+cursor+" "+name+"  "+p.desc, w))
+		out = append(out, hangLines(" "+cursor+" "+name+"  ", 1+1+1+12+2, p.desc, w)...)
 	}
 	if t.onlyUser {
 		out = append(out, " "+t.theme.Accent().Render("[x]")+" aplicar só os itens do usuário (--somente-usuario): o que exige administrador fica de fora")
@@ -653,10 +653,53 @@ func (t *PrivacyTab) mainLines(w int) []string {
 		if s.Admin {
 			adm = " [admin]"
 		}
-		out = append(out, clip(" "+style.Render(cell(sym+" "+word, 16))+" "+s.Title+adm, w))
+		out = append(out, hangLines(" "+style.Render(cell(sym+" "+word, 16))+" ", 1+16+1, s.Title+adm, w)...)
 	}
 	if shown == 0 {
 		out = append(out, " Nenhum ajuste para este perfil.")
+	}
+	return out
+}
+
+// hangLines põe text depois de prefix (já desenhado, com prefixW colunas) e QUEBRA nos espaços na largura w,
+// com as linhas seguintes recuadas na coluna do texto: nada é cortado com reticências.
+func hangLines(prefix string, prefixW int, text string, w int) []string {
+	room := w - prefixW
+	if room < 10 || lipgloss.Width(text) <= room {
+		return []string{prefix + text}
+	}
+	pad := strings.Repeat(" ", prefixW)
+	var out []string
+	cur := ""
+	for _, word := range strings.Fields(text) {
+		for lipgloss.Width(word) > room { // palavra maior que a linha: parte em pedaços
+			if cur != "" {
+				out = append(out, cur)
+				cur = ""
+			}
+			head, rest := splitWidth(word, room)
+			out = append(out, head)
+			word = rest
+		}
+		switch {
+		case cur == "":
+			cur = word
+		case lipgloss.Width(cur)+1+lipgloss.Width(word) <= room:
+			cur += " " + word
+		default:
+			out = append(out, cur)
+			cur = word
+		}
+	}
+	if cur != "" {
+		out = append(out, cur)
+	}
+	for i := range out {
+		if i == 0 {
+			out[i] = prefix + out[i]
+		} else {
+			out[i] = pad + out[i]
+		}
 	}
 	return out
 }
