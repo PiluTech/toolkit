@@ -16,6 +16,7 @@ Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (
 - `SECURITY.md`: como reportar e as regras garantidas (hash obrigatório etc.).
 - `CONTRIBUTING.md`: como adicionar um app ou receita.
 - `docs/tui.md`: especificação da TUI (variante A adotada: abas, tokens, teclas, estados, mensagens Bubble Tea), decisões em aberto e pendências fora da TUI (update, menores da fase 5).
+- `docs/plano-seguranca-e-tui.md`: PROPOSTA (sem código) de quatro funções, todas também na TUI: USB permitidos (Windows, USBGuard, macOS só orientação; limite honesto de clonagem de VID/PID), análise de rede só leitura, otimização do Windows (gargalos + animações com desfazer) e mais apps no catálogo (navegadores, LibreOffice, compactadores, acesso remoto). Riscos, `security-audit` por PR, ordem de PRs, decisões abertas e lista de A VERIFICAR.
 - `docs/roadmap.md`: o que vem depois da v0.1.0 (update, aviso de versão, ícone, localização pt-BR/en/es, acessibilidade da TUI, smoke) e os padrões de produto da PiluTech (skill `padroes-produto-pilutech`).
 - `docs/auditoria-a11y-l10n.md`: auditoria de acessibilidade e localização (2026-11-13) contra a skill `padroes-produto-pilutech`: achados A1–A8 e L1–L10, o que já cumpre, medição de contraste e ordem sugerida das correções.
 - `docs/notas-de-versao/vX.Y.Z.md`: texto pronto das notas de cada release (o Paulo cola no rascunho que a pipeline cria, no lugar dos `(preencher)`). Hoje: v0.2.2 e v0.3.0.
