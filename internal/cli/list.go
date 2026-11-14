@@ -132,6 +132,9 @@ type listItem struct {
 	ExternalPath    string `json:"external_path,omitempty"`
 	// StatusError: não deu para verificar (sem instalador aplicável, leitura falhou).
 	StatusError string `json:"status_error,omitempty"`
+	// DetectGap (só com installed=false): "incomplete" (leitura do registro incompleta) ou "not_applicable"
+	// (app sem detecção neste SO). Nos dois casos o texto é "não detectado", nunca "não instalado".
+	DetectGap string `json:"detect_gap,omitempty"`
 }
 
 func newListCmd(deps Deps) *cobra.Command {
@@ -279,6 +282,7 @@ func fillState(ctx context.Context, it *listItem, deps Deps, rn exec.Runner, reg
 	inst := st.Installed
 	it.Installed = &inst
 	it.InstalledVersion = printable(st.Version)
+	it.DetectGap = st.DetectGap
 	switch {
 	case st.External != nil:
 		it.Source = "external"
@@ -295,6 +299,10 @@ func stateCell(it listItem) string {
 	switch {
 	case it.StatusError != "":
 		return msg.ListStateUnknown
+	case (it.Installed == nil || !*it.Installed) && it.DetectGap == DetectIncomplete:
+		return msg.ListStateIncomplete
+	case (it.Installed == nil || !*it.Installed) && it.DetectGap == DetectNotApplicable:
+		return msg.ListStateUndetected
 	case it.Installed == nil || !*it.Installed:
 		return msg.ListStateNo
 	}

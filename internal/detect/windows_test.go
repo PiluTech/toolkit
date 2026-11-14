@@ -11,13 +11,35 @@ import (
 
 // Formato da saída do script (ver windows.go): uma linha por item, separada por TAB.
 //   U origem nome versão publisher SystemComponent ParentKeyName   (chave de desinstalação)
-//   A origem exe                                                   (App Paths)
+//   A origem subchave caminho folha                                (App Paths: valor padrão; folha 1 = .exe local existente)
+//   S tipo origem estado                                           (estado da raiz: ok, ausente, falhou)
 // As fixtures são SINTÉTICAS: nomes no formato conhecido de cada instalador, não capturas de uma máquina real.
 
 func winStub(lines ...string) *stub {
+	all := append([]string{}, lines...)
+	for _, r := range append(append([]rootKey{}, uninstallRoots...), appPathsRoots...) {
+		all = append(all, st(r.kind, r.origin, "ok"))
+	}
+	return winRaw(all...)
+}
+
+// winRaw devolve EXATAMENTE as linhas dadas (sem os estados "ok" que winStub acrescenta).
+func winRaw(lines ...string) *stub {
 	out := strings.Join(lines, "\r\n") + "\r\n"
 	return &stub{handle: func(exec.Cmd) (exec.Result, error) { return ok(out) }}
 }
+
+// st monta a linha de estado de uma raiz.
+func st(kind, origin, state string) string {
+	return strings.Join([]string{"S", kind, origin, state}, "\t")
+}
+
+// ap monta uma linha de App Paths.
+func ap(origin, sub, path, leaf string) string {
+	return strings.Join([]string{"A", origin, sub, path, leaf}, "\t")
+}
+
+const chromePath = `C:\Program Files\Google\Chrome\Application\chrome.exe`
 
 // u monta uma linha de chave de desinstalação.
 func u(origin, name, version, publisher string) string {
@@ -134,26 +156,26 @@ func TestWindowsPublisherDeclaradoExigeIgualdade(t *testing.T) {
 
 func TestWindowsAppPathsComoEvidenciaComplementar(t *testing.T) {
 	a := winApp(t, "display_name: Google Chrome, app_path: chrome.exe")
-	ap := strings.Join([]string{"A", "HKLM", "chrome.exe"}, "\t")
-	f, found := find(t, New(winStub(ap), Options{GOOS: "windows"}), a)
+	lin := ap("HKLM", "chrome.exe", chromePath, "1")
+	f, found := find(t, New(winStub(lin), Options{GOOS: "windows"}), a)
 	if !found || !strings.Contains(f.Where, "App Paths") || !strings.Contains(f.Where, "chrome.exe") || f.Version != "" {
 		t.Fatalf("%v %+v", found, f)
 	}
 	// O Uninstall tem prioridade (traz a versão).
-	f, found = find(t, New(winStub(ap, u("HKLM", "Google Chrome", "130", "G")), Options{GOOS: "windows"}), a)
+	f, found = find(t, New(winStub(lin, u("HKLM", "Google Chrome", "130", "G")), Options{GOOS: "windows"}), a)
 	if !found || f.Version != "130" || strings.Contains(f.Where, "App Paths") {
 		t.Fatalf("%v %+v", found, f)
 	}
 	// Outro exe não casa; sem app_path no catálogo o App Paths é ignorado.
-	other := strings.Join([]string{"A", "HKCU", "firefox.exe"}, "\t")
+	other := ap("HKCU", "firefox.exe", `C:\Firefox\firefox.exe`, "1")
 	if _, found = find(t, New(winStub(other), Options{GOOS: "windows"}), a); found {
 		t.Fatal("outro exe")
 	}
-	if _, found = find(t, New(winStub(ap), Options{GOOS: "windows"}), winApp(t, "display_name: Google Chrome")); found {
+	if _, found = find(t, New(winStub(lin), Options{GOOS: "windows"}), winApp(t, "display_name: Google Chrome")); found {
 		t.Fatal("sem app_path no catálogo")
 	}
 	// App com só app_path (sem display_name) também funciona.
-	if _, found = find(t, New(winStub(ap), Options{GOOS: "windows"}), winApp(t, "app_path: chrome.exe")); !found {
+	if _, found = find(t, New(winStub(lin), Options{GOOS: "windows"}), winApp(t, "app_path: chrome.exe")); !found {
 		t.Fatal("só app_path")
 	}
 }
@@ -256,7 +278,7 @@ func TestWindowsAppPathsDoCatalogoEmbutido(t *testing.T) {
 	}
 	for id, exe := range map[string]string{"chrome": "chrome.exe", "firefox": "firefox.exe", "brave": "brave.exe"} {
 		a, _ := c.Get(id)
-		f, found := find(t, New(winStub(strings.Join([]string{"A", "HKCU", exe}, "\t")), Options{GOOS: "windows"}), a)
+		f, found := find(t, New(winStub(ap("HKCU", exe, `C:\Apps\`+exe, "1")), Options{GOOS: "windows"}), a)
 		if !found || !strings.Contains(f.Where, exe) {
 			t.Errorf("%s: %v %+v", id, found, f)
 		}

@@ -119,6 +119,8 @@ type External struct {
 	Manager string // nome para o usuário do gerenciador esperado ("Homebrew")
 	Where   string // onde está ("/Applications/Discord.app")
 	Version string // versão lida, se houver
+	// Incomplete só vem com found == false: a leitura falhou em parte, então "não achei" não é "não instalado".
+	Incomplete bool
 }
 
 // ExternalFinder procura o app fora do gerenciador (leitura). O segundo valor é false quando não há. Um erro
