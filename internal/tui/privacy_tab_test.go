@@ -25,19 +25,42 @@ type fakePriv struct {
 	plans     []string
 	applies   []string
 	undoCalls int
+	seq       int
+	lastID    string   // ID do ÚLTIMO plano emitido (o exibido)
+	applyIDs  []string // IDs recebidos pelo Apply/Undo (a confirmação deve usar o do plano exibido)
 }
 
 func (f *fakePriv) Load(context.Context) (PrivInfo, error) { f.loads++; return f.info, f.loadErr }
 func (f *fakePriv) Plan(_ context.Context, p PrivProfile, only bool) (PrivPlan, error) {
 	f.plans = append(f.plans, string(p)+map[bool]string{true: "+user", false: ""}[only])
-	return f.plan, f.planErr
+	pl := f.plan
+	pl.ID = f.issue()
+	return pl, f.planErr
 }
-func (f *fakePriv) Apply(_ context.Context, p PrivProfile, only bool, _ string) (PrivResult, error) {
+
+func (f *fakePriv) issue() string {
+	f.seq++
+	f.lastID = "plano-" + string(rune('0'+f.seq%10)) + "-" + string(rune('a'+f.seq%26))
+	return f.lastID
+}
+func (f *fakePriv) Apply(_ context.Context, p PrivProfile, only bool, id string) (PrivResult, error) {
+	f.applyIDs = append(f.applyIDs, id)
+	if id != f.lastID {
+		return PrivResult{}, ErrPrivStalePlan // a confirmação tem de usar o ID do plano EXIBIDO
+	}
 	f.applies = append(f.applies, string(p)+map[bool]string{true: "+user", false: ""}[only])
 	return f.applyRes, f.applyErr
 }
-func (f *fakePriv) UndoPlan(context.Context) (PrivPlan, error) { return f.undoPlan, f.undoErr }
-func (f *fakePriv) Undo(context.Context, string) (PrivResult, error) {
+func (f *fakePriv) UndoPlan(context.Context) (PrivPlan, error) {
+	pl := f.undoPlan
+	pl.ID = f.issue()
+	return pl, f.undoErr
+}
+func (f *fakePriv) Undo(_ context.Context, id string) (PrivResult, error) {
+	f.applyIDs = append(f.applyIDs, id)
+	if id != f.lastID {
+		return PrivResult{}, ErrPrivStalePlan
+	}
 	f.undoCalls++
 	return f.undoRes, f.undoRunE
 }
@@ -538,5 +561,18 @@ func privFirstPlanMsg(cmd tea.Cmd) tea.Msg {
 		return nil
 	default:
 		return m
+	}
+}
+
+// Lupa #66: a confirmação usa o ID do plano EXIBIDO (o fake recusa qualquer outro).
+func TestPrivacyConfirmUsaOIDDoPlanoExibido(t *testing.T) {
+	be := &fakePriv{info: privSample(true), plan: PrivPlan{Text: planText, Pending: 2}, applyRes: PrivResult{Applied: 2}}
+	tab := privTab(t, be)
+	pkey(tab, "a", "s")
+	if len(be.applyIDs) != 1 || be.applyIDs[0] != be.lastID || be.lastID == "" {
+		t.Fatalf("ids=%v último=%q", be.applyIDs, be.lastID)
+	}
+	if len(be.applies) != 1 {
+		t.Fatalf("o plano exibido devia ter sido aplicado: %v", be.applies)
 	}
 }

@@ -72,14 +72,14 @@ func rootRunOS(t *testing.T, goos string, stdin, stdout bool, term string, args 
 
 func TestRootWithoutArgsOpensTUIOnlyWithTerminal(t *testing.T) {
 	out, opened, tabs := rootRun(t, true, true, "xterm")
-	if !opened || len(tabs) != 5 {
-		t.Fatalf("deve abrir a TUI com 5 abas: opened=%v abas=%d (%s)", opened, len(tabs), out)
+	if !opened || len(tabs) != 6 {
+		t.Fatalf("deve abrir a TUI com 6 abas: opened=%v abas=%d (%s)", opened, len(tabs), out)
 	}
 	var titles []string
 	for _, tb := range tabs {
 		titles = append(titles, tb.Title())
 	}
-	if strings.Join(titles, ",") != "Apps,Receitas,Diagnóstico,Log,Privacidade" {
+	if strings.Join(titles, ",") != "Apps,Receitas,Diagnóstico,Log,Privacidade,Apps nativos" {
 		t.Fatalf("abas: %v", titles)
 	}
 }
@@ -393,7 +393,7 @@ func TestStdinAndStdoutShareTheSameTerminalDetection(t *testing.T) {
 func TestRootOpensTUIOnWindowsWithoutTERM(t *testing.T) {
 	for _, term := range []string{"", "  "} {
 		_, opened, tabs := rootRunOS(t, "windows", true, true, term)
-		if !opened || len(tabs) != 5 {
+		if !opened || len(tabs) != 6 {
 			t.Fatalf("no Windows com TERM=%q a TUI deve abrir: opened=%v abas=%d", term, opened, len(tabs))
 		}
 	}
@@ -429,7 +429,7 @@ func TestTuiSubcommandOpensTUI(t *testing.T) {
 			term = "xterm"
 		}
 		_, opened, tabs := rootRunOS(t, goos, true, true, term, "tui")
-		if !opened || len(tabs) != 5 {
+		if !opened || len(tabs) != 6 {
 			t.Fatalf("%s: `toolkit tui` deve abrir a TUI: opened=%v abas=%d", goos, opened, len(tabs))
 		}
 	}
