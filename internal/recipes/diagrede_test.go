@@ -353,24 +353,24 @@ func runAll(t *testing.T, c osCase, f fakeEnv, env ...string) (map[string]string
 	return outs, calls
 }
 
-func TestDiagRedeSaidaMascaradaEResumida(t *testing.T) {
+// O toolkit mostra as informações da rede como o sistema informa (decisão do Paulo: ferramenta de análise): IPs públicos,
+// IPv6 global e nome do Wi-Fi aparecem inteiros, sem máscara nenhuma. O MAC não é coletado (a receita não o pede).
+func TestDiagRedeSaidaSemMascaraEResumida(t *testing.T) {
 	for _, c := range diagCases {
 		f := newToolbox(t, c.fakes())
 		outs, calls := runAll(t, c, f)
 		all := strings.Join([]string{outs["interfaces"], outs["dns"], outs["alcance"], outs["wifi"], outs["portas"]}, "\n")
-		// dado sensível nunca aparece: MAC, SSID, IPv4 e IPv6 públicos do usuário
-		for _, secret := range []string{"52:54:00:12:34:56", "aa:bb:cc:dd:ee:ff", "11:22:33:44:55:66", "MinhaRedeSecreta", "203.0.113.", "2001:db8", "5223", "52000"} {
-			if strings.Contains(all, secret) {
-				t.Errorf("%v: dado sensível %q na saída:\n%s", c.os, secret, all)
-			}
-		}
-		// o que é privado e útil continua
-		for _, want := range []string{"192.168.1.1", "203.x.x.x", "2001:x:x", "fe80::", "1500", "ok"} {
+		for _, want := range []string{"192.168.1.1", "203.0.113.", "2001:db8", "MinhaRedeSecreta", "fe80::", "1500", "ok"} {
 			if !strings.Contains(all, want) {
-				t.Errorf("%v: faltou %q na saída:\n%s", c.os, want, all)
+				t.Errorf("%v: faltou %q na saída (nada é escondido):\n%s", c.os, want, all)
 			}
 		}
-		if !strings.Contains(outs["wifi"], "[nome oculto]") || !strings.Contains(outs["wifi"], "Adaptador") {
+		for _, bad := range []string{".x.x.x", ":x:x", "[nome oculto]", "[name hidden]", "masked", "mascarad"} {
+			if strings.Contains(all, bad) {
+				t.Errorf("%v: sobrou máscara %q na saída:\n%s", c.os, bad, all)
+			}
+		}
+		if !strings.Contains(outs["wifi"], "MinhaRedeSecreta") || !strings.Contains(outs["wifi"], "Adaptador") {
 			t.Errorf("%v wifi: %q", c.os, outs["wifi"])
 		}
 		if !strings.Contains(outs["alcance"], "HTTPS https://example.com/: ok (HTTP 200; tcp 0.011 s; tls 0.045 s; total 0.098 s)") {
@@ -597,7 +597,8 @@ func TestDiagRedeCurlComQPrimeiroESemSSLKEYLOGFILE(t *testing.T) {
 
 // Lupa #55 (2): se o DNS devolve o IP público da própria máquina (o mesmo que a etapa interfaces mascarou), ele não
 // reaparece; o mesmo vale para as caudas de erro do ping e do curl. Alvo, servidor DNS e gateway continuam como são.
-func TestDiagRedeMascaraRespostasDeDNSEErrosDeRede(t *testing.T) {
+// Respostas de DNS e caudas de erro do ping e do curl aparecem como vieram (inclusive o IP público da própria máquina).
+func TestDiagRedeRespostasDeDNSEErrosDeRedeSemMascara(t *testing.T) {
 	for _, c := range diagCases {
 		fakes := c.fakes()
 		own4, own6 := "203.0.113.7", "2001:db8:abcd:12::5"
@@ -609,20 +610,18 @@ func TestDiagRedeMascaraRespostasDeDNSEErrosDeRede(t *testing.T) {
 		f := newToolbox(t, fakes)
 		r := diagRecipe(t, c.os)
 		dns, _, _ := f.runStep(t, stepScript(t, r, "dns"))
-		if strings.Contains(dns, own4) || strings.Contains(dns, own6) || strings.Contains(dns, "2001:db8") {
-			t.Errorf("%v: o IP público da própria máquina reapareceu no DNS:\n%s", c.os, dns)
+		for _, want := range []string{own4, own6, "192.168.1.50", "192.168.1.1"} {
+			if !strings.Contains(dns, want) {
+				t.Errorf("%v: faltou %q no DNS (nada é escondido):\n%s", c.os, want, dns)
+			}
 		}
-		if !strings.Contains(dns, "203.x.x.x") || !strings.Contains(dns, "2001:x:x") || !strings.Contains(dns, "192.168.1.50") || !strings.Contains(dns, "192.168.1.1") {
-			t.Errorf("%v: máscara/preservação do DNS erradas:\n%s", c.os, dns)
+		if strings.Contains(dns, ".x.x.x") || strings.Contains(dns, ":x:x") {
+			t.Errorf("%v: sobrou máscara no DNS:\n%s", c.os, dns)
 		}
 		alc, _, code := f.runStep(t, stepScript(t, r, "alcance"), "STUB_PING_ERR=1", "STUB_CURL_ERR=1")
-		if code != 0 || strings.Contains(alc, "203.0.113.7") {
-			t.Errorf("%v: cauda de erro do ping/curl com IP público (status %d):\n%s", c.os, code, alc)
+		if code != 0 || !strings.Contains(alc, "203.0.113.7") || !strings.Contains(alc, "falhou") || strings.Contains(alc, ".x.x.x") {
+			t.Errorf("%v: a cauda de erro do ping/curl aparece como veio (status %d):\n%s", c.os, code, alc)
 		}
-		if !strings.Contains(alc, "203.x.x.x") || !strings.Contains(alc, "falhou") {
-			t.Errorf("%v: erro mascarado ausente:\n%s", c.os, alc)
-		}
-		// o alvo configurado continua visível (exceção documentada)
 		if !strings.Contains(alc, "https://example.com/") || !strings.Contains(alc, "1.1.1.1") {
 			t.Errorf("%v: alvo deveria aparecer como é:\n%s", c.os, alc)
 		}
@@ -635,7 +634,7 @@ func TestDiagRedeLinuxNslookupNaoLeConfigDoUsuario(t *testing.T) {
 	f := newToolbox(t, fakes)
 	out, _, code := f.runStep(t, stepScript(t, diagRecipe(t, platform.Linux), "dns"))
 	data, _ := os.ReadFile(f.log + ".env")
-	if code != 0 || !strings.Contains(string(data), "HOME=/\n") || !strings.Contains(out, "93.x.x.x") {
-		t.Errorf("nslookup deve rodar com HOME=/ e a resposta sair mascarada (status %d):\n%s\n%s", code, data, out)
+	if code != 0 || !strings.Contains(string(data), "HOME=/\n") || !strings.Contains(out, "93.184.216.34") {
+		t.Errorf("nslookup deve rodar com HOME=/ e a resposta sair como veio (status %d):\n%s\n%s", code, data, out)
 	}
 }

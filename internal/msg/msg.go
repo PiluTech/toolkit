@@ -120,11 +120,11 @@ const (
 // Textos do comando diagnostico.
 const (
 	DiagShort = "Diagnostica a máquina (só leitura): hardware, discos, bateria, temperatura e erros"
-	DiagLong  = "Lê o estado de saúde da máquina SEM alterar nada e SEM pedir administrador: hardware, discos com SMART, bateria, temperatura, GPU e os erros e falhas recentes do sistema (Windows: Eventos, Confiabilidade e telas azuis; macOS: relatórios de falha e log de erros; Linux: journalctl e dmesg). Mostra um resumo do que está ruim e do que fazer. O que exigir administrador (SMART no Linux, temperatura no macOS) aparece como \"não lido\" com a instrução. O relatório completo e o arquivo de --relatorio saem com os dados sensíveis mascarados (nome do usuário e da máquina, séries, UUIDs, MACs, e-mails, IPs públicos)."
+	DiagLong  = "Lê o estado de saúde da máquina SEM alterar nada e SEM pedir administrador: hardware, discos com SMART, bateria, temperatura, GPU e os erros e falhas recentes do sistema (Windows: Eventos, Confiabilidade e telas azuis; macOS: relatórios de falha e log de erros; Linux: journalctl e dmesg). Mostra um resumo do que está ruim e do que fazer. O que exigir administrador (SMART no Linux, temperatura no macOS) aparece como \"não lido\" com a instrução. As informações aparecem como o sistema as informa: nada é mascarado."
 
-	FlagDiagFull   = "mostra também o relatório completo (todos os dados lidos), com os dados sensíveis mascarados"
-	FlagDiagJSON   = "saída em JSON (resumo e dados lidos, mascarados)"
-	FlagDiagReport = "grava o resumo e o relatório completo (mascarados) neste arquivo novo (permissão 0600; não sobrescreve)"
+	FlagDiagFull   = "mostra também o relatório completo (todos os dados lidos)"
+	FlagDiagJSON   = "saída em JSON (resumo e dados lidos)"
+	FlagDiagReport = "grava o resumo e o relatório completo neste arquivo novo (permissão 0600; não sobrescreve)"
 
 	DiagReading   = "Lendo o estado da máquina (só leitura; pode levar até um minuto)…"
 	DiagSaved     = "Relatório completo salvo em %s"

@@ -1,6 +1,6 @@
 // Package diagnostico reúne, SÓ PARA LEITURA, o estado de saúde da máquina (hardware, discos com SMART, bateria,
 // temperatura, GPU e erros recentes), transforma em achados ("o que está ruim e o que fazer") e monta o resumo e o
-// relatório completo com os dados sensíveis mascarados. Os coletores de cada SO (coleta_win.go, coleta_lin.go,
+// relatório completo (as informações do PC aparecem como são: nada é mascarado). Os coletores de cada SO (coleta_win.go, coleta_lin.go,
 // coleta_mac.go) só usam o exec.Runner de leitura e as funções de arquivo injetadas em Deps: nenhum teste toca o
 // sistema real e nada pede administrador (o que exigiria admin vira um item em Report.Skipped, com a instrução).
 package diagnostico
@@ -115,7 +115,7 @@ type Event struct {
 type Crash struct {
 	When   time.Time
 	Kind   CrashKind
-	Detail string // código de parada, nome do processo, resumo (sem caminhos de usuário)
+	Detail string // código de parada, nome do processo, resumo
 }
 
 // Skipped é uma área que não pôde ser lida, com o motivo e o que fazer (nunca silêncio).

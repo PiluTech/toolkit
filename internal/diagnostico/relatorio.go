@@ -89,8 +89,7 @@ func dur(d time.Duration, l Lang) string {
 	return fmt.Sprintf("%d h %d min", hours, int(d.Minutes())%60)
 }
 
-// Full é o relatório completo: todos os dados lidos, por área. Não mascara nada sozinho: o chamador passa o texto por
-// MaskText antes de mostrar ou gravar (os campos de texto livre, como mensagens de evento, vêm do sistema).
+// Full é o relatório completo: todos os dados lidos, por área, como o sistema os informou (nada é mascarado).
 func Full(r *Report, l Lang) string {
 	t := func(pt, en, es string) string { return diagfmt.T(l, pt, en, es) }
 	var b strings.Builder
