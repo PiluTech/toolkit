@@ -18,6 +18,9 @@ type natSys struct {
 	others      []appsnativos.Package
 	provisioned []appsnativos.Provisioned
 	removes     []string
+	// onList (opcional) roda no início de cada ListInstalled, com o número da chamada: simula outro processo.
+	lists  int
+	onList func(call int)
 }
 
 func newNatSys(admin bool, names ...string) *natSys {
@@ -36,6 +39,10 @@ func natPkg(name string) appsnativos.Package {
 func (s *natSys) IsAdmin(context.Context) bool            { return s.admin }
 func (s *natSys) UserSID(context.Context) (string, error) { return "S-1-5-21-1-2-3-1001", nil }
 func (s *natSys) ListInstalled(_ context.Context, all bool) ([]appsnativos.Package, error) {
+	s.lists++
+	if s.onList != nil {
+		s.onList(s.lists)
+	}
 	if all && !s.admin {
 		return nil, exec.ErrNotElevated
 	}
