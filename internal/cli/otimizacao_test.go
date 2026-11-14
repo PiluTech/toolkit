@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -143,8 +144,10 @@ func TestOtimizacaoRelatorioNovo0600SemSobrescrever(t *testing.T) {
 	if err != nil || !strings.Contains(string(b), "== CPU ==") || !strings.Contains(string(b), "Otimização do Windows") {
 		t.Fatalf("o arquivo traz resumo e completo: %v\n%s", err, b)
 	}
-	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o600 {
-		t.Errorf("permissão %v, quer 0600", fi.Mode().Perm())
+	if runtime.GOOS != "windows" { // permissões Unix não existem no Windows (o diagnóstico pula pelo mesmo motivo)
+		if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o600 {
+			t.Errorf("permissão %v, quer 0600", fi.Mode().Perm())
+		}
 	}
 	if !strings.Contains(out, "Relatório completo salvo em") {
 		t.Errorf("faltou a linha do arquivo salvo:\n%s", out)
