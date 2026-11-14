@@ -68,6 +68,9 @@ Precedência: `-Versao` (`--versao`, `-v`) > `TOOLKIT_VERSION` > última release
 Em `curl ... | TOOLKIT_VERSION=... sh` a variável vale para o `sh` (o lado que lê o script), que é onde o
 `unix.sh` a lê.
 
+
+**Formato do backup do `toolkit privacidade` (nota para a v0.4.0-rc.1).** O formato de backup da privacidade nasce nesta versão: nenhuma versão publicada o criou, então não há migração nem compatibilidade com formato anterior. O `desfazer` só conhece o catálogo ATUAL, sem exceções: um backup que cite um ajuste fora do catálogo (por exemplo o serviço `dmwappushservice`, que saiu do catálogo antes da publicação) é recusado, sem alterar nada.
+
 ## Segredos e environment `release`
 
 Nada de segredo no código, no workflow ou no log. Os cinco segredos vivem no **environment `release`** (Settings,

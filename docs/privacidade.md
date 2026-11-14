@@ -47,3 +47,7 @@ toolkit privacidade aplicar --perfil recomendado --dry-run
 ```
 
 Os testes automáticos (`internal/cli/privacidade_test.go`, `internal/privacidade`) usam um Windows em memória: nenhum teste toca o registro, os serviços ou as tarefas reais. Todo texto vindo do sistema passa por `textsafe` antes de chegar ao terminal.
+
+## Formato do backup
+
+O formato do backup nasce na v0.4.0-rc.1 (nunca houve outro publicado): não há migração. O `desfazer` valida cada entrada contra o catálogo atual, sem exceções; backup que cite algo fora do catálogo é recusado sem mudar nada.

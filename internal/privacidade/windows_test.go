@@ -688,3 +688,45 @@ func TestUsaGuardasDeLeituraEMutacao(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Dois níveis ausentes (ex.: ...\Siuf\Rules e ...\Siuf): sobe até um ancestral listável e prova a ausência da primeira
+// subchave faltante.
+func TestRegReadChaveEPaiAusentesSubeAteAncestralListavel(t *testing.T) {
+	r := newRec(t).
+		on(`reg query HKCU\Software\Microsoft\Siuf\Rules /v NumberOfSIUFInPeriod`, reply{code: 1}).
+		on(`reg query HKCU\Software\Microsoft\Siuf\Rules`, reply{code: 1}).
+		on(`reg query HKCU\Software\Microsoft\Siuf`, reply{code: 1}).
+		on(`reg query HKCU\Software\Microsoft`, reply{stdout: "\r\nHKEY_CURRENT_USER\\Software\\Microsoft\r\nHKEY_CURRENT_USER\\Software\\Microsoft\\Windows\r\n"})
+	_, ok, err := newSys(r, false).RegRead(ctx, `HKCU\Software\Microsoft\Siuf\Rules`, "NumberOfSIUFInPeriod")
+	if err != nil || ok {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+}
+
+// O ancestral lista a primeira subchave faltante, mas ela não é legível: erro (acesso negado), nunca ausência.
+func TestRegReadAncestralListaAChaveMasNaoELegivelEErro(t *testing.T) {
+	r := newRec(t).
+		on(`reg query HKLM\SOFTWARE\Policies\A\B /v N`, reply{code: 1}).
+		on(`reg query HKLM\SOFTWARE\Policies\A\B`, reply{code: 1}).
+		on(`reg query HKLM\SOFTWARE\Policies\A`, reply{code: 1, stderr: "ERROR: Access is denied.\r\n"}).
+		on(`reg query HKLM\SOFTWARE\Policies`, reply{stdout: "\r\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\r\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\a\r\n"})
+	if _, ok, err := newSys(r, false).RegRead(ctx, `HKLM\SOFTWARE\Policies\A\B`, "N"); err == nil || ok {
+		t.Fatalf("esperava erro, ok=%v err=%v", ok, err)
+	}
+}
+
+// A subida é limitada: sem ancestral listável dentro do limite, erro (não prova ausência).
+func TestRegReadSubidaLimitada(t *testing.T) {
+	key := `HKCU\A\B\C\D\E\F\G\H\I\J\K`
+	r := newRec(t).on(`reg query `+key+` /v N`, reply{code: 1})
+	p := key
+	for i := 0; i < 12; i++ {
+		r.on(`reg query `+p, reply{code: 1})
+		if j := strings.LastIndex(p, `\`); j > 0 {
+			p = p[:j]
+		}
+	}
+	if _, ok, err := newSys(r, false).RegRead(ctx, key, "N"); err == nil || ok {
+		t.Fatalf("esperava erro, ok=%v err=%v", ok, err)
+	}
+}

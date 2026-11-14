@@ -76,3 +76,12 @@ func TestBuildUndoAdulteradoPreservaArquivoByteAByte(t *testing.T) {
 		})
 	}
 }
+
+// O formato/catálogo antigo nunca foi publicado: o desfazer só conhece o catálogo ATUAL, sem exceções (dmwappushservice
+// saiu do catálogo e um backup que o cite é recusado).
+func TestBuildUndoSemExcecaoParaServicoQueSaiuDoCatalogo(t *testing.T) {
+	ix := newCatalogIndex()
+	if _, ok := ix.svcs["svc:dmwappushservice"]; ok {
+		t.Fatal("dmwappushservice não deve estar no índice de validação")
+	}
+}

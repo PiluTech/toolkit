@@ -240,28 +240,45 @@ func (w *windowsSystem) confirmaAusencia(ctx context.Context, c exec.Cmd, r exec
 	if lr.ExitCode != 1 {
 		return cmdFailed(c, lr)
 	}
-	i := strings.LastIndex(key, `\`)
-	parent, leaf := key[:i], key[i+1:]
-	_, pr, err := w.readCmd(ctx, regExe, "query", parent)
-	if err != nil {
-		return fmt.Errorf("reg query %s: %w", parent, err)
-	}
-	if pr.ExitCode != 0 {
-		return fmt.Errorf("reg query %s\\%s: não foi possível confirmar que o valor não existe (%s): %w", key, name, snippet(r), cmdFailed(c, pr))
-	}
-	root, rest, _ := strings.Cut(parent, `\`)
-	full := regRoots[root]
-	if rest != "" {
-		full += `\` + rest
-	}
-	full += `\` + leaf
-	for _, line := range strings.Split(string(pr.Stdout), "\n") {
-		if strings.EqualFold(strings.TrimSpace(line), full) {
-			return fmt.Errorf("reg query %s\\%s: a chave existe mas não pôde ser lida (acesso negado?): %s", key, name, snippet(r))
+	// A chave não abriu (ausente ou sem acesso). Sobe, no máximo regMaxClimb níveis, até um ancestral que LISTE (exit 0) e
+	// prova a ausência da primeira subchave faltante pela listagem dele. Se o ancestral a lista, ela existe mas não é
+	// legível (acesso negado?): erro. Sem ancestral listável dentro do limite: erro (não prova nada).
+	cur, below := key, ""
+	for i := 0; i < regMaxClimb; i++ {
+		j := strings.LastIndex(cur, `\`)
+		if j < 0 {
+			break
 		}
+		below = cur
+		cur = cur[:j]
+		_, pr, err := w.readCmd(ctx, regExe, "query", cur)
+		if err != nil {
+			return fmt.Errorf("reg query %s: %w", cur, err)
+		}
+		if pr.ExitCode == 1 {
+			continue // este ancestral também não abre: sobe mais um nível
+		}
+		if pr.ExitCode != 0 {
+			return fmt.Errorf("reg query %s\\%s: não foi possível confirmar que o valor não existe (%s): %w", key, name, snippet(r), cmdFailed(c, pr))
+		}
+		root, rest, _ := strings.Cut(cur, `\`)
+		full := regRoots[root]
+		if rest != "" {
+			full += `\` + rest
+		}
+		full += `\` + below[strings.LastIndex(below, `\`)+1:]
+		for _, line := range strings.Split(string(pr.Stdout), "\n") {
+			if strings.EqualFold(strings.TrimSpace(line), full) {
+				return fmt.Errorf("reg query %s\\%s: a chave %s existe mas não pôde ser lida (acesso negado?): %s", key, name, below, snippet(r))
+			}
+		}
+		return nil
 	}
-	return nil
+	return fmt.Errorf("reg query %s\\%s: não foi possível confirmar que o valor não existe (nenhum ancestral listável em %d níveis): %s", key, name, regMaxClimb, snippet(r))
 }
+
+// regMaxClimb limita quantos níveis acima da chave a prova de ausência sobe.
+const regMaxClimb = 8
 
 func parseRegQuery(out, name string) (RegValue, bool, error) {
 	for _, line := range strings.Split(out, "\n") {

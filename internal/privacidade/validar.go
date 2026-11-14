@@ -40,15 +40,8 @@ func newCatalogIndex() catalogIndex {
 			ix.tasks["task:"+tk.Path] = tk
 		}
 	}
-	// Já esteve no catálogo (quebra a sincronização Intune/MDM) e saiu: backups de versões anteriores ainda podem
-	// restaurá-lo ao estado original.
-	for _, name := range legacyServices {
-		ix.svcs["svc:"+name] = ServiceSpec{Name: name}
-	}
 	return ix
 }
-
-var legacyServices = []string{"dmwappushservice"}
 
 // validateEntry confere UMA entrada do backup contra o catálogo: a chave do mapa, o ID da entrada e o alvo (chave e nome,
 // serviço ou caminho da tarefa) têm de coincidir EXATAMENTE com um item do catálogo; tipo de valor e tipo de início têm
