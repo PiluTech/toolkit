@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,6 +22,10 @@ type privSys struct {
 	svcs   map[string]*privacidade.ServiceState
 	tasks  map[string]*privacidade.TaskState
 	writes int
+	// gate bloqueia a PRÓXIMA leitura de edição (armed) até o teste liberar: simula um plano lento/cancelado.
+	armed   atomic.Bool
+	entered chan struct{}
+	gate    chan struct{}
 }
 
 func newPrivSys(admin bool) *privSys {
@@ -39,8 +44,14 @@ func newPrivSys(admin bool) *privSys {
 
 func pk(key, name string) string { return strings.ToUpper(key) + "|" + name }
 
-func (s *privSys) Edition(context.Context) (string, error) { return s.edit, nil }
-func (s *privSys) IsAdmin(context.Context) bool            { return s.admin }
+func (s *privSys) Edition(context.Context) (string, error) {
+	if s.armed.CompareAndSwap(true, false) {
+		s.entered <- struct{}{}
+		<-s.gate
+	}
+	return s.edit, nil
+}
+func (s *privSys) IsAdmin(context.Context) bool { return s.admin }
 func (s *privSys) RegRead(_ context.Context, k, n string) (privacidade.RegValue, bool, error) {
 	v, ok := s.regs[pk(k, n)]
 	return v, ok, nil
