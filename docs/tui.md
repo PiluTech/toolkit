@@ -109,6 +109,8 @@ Três regras: cor só no símbolo e na palavra de estado, nunca na frase; nenhum
 nada depende de negrito, reverso ou cor para ser entendido. Com `NO_COLOR` (`Options.Mono`) **nenhuma**
 sequência de estilo sai e o layout é idêntico ao colorido (teste `TestMonoHasNoStyleAndSameLayoutAsColor`).
 
+**Reduzir movimento:** `TOOLKIT_REDUCE_MOTION=1` ou `--no-motion` (no `toolkit` e no `toolkit tui`): o spinner vira o símbolo fixo `~` (sempre com a palavra `executando`, `verificando` ou `em andamento`) e nenhum quadro é agendado, então a tela só muda quando o estado muda (nada é redesenhado a cada 100 ms). Sem a opção o spinner é um caractere de 4 quadros a 10 por segundo.
+
 Símbolos (sempre com a palavra do estado): `✓` instalado/feito (`✓ instalado (fora do Homebrew)` quando o app já veio de fora do gerenciador, como o .dmg no macOS; em coluna estreita vira `✓ instalado (fora)`), `✗` falhou, `!` aviso/aguardando
 reinício, `○` pendente/não instalado/na fila, `-` pulado/sem instalador, `| / - \` verificando/executando,
 `[x] [ ]` marca, `(•) ( )` escolha única, `▾` tem lista, `↑` versão nova, `↓` há mais. Conjunto ASCII
