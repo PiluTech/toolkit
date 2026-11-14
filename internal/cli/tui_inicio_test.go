@@ -43,7 +43,7 @@ func inicioDe(t *testing.T, goos string, admin bool) (*tui.InicioTab, []tui.Area
 func TestInicioRealApontaParaAsSecoesCertas(t *testing.T) {
 	ini, areas := inicioDe(t, "linux", false)
 	items := ini.Items()
-	want := []string{"Apps", "Receitas", "Diagnóstico", "Apps nativos", "Privacidade", "Análise", "Execuções"}
+	want := []string{"Apps", "Receitas", "Diagnóstico", "Apps nativos", "Otimização", "Privacidade", "Análise", "Execuções"}
 	if len(items) != len(want) {
 		t.Fatalf("%d objetivos, queria %d", len(items), len(want))
 	}
@@ -58,15 +58,15 @@ func TestInicioRealApontaParaAsSecoesCertas(t *testing.T) {
 			t.Errorf("item %d incompleto: %+v", i, it)
 		}
 	}
-	// a ordem do pedido: Apps e Receitas na área 1, Diagnóstico e Apps nativos na 2, Privacidade 3, Análise 4, Execuções 5
-	for i, a := range []int{1, 1, 2, 2, 3, 4, 5} {
+	// a ordem do pedido: Apps e Receitas na área 1, Diagnóstico, Apps nativos e Otimização na 2, Privacidade 3, Análise 4, Execuções 5
+	for i, a := range []int{1, 1, 2, 2, 2, 3, 4, 5} {
 		if items[i].Area != a {
 			t.Errorf("item %d: área %d, queria %d", i, items[i].Area, a)
 		}
 	}
 	// só "Analisar a rede" ainda não existe (campo explícito, não a etiqueta)
 	for i, it := range items {
-		if it.Unavailable != (i == 5) {
+		if it.Unavailable != (i == 6) {
 			t.Errorf("item %d (%q): Unavailable=%v", i, it.Title, it.Unavailable)
 		}
 	}
@@ -85,16 +85,16 @@ func TestInicioRealEtiquetasPorSOEAdmin(t *testing.T) {
 		return out
 	}
 	join := func(s []string) string { return strings.Join(s, "|") }
-	if got, want := join(tags("linux", true)), "|||! só Windows|! só Windows|○ em breve|"; got != want {
+	if got, want := join(tags("linux", true)), "|||! só Windows|! só Windows|! só Windows|○ em breve|"; got != want {
 		t.Errorf("linux: %q", got)
 	}
-	if got, want := join(tags("darwin", false)), "|||! só Windows|! só Windows|○ em breve|"; got != want {
+	if got, want := join(tags("darwin", false)), "|||! só Windows|! só Windows|! só Windows|○ em breve|"; got != want {
 		t.Errorf("macOS: %q", got)
 	}
-	if got, want := join(tags("windows", false)), "||||! pede administrador para alguns itens|○ em breve|"; got != want {
+	if got, want := join(tags("windows", false)), "|||||! pede administrador para alguns itens|○ em breve|"; got != want {
 		t.Errorf("Windows sem admin: %q", got)
 	}
-	if got, want := join(tags("windows", true)), "|||||○ em breve|"; got != want {
+	if got, want := join(tags("windows", true)), "||||||○ em breve|"; got != want {
 		t.Errorf("Windows admin: %q", got)
 	}
 }

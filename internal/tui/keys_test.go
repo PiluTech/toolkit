@@ -13,7 +13,7 @@ import (
 )
 
 // helpAreas monta as seções REAIS (as mesmas do `toolkit`, com backends de mentira), já carregadas, na ordem das áreas:
-// 0 Início | 1 Instalar (Apps, Receitas) | 2 Máquina (Diagnóstico, Apps nativos) | 3 Segurança (Privacidade) | 4 Rede | 5 Histórico.
+// 0 Início | 1 Instalar (Apps, Receitas) | 2 Máquina (Diagnóstico, Apps nativos, Otimização) | 3 Segurança (Privacidade) | 4 Rede | 5 Histórico.
 func helpAreas(t *testing.T) []AreaDef {
 	t.Helper()
 	th := Theme{Mono: true, NoMotion: true}
@@ -23,6 +23,7 @@ func helpAreas(t *testing.T) []AreaDef {
 	diag := newDiag(t, &fakeMachine{rep: machineReport()})
 	nat := natTab(t, &fakeNat{info: natSample(true), plan: NatPlan{Text: "plano", Pending: 1}})
 	priv := privTab(t, &fakePriv{info: privSample(true), plan: PrivPlan{Text: "plano", Pending: 1, NeedsAdmin: true, IsAdmin: true}})
+	otim := newOtim(&fakeOtim{rep: otimReport()}, "windows")
 	inicio := NewInicioTab(th, "Início", "Iníc", "O que você quer fazer?", []InicioItem{{Title: "Instalar apps", Desc: "d", Tag: "✓", Area: 1, Section: 0, Dest: "Apps"}})
 	rede := NewInfoTab(th, "Análise", "Anál", "A análise de rede ainda não existe.")
 	execs := NewLogTab(th, "")
@@ -30,7 +31,7 @@ func helpAreas(t *testing.T) []AreaDef {
 	return []AreaDef{
 		{Key: "inicio", Title: "Início", Short: "Iníc", Tabs: []Tab{inicio}},
 		{Key: "instalar", Title: "Instalar", Short: "Inst", Tabs: []Tab{apps, rec}},
-		{Key: "maquina", Title: "Máquina", Short: "Máq", Tabs: []Tab{diag, nat}},
+		{Key: "maquina", Title: "Máquina", Short: "Máq", Tabs: []Tab{diag, nat, otim}},
 		{Key: "seguranca", Title: "Segurança", Short: "Seg", Tabs: []Tab{priv}},
 		{Key: "rede", Title: "Rede", Short: "Rede", Tabs: []Tab{rede}},
 		{Key: "historico", Title: "Histórico", Short: "Hist", Tabs: []Tab{execs}},
@@ -131,6 +132,16 @@ func realKeyStates(t *testing.T) map[string][]KeyHint {
 	nkey(nat, "esc", "r")
 	add("nativos/confirma", nat)
 
+	otim := get(2, 2).(*OptimizeTab)
+	add("otimizacao", otim)
+	otim.loading = true
+	add("otimizacao/lendo", otim)
+	otim.loading, otim.loaded = false, true
+	add("otimizacao/lido", otim)
+	otim.loaded = false
+	foraWin := newOtim(&fakeOtim{}, "darwin")
+	add("otimizacao/foradowindows", foraWin)
+
 	priv := get(3, 0).(*PrivacyTab)
 	add("privacidade", priv)
 	pkey(priv, "p")
@@ -146,7 +157,7 @@ func realKeyStates(t *testing.T) map[string][]KeyHint {
 // confere cada letra de ação de Keys() contra a legenda: rótulo igual (ou variante permitida) e "…" só em quem confirma.
 func TestVocabularioDeTeclasIgualEmTodasAsSecoes(t *testing.T) {
 	m := NewWithAreas(Options{Mono: true}, helpAreas(t))
-	if len(m.tabs) != 8 {
+	if len(m.tabs) != 9 {
 		t.Fatalf("seções: %d", len(m.tabs))
 	}
 	used := map[string]map[string]string{}

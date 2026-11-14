@@ -56,6 +56,8 @@ type Deps struct {
 	UpdateCheck UpdateCheckDeps
 	// Diag são os pontos injetáveis do `toolkit diagnostico` (zero = a máquina real, só leitura).
 	Diag DiagDeps
+	// Otim são os pontos injetáveis do `toolkit otimizacao` e da seção Otimização da TUI.
+	Otim OtimDeps
 	// Priv são os pontos injetáveis do `toolkit privacidade` (zero = o Windows real e o backup na pasta de estado).
 	Priv PrivDeps
 	// AppsNat são os pontos injetáveis do `toolkit apps-nativos` (zero = o Windows real e o backup por SID na pasta de estado).

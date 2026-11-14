@@ -1,0 +1,40 @@
+ toolkit  0 Início  1 Instalar [2 Máquina] 3 Segurança  4 Rede  5 Histórico                                      v0.1.0
+ Máquina ›  Diagnóstico   Apps nativos  [Otimização]                                                         admin: não
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Otimização do Windows — gargalos (só leitura)                             │ Como ler
+                                                                           │ Só números de um instante e limiares
+ Resultado: 1 problema(s), 3 atenção.                                      │ explícitos; sem pontuação.
+                                                                           │
+ ✗ problema: Pouco espaço livre no disco do sistema: C: (Disco Fake) — 40  │ LIMIARES USADOS
+   B livres de 1000 B (limiar de atenção 10%; de problema 5%)              │ - CPU: média da amostra >= 80%
+     O que fazer: Libere espaço (lixeira, downloads, caches e arquivos     │ - Memória: >= 90% em uso; commit >= 90% do
+   grandes) ou mova dados para outro disco.                                │   limite
+ ! atenção: CPU com uso alto — média 91%, pico 99% (amostra de 3 leituras; │ - Paginação: >= 80% do alocado
+   limiar 80%); mais pesados agora: chrome (50%)                           │ - Espaço livre: < 10% atenção, < 5%
+     O que fazer: Abra o Gerenciador de Tarefas (Ctrl+Shift+Esc), veja     │   problema
+   quais programas mais usam a CPU e feche os que você não precisa. É uma  │ - Disco: fila >= 2; latência >= 25 ms
+   amostra curta: se o uso alto for só agora, espere acabar. O toolkit não │ - Inicialização: > 10
+   encerra processos.                                                      │ - Serviços fora da pasta do Windows: > 25
+ ! atenção: Pouca memória disponível — 1 GB disponíveis de 16 GB (em uso   │
+   94%; limiar 90%); maiores agora: chrome (2 GB)                          │ O QUE O TOOLKIT NUNCA FAZ AQUI
+     O que fazer: Feche os programas que você não usa (os maiores estão na │ - Não desativar serviço de segurança nem
+   lista) ou, se isso se repete, amplie a memória do computador.           │   qualquer outro: nesta função nenhum
+ ! atenção: O disco do sistema é um HDD: C: (Disco Fake) — disco mecânico, │   serviço é alterado.
+   bem mais lento que um SSD                                               │ - Nada de "otimizadores" agressivos: limpar
+     O que fazer: Trocar por um SSD melhora a velocidade mais do que       │   o registro, desligar o arquivo de
+   qualquer ajuste de software.                                            │   paginação, o SmartScreen ou o controle de
+ - info: Muitos itens registrados para iniciar com o Windows — 14 itens    │   conta, mexer em HKLM, desligar a
+   (limiar: mais de 10); alguns podem já estar desligados em Configurações │   telemetria.
+   (o toolkit não lê esse estado) e a fonte não informa o peso de cada um  │ - Não remover componentes do sistema nem do
+     O que fazer: Abra Configurações > Aplicativos > Inicialização e       │   Windows Update, não apagar arquivos do
+   desligue os que você não usa. O toolkit não desliga nada.               │   sistema, não usar o dism.
+ - info: Serviço automático parado com erro — SvcFalhou                    │ - Não encerrar processo, nem desligar item
+     O que fazer: Informativo: confira no Visualizador de Eventos se algo  │   de inicialização ou tarefa agendada: o
+   que você usa deixou de funcionar. O toolkit não inicia, não para e não  │   toolkit só mostra; quem decide é você.
+   muda serviços.                                                          │ - Sem "pontuação de PC" nem promessa de
+ - info: O Windows detectou lentidão no último boot — o próprio Windows    │   ganho de desempenho: só números, limiares
+   marcou o último boot como com lentidão (evento 100); duração 99 s       │   explícitos e o que fazer em texto.
+     O que fazer: Veja o que atrasa o boot: itens de inicialização         │
+────────────────────────────────────────────────────────────────────────────────────────────────────── ↓ mais 40 linhas
+ Otimização — só leitura, nada é alterado; c lê de novo
+ ↑↓ rolar  c ler de novo  ? ajuda  q sair
