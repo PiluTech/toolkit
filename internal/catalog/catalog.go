@@ -17,6 +17,9 @@ var Categories = []string{
 	"seguranca", "escritorio", "jogos", "drivers", "sistema",
 }
 
+// MaxNote é o limite (em caracteres) do aviso `note:` de um app: texto curto, mostrado no plano, na Revisão e no detalhe.
+const MaxNote = 600
+
 // Chaves das listas de instaladores por SO.
 const (
 	KeyWindows = "windows"
@@ -87,6 +90,7 @@ type App struct {
 	ID         string
 	Name       string
 	Category   string
+	Note       string // aviso opcional (texto puro, sem template), mostrado no plano do install, na Revisão e no detalhe
 	Versions   Versions
 	Installers map[string][]Installer // chaves: windows, macos, linux, any
 	Detect     map[string]Detect      // chaves: windows, macos, linux (opcional)

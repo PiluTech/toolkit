@@ -375,6 +375,37 @@ Ressalva Chrome: o instalador do winget aponta para uma URL do fabricante que mu
 3. O catálogo não configura o RustDesk: não troca servidor, não ativa autoinício. A ajuda diz: use senha forte e senha temporária, desative "aceitar acesso permanente" se não precisa, prefira servidor próprio, e **só instale se a pessoa que vai usar entende que isto dá controle da máquina**.
 4. Se a decisão for não aceitar o risco de CVEs, a alternativa recomendada é **nada de acesso remoto no catálogo** (Assistência Rápida no Windows e Compartilhamento de Tela no macOS são nativos).
 
+### Verificação do PR13 (RustDesk e versão mínima)
+
+Pesquisa feita em 2026-11-14 na API pública do NVD ([consulta por palavra-chave `rustdesk`](https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=rustdesk&resultsPerPage=100), 21 CVEs), nos
+[releases do GitHub](https://github.com/rustdesk/rustdesk/releases) e na [Flathub](https://flathub.org/apps/com.rustdesk.RustDesk). CVEs de severidade alta ou crítica no **cliente**:
+
+| CVE | Severidade (NVD) | Afetado segundo o NVD | Corrigido em |
+|---|---|---|---|
+| [CVE-2026-30791](https://nvd.nist.gov/vuln/detail/CVE-2026-30791), [30785](https://nvd.nist.gov/vuln/detail/CVE-2026-30785), [30793](https://nvd.nist.gov/vuln/detail/CVE-2026-30793), [30795](https://nvd.nist.gov/vuln/detail/CVE-2026-30795), [30797](https://nvd.nist.gov/vuln/detail/CVE-2026-30797) | alta e crítica (8.2 a 9.3) | até 1.4.5 | 1.4.6 (lançada em 2026-03-05) ou depois: **inferido** (o NVD só diz "até 1.4.5") |
+| [CVE-2026-30792](https://nvd.nist.gov/vuln/detail/CVE-2026-30792), [30798](https://nvd.nist.gov/vuln/detail/CVE-2026-30798) | alta (8.3 e 8.2) | **divergente no próprio NVD**: texto "até 1.4.8", lista de produtos "até 1.4.5" | tratada como 1.4.9 ou depois (leitura conservadora do texto) |
+| [CVE-2026-57850](https://nvd.nist.gov/vuln/detail/CVE-2026-57850) e [58056](https://nvd.nist.gov/vuln/detail/CVE-2026-58056) | alta (8.7 e 7.2) | antes de 1.4.9 (57850); 58056 sem versão informada (análise adiada) | 1.4.9 (a 57850 cita a [release 1.4.9](https://github.com/rustdesk/rustdesk/releases/tag/1.4.9)); 58056 **A VERIFICAR** (mesma classe, sem versão no NVD) |
+| [CVE-2026-73108](https://nvd.nist.gov/vuln/detail/CVE-2026-73108) | alta (8.7, negação de serviço antes de autenticar) | antes de 1.4.7 | 1.4.7 |
+| [CVE-2026-76840](https://nvd.nist.gov/vuln/detail/CVE-2026-76840) | alta (8.5, só Windows, área de transferência) | sem versão informada (análise adiada) | o NVD aponta o PR 15515 ("harden wf_cliprdr.c"), que consta nas notas da **1.5.0**: **inferido** |
+
+Outros, de severidade média ou baixa e já com versão (`CVE-2026-100388` e `CVE-2026-100417`: antes de 1.5.0; `CVE-2026-73102`, macOS: 1.3.9 a 1.4.9) também ficam atrás da 1.5.0. Fora de escopo: `CVE-2026-3598` (servidor Pro) e `CVE-2026-111324` (rustdesk-api), do servidor.
+`CVE-2024-25140` (certificado de teste instalado no Windows, 1.2.3) tem a posição do fabricante no próprio NVD (comportamento intencional do instalador).
+
+**Versão mínima adotada: 1.5.0** (lançada em 2026-09-30; a atual na verificação era a 1.5.3, de 2026-11-09, igual à do cask `rustdesk` e à da Flathub). É a menor versão
+**sem CVE alto ou crítico conhecido sem correção** pelos dados acima; o ponto mais frágil é o que está marcado como inferido ou A VERIFICAR (o NVD ainda tem registros "adiados"
+e com informação divergente: reconferir antes de cada PR que mexa na entrada). Fonte oficial adicional não consultada: os avisos de segurança do GitHub do projeto (a API devolveu lista vazia).
+
+**O toolkit enforça a versão mínima?** Não. O catálogo instala "a versão atual" do gerenciador: o brew e o flatpak **recusam** fixar versão (`SupportsVersion` sempre recusa) e o
+`versions: true` não vale para eles. Hoje, brew e Flathub entregam a 1.5.3 (acima da mínima), mas um espelho ou cache atrasado poderia entregar menos, e o toolkit não confere a versão
+depois de instalar. Por isso o aviso na tela diz a versão mínima, a data e a fonte e manda o usuário conferir a versão no app, e **nunca afirma** que a instalada cumpre.
+Aceitável para a decisão 3 porque o ganho é só para quem aceita o aviso e o risco residual é o de uma instalação desatualizada, que o próprio aviso descreve.
+**Pendência (PR de enforcement, depois do smoke):** conferir a versão instalada depois do install (ou no plano, via `brew info`/`flatpak remote-info`) contra um campo `min_version` do catálogo e falhar/avisar alto se for menor.
+
+**Windows:** o id `RustDesk.RustDesk` segue **sem pasta** em `microsoft/winget-pkgs` (`manifests/r/RustDesk` devolve 404 na API do GitHub em 2026-11-14), então o Windows fica sem instalador (o plano diz isso, nada é inventado).
+Outro id só se o próximo PR o verificar em fonte pública.
+
+**Aviso (`note:`)**: o campo opcional novo do catálogo ([catalogo.md](catalogo.md#aviso-note)) leva o texto da recomendação 3 acima. Aparece no plano do `install`/`--dry-run` (antes de confirmar), na Revisão da TUI (lista de avisos) e no detalhe da aba Apps.
+
 ### Como entra no catálogo
 
 Cada app vira uma entrada de `catalog/catalog.yaml` com o formato de [catalogo.md](catalogo.md): `name`, `category` (`navegadores`, `escritorio`, `utilitarios`; acesso remoto: `utilitarios` ou uma categoria nova, que seria uma linha na lista do código), instaladores por SO e o bloco `detect` **só com valores conhecidos** (sem certeza, sem o bloco). `assets_test.go` passa a conferir o número de entradas. ids por gerenciador: só os da tabela acima marcados como existentes; o resto fica **fora** até o PR confirmar. Um PR por grupo (navegadores; escritório e compactadores; acesso remoto, separado por ter decisão própria).
@@ -468,7 +499,7 @@ Sugestão de **ordem**: PR8, PR10, PR11 podem andar em paralelo (independentes);
 |---|---|---|
 | 1 | Qual serviço usar para descobrir o IP público (ou nenhum)? | **Nenhum por padrão**: só com serviço informado pela pessoa (`TOOLKIT_IP_URL`); decidir um padrão só depois de uma avaliação de privacidade do serviço escolhido |
 | 2 | O portal cativo entra na primeira versão da análise de rede? | **Não**: junto do IP público, no PR9 |
-| 3 | RustDesk entra no catálogo, dadas as CVEs de 2026 e o uso em golpes? | **Entra só se** houver versão mínima verificada no NVD e o aviso de segurança na tela; caso contrário, nenhum acesso remoto no catálogo |
+| 3 | RustDesk entra no catálogo, dadas as CVEs de 2026 e o uso em golpes? | **Resolvida no PR13 (2026-11-14): entra**, no macOS (cask) e no Linux (flatpak), com o aviso na tela e a versão mínima **1.5.0** verificada no NVD; **sem instalador no Windows** (id do winget inexistente). O toolkit NÃO enforça a versão mínima (ver [Verificação do PR13](#verificação-do-pr13-rustdesk-e-versão-mínima)) |
 | 4 | Chrome entra apesar da possibilidade de falha de hash por URL do fabricante mutável? | **Entra**, com a mensagem explicativa; hash divergente nunca é contornado |
 | 5 | USB no Windows Home: recusar ou tentar? | **Recusar** (a Microsoft não lista a edição); revalidar na VM |
 | 6 | USB: identificar por ID de hardware (modelo) ou por ID de instância (unidade)? | **ID de hardware** com todos os nós do dispositivo; instância só se a VM mostrar que é estável |
@@ -492,8 +523,8 @@ Sugestão de **ordem**: PR8, PR10, PR11 podem andar em paralelo (independentes);
 9. Rede: formato de saída de cada comando por SO (`netsh wlan show interfaces`, `nmcli`, `iw`, `resolvectl`, `networksetup`, `scutil`, `wdutil`, `socketfilterfw`, `pfctl`), disponibilidade do `airport`, se `netsh wlan show networks` e o `system_profiler` forçam varredura (precisa ser passivo), `nmcli ... --rescan no` por versão, `Get-DnsClientDohServerAddress`, `Get-NetIPv6Protocol`, e lista final de portas sensíveis.
 10. Otimização: nomes e tipos dos valores `MinAnimate`, `TaskbarAnimations`, `VisualFXSetting`; quais efeitos só valem após reiniciar o Explorer; evento 100 só com degradação, mapeamento de 101/102 e evento de desligamento 200 (o pedido cita 100/200), e se o log operacional exige administrador.
 11. Licenças a confirmar na fonte do projeto: Brave (MPL-2.0), LibreOffice (MPL-2.0), PeaZip (LGPL-3.0).
-12. ids a confirmar: cask do PeaZip, pacotes apt/dnf de LibreOffice, Microsoft Edge e Keka fora de escopo, id do RustDesk no winget (não encontrado no repositório).
-13. RustDesk: lista oficial de CVEs e versão mínima segura (NVD e avisos do GitHub), modelo de criptografia, 2FA, abuso em golpes; Chrome Remote Desktop e Assistência Rápida (criptografia, exigência de conta); histórico de CVEs de TightVNC; qual linha (2.x GPL ou 4.x fechada) o id `GlavSoft.TightVNC` instala; incidente público do AnyDesk.
+12. ids a confirmar: cask do PeaZip, pacotes apt/dnf de LibreOffice, Microsoft Edge e Keka fora de escopo, id do RustDesk no winget (não encontrado no repositório em 2026-11-14: o Windows ficou sem instalador no PR13).
+13. RustDesk: versão mínima verificada no PR13 (NVD, ver acima; sobram os CVEs com versão inferida e os avisos do GitHub do projeto), enforcement da versão mínima (PR futuro), modelo de criptografia, 2FA, abuso em golpes; Chrome Remote Desktop e Assistência Rápida (criptografia, exigência de conta); histórico de CVEs de TightVNC; qual linha (2.x GPL ou 4.x fechada) o id `GlavSoft.TightVNC` instala; incidente público do AnyDesk.
 
 ## Fontes
 
