@@ -64,11 +64,14 @@ func TestInicioRealApontaParaAsSecoesCertas(t *testing.T) {
 			t.Errorf("item %d: área %d, queria %d", i, items[i].Area, a)
 		}
 	}
-	// só "Analisar a rede" ainda não existe (campo explícito, não a etiqueta)
+	// todos os objetivos existem: "Analisar a rede" deixou de ser "em breve" e navega para Rede › Análise
 	for i, it := range items {
-		if it.Unavailable != (i == 5) {
-			t.Errorf("item %d (%q): Unavailable=%v", i, it.Title, it.Unavailable)
+		if it.Unavailable || strings.Contains(it.Tag, "em breve") {
+			t.Errorf("item %d (%q): Unavailable=%v tag=%q", i, it.Title, it.Unavailable, it.Tag)
 		}
+	}
+	if r := items[5]; r.Title != "Analisar a rede" || r.Area != 4 || r.Section != 0 || r.Dest != "4 Rede › Análise" {
+		t.Errorf("Analisar a rede: %+v", r)
 	}
 	if items[0].Title != "Instalar programas" || items[1].Title != "Preparar a máquina com uma receita" || items[2].Title != "Ver a saúde da máquina" {
 		t.Errorf("títulos: %q | %q | %q", items[0].Title, items[1].Title, items[2].Title)
@@ -85,16 +88,16 @@ func TestInicioRealEtiquetasPorSOEAdmin(t *testing.T) {
 		return out
 	}
 	join := func(s []string) string { return strings.Join(s, "|") }
-	if got, want := join(tags("linux", true)), "|||! só Windows|! só Windows|○ em breve|"; got != want {
+	if got, want := join(tags("linux", true)), "|||! só Windows|! só Windows||"; got != want {
 		t.Errorf("linux: %q", got)
 	}
-	if got, want := join(tags("darwin", false)), "|||! só Windows|! só Windows|○ em breve|"; got != want {
+	if got, want := join(tags("darwin", false)), "|||! só Windows|! só Windows||"; got != want {
 		t.Errorf("macOS: %q", got)
 	}
-	if got, want := join(tags("windows", false)), "||||! pede administrador para alguns itens|○ em breve|"; got != want {
+	if got, want := join(tags("windows", false)), "||||! pede administrador para alguns itens||"; got != want {
 		t.Errorf("Windows sem admin: %q", got)
 	}
-	if got, want := join(tags("windows", true)), "|||||○ em breve|"; got != want {
+	if got, want := join(tags("windows", true)), "||||||"; got != want {
 		t.Errorf("Windows admin: %q", got)
 	}
 }

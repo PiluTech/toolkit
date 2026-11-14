@@ -612,7 +612,7 @@ func TestNoMotionFlagIsDocumentedInHelp(t *testing.T) {
 }
 
 // O cabeçalho mostra "admin: sim/não": o cli preenche Options.IsAdmin com a mesma detecção do diagnóstico, e a seção
-// Rede/Análise explica que a análise não existe (em vez de sumir).
+// Rede/Análise é a real (a leitura só começa quando a pessoa pede).
 func TestOpenTUIPassesAdminAndExplainsMissingSections(t *testing.T) {
 	for _, admin := range []bool{false, true} {
 		var got tui.Options
@@ -631,8 +631,8 @@ func TestOpenTUIPassesAdminAndExplainsMissingSections(t *testing.T) {
 		if got.IsAdmin != admin {
 			t.Errorf("IsAdmin=%v, quero %v", got.IsAdmin, admin)
 		}
-		if v := areas[4].Tabs[0].View(80, 10); !strings.Contains(v, "A análise de rede ainda não existe nesta versão") {
-			t.Errorf("Rede/Análise sem explicação: %q", v)
+		if v := areas[4].Tabs[0].View(80, 10); !strings.Contains(v, "A rede ainda não foi lida") || !strings.Contains(v, "Tecle c") {
+			t.Errorf("Rede/Análise deve ser a seção real, com a instrução de leitura: %q", v)
 		}
 		if v := areas[0].Tabs[0].View(100, 40); !strings.Contains(v, "Ver o que já rodou") || !strings.Contains(v, "Instalar programas") {
 			t.Errorf("Início sem os objetivos: %q", v)

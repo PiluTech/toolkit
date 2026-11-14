@@ -25,7 +25,7 @@ func inicioItems(win, admin bool) []InicioItem {
 		{Title: "Ver a saúde da máquina", Desc: "Diagnóstico só de leitura: hardware, série, UUID, MAC e o que está ruim.", Area: 2, Section: 0, Dest: "2 Máquina › Diagnóstico"},
 		{Title: "Remover apps nativos do Windows", Desc: "Remove só os apps do Windows que você escolher, depois de ver o plano.", Tag: nat, Area: 2, Section: 1, Dest: "2 Máquina › Apps nativos"},
 		{Title: "Proteger a privacidade do Windows", Desc: "Ajustes de privacidade, um por um, com confirmação e como desfazer.", Tag: priv, Area: 3, Section: 0, Dest: "3 Segurança › Privacidade"},
-		{Title: "Analisar a rede", Desc: "IPs, Wi-Fi, DNS e portas da máquina.", Tag: "○ em breve", Unavailable: true, Area: 4, Section: 0, Dest: "4 Rede › Análise"},
+		{Title: "Analisar a rede", Desc: "IPs, Wi-Fi, DNS e portas da máquina.", Area: 4, Section: 0, Dest: "4 Rede › Análise"},
 		{Title: "Ver o que já rodou", Desc: "O que já rodou e o que falhou, com o registro de cada execução.", Area: 5, Section: 0, Dest: "5 Histórico › Execuções"},
 	}
 }
@@ -89,7 +89,7 @@ func TestInicioEnterAbreAreaESecaoDoItem(t *testing.T) {
 	for _, c := range []struct {
 		downs int
 		want  int
-	}{{0, idxApps}, {1, idxRec}, {2, idxDiag}, {3, idxNat}, {4, idxPriv}, {5, idxInicio}, {6, idxExec}} { // 5: "Analisar a rede" ainda não existe: não navega
+	}{{0, idxApps}, {1, idxRec}, {2, idxDiag}, {3, idxNat}, {4, idxPriv}, {5, idxRede}, {6, idxExec}} { // 5: "Analisar a rede" abre Rede › Análise
 		ikey(m, "0")
 		ikey(m, "g")
 		for i := 0; i < c.downs; i++ {
@@ -103,7 +103,7 @@ func TestInicioEnterAbreAreaESecaoDoItem(t *testing.T) {
 }
 
 func TestInicioNumeroVaiDiretoAoItem(t *testing.T) {
-	for n, want := range []int{idxApps, idxRec, idxDiag, idxNat, idxPriv, idxInicio, idxExec} { // 6: rede ainda não existe
+	for n, want := range []int{idxApps, idxRec, idxDiag, idxNat, idxPriv, idxRede, idxExec} { // 6: Analisar a rede
 		m := areasWithInicio(Options{Mono: true, NoMotion: true}, true, true)
 		m.Update(sizeMsg(80, 24))
 		ikey(m, fmt.Sprint(n+1))
@@ -251,7 +251,7 @@ func TestInicioNaoNavegaDuranteExecucaoEPergunta(t *testing.T) {
 func TestInicioEtiquetasPorSOEAdmin(t *testing.T) {
 	view := func(win, admin bool) string { return newInicio(win, admin).View(120, 40) }
 	lin := view(false, false)
-	if strings.Count(lin, "! só Windows") != 2 || !strings.Contains(lin, "○ em breve") {
+	if strings.Count(lin, "! só Windows") != 2 || strings.Contains(lin, "em breve") {
 		t.Errorf("fora do Windows:\n%s", lin)
 	}
 	w := view(true, false)
@@ -320,7 +320,7 @@ func TestInicioAlturaMinimaRolaComMore(t *testing.T) {
 
 func TestInicioMonoSimboloEPalavra(t *testing.T) {
 	out := newInicio(false, false).View(80, 30)
-	for _, w := range []string{"> 1 Instalar programas", "! só Windows", "○ em breve"} {
+	for _, w := range []string{"> 1 Instalar programas", "! só Windows"} {
 		if !strings.Contains(out, w) {
 			t.Errorf("falta %q:\n%s", w, out)
 		}
@@ -521,7 +521,12 @@ func TestIntegradoConfirmacaoDosAppsNativosNaoEscapa(t *testing.T) {
 // Lupa #70: objetivo indisponível ("em breve") não emite GoTo: Enter e a tecla do item ficam no Início, sem Revisão nem
 // executor, e a linha de estado diz que ainda não existe.
 func TestInicioItemIndisponivelNaoNavegaEDizNoStatus(t *testing.T) {
-	m := areasWithInicio(Options{Mono: true, NoMotion: true}, true, true)
+	// nenhum objetivo real está "em breve" hoje: o mecanismo continua valendo para o próximo (objetivo 6 marcado à mão)
+	items := inicioItems(true, true)
+	items[5].Tag, items[5].Unavailable = "○ em breve", true
+	ds := areaDefs()
+	ds[0].Tabs[0] = NewInicioTab(Theme{Mono: true, NoMotion: true}, "Início", "Iníc", "O que você quer fazer?", items)
+	m := NewWithAreas(Options{Mono: true, NoMotion: true}, ds)
 	m.Update(sizeMsg(80, 24))
 	for _, via := range []string{"enter", "6"} {
 		ikey(m, "0")

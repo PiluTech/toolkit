@@ -1,0 +1,24 @@
+ toolkit  [1 Análise]                                                    v0.1.0
+────────────────────────────────────────────────────────────────────────────────
+ Análise de rede (Linux)
+
+ Resultado: 3 alta(s), 0 média(s), 1 baixa(s).
+
+ ✗ alta: Rede Wi-Fi aberta (sem senha) (REDE-FAKE) — qualquer pessoa por perto
+   lê o que não estiver criptografado
+     O que fazer: Evite dados sensíveis, use uma VPN ou prefira outra rede.
+ ✗ alta: Firewall desligado — nenhum firewall lido está ativo
+     O que fazer: Ligue o firewall nas configurações de segurança do sistema (o
+   toolkit não o liga).
+ ✗ alta: Porta 23 (Telnet) aceita conexões de fora desta máquina — 0.0.0.0:23
+   (telnetd) — o firewall está desligado; se a internet alcança isto depende do
+   roteador, que o toolkit não vê
+     O que fazer: Feche o serviço ou restrinja-o ao 127.0.0.1 (o toolkit não
+   fecha portas).
+ - baixa: DNS em endereço público, sem DoH/DoT — 203.0.113.53 — as consultas de
+   nomes viajam sem criptografia
+     O que fazer: Sem ação obrigatória; considere um DNS com criptografia (DoH
+   ou DoT).
+────────────────────────────────────────────────────────────── ↓ mais 44 linhas
+ Rede — dados como o sistema informou; c lê de novo
+ ↑↓ rolar  c ler de novo  ? ajuda  q sair

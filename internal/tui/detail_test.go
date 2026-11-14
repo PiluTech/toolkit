@@ -574,7 +574,10 @@ func TestDetalhePrivacidadeSemPainelForaDaLista(t *testing.T) {
 // --- Início ---
 
 func TestDetalheInicio(t *testing.T) {
-	tab := newInicio(false, false)
+	// objetivo 6 marcado "em breve" à mão: nenhum objetivo real está assim hoje, mas o mecanismo continua valendo
+	items := inicioItems(false, false)
+	items[5].Tag, items[5].Unavailable = "○ em breve", true
+	tab := NewInicioTab(Theme{Mono: true, NoMotion: true}, "Início", "Iníc", "O que você quer fazer?", items)
 	out := tab.Detail(44, 40)
 	detailLines(t, out, 44)
 	mustContain(t, out, "Instalar programas", "Escolha os programas do catálogo", "Enter abre 1 Instalar › Apps")

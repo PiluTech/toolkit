@@ -65,6 +65,7 @@ toolkit recipe list
 toolkit recipe run wsl-dev
 toolkit recipe status
 toolkit diagnostico              # saúde da máquina, só leitura: o que está ruim e o que fazer (docs/diagnostico.md)
+toolkit rede                    # análise da rede, só leitura: IPs, Wi-Fi, DNS, portas em escuta, firewall (docs/rede.md)
 toolkit resume                  # chamado sozinho depois do reboot; pode ser rodado à mão
 ```
 

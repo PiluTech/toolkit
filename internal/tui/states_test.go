@@ -117,8 +117,11 @@ func TestEstadosHistoricoVazioERede(t *testing.T) {
 	lt := NewLogTab(Theme{Mono: true, NoMotion: true}, "/home/ana/.local/state/toolkit/logs")
 	wantAll(t, "histórico", lt.View(80, 12), "i Nada por aqui", "Nada rodou nesta sessão.", "1. Marque apps ou receitas e tecle Enter.", "2. Logs anteriores: /home/ana/.local/state/toolkit/logs")
 	wantAll(t, "histórico sem pasta", NewLogTab(Theme{Mono: true}, "").View(80, 12), "Nada rodou nesta sessão.", "1. Marque apps")
-	rede := NewInfoTab(Theme{Mono: true}, "Análise", "Anál", "A análise de rede ainda não existe nesta versão.")
-	wantAll(t, "rede", rede.View(80, 10), "i Ainda não existe nesta versão", "A análise de rede ainda não existe nesta versão.")
+	rede := newNet(&fakeNet{rep: netReport()})
+	wantAll(t, "rede", rede.View(80, 10), "i Nada por aqui", "A rede ainda não foi lida.", "1. Tecle c para ler a rede")
+	// o InfoTab (seção só de texto) continua valendo para a próxima função que ainda não existir
+	soon := NewInfoTab(Theme{Mono: true}, "Análise", "Anál", "Esta função ainda não existe nesta versão.")
+	wantAll(t, "em breve", soon.View(80, 10), "i Ainda não existe nesta versão", "Esta função ainda não existe nesta versão.")
 }
 
 func TestEstadosDefaultTabs(t *testing.T) {
@@ -131,11 +134,14 @@ func TestEstadosDefaultTabs(t *testing.T) {
 
 func TestEstadosPiorCasoNaoQuebraOLayout(t *testing.T) {
 	evil := "\x1b[2J\x1b]0;preso\x07 \u202e" + strings.Repeat("Nome-Muito-Longo-Sem-Espacos-", 12) + "\r\n\x00"
+	rt := newNet(&fakeNet{err: errors.New(evil)})
+	netSettle(t, rt, netKey(rt, "c"))
 	tabs := []Tab{
 		newApps(&fakeBackend{loadErr: errors.New(evil)}),
 		privTab(t, &fakePriv{loadErr: errors.New(evil)}),
 		natTab(t, &fakeNat{info: NatInfo{Supported: false, OS: evil, Reason: evil}}),
 		NewInfoTab(Theme{Mono: true}, "Análise", "Anál", evil),
+		rt,
 		NewLogTab(Theme{Mono: true}, evil),
 	}
 	tabs[0].(*AppsTab).Update(tabs[0].(*AppsTab).loadCmd()())
