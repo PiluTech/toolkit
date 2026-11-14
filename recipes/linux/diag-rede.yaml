@@ -1,6 +1,6 @@
 id: diag-rede
 name: Diagnóstico de rede
-description: Interfaces, rota padrão, DNS, alcance (ping e HTTPS), Wi-Fi e portas em escuta. Só leitura, sem sudo; endereços públicos e nome do Wi-Fi saem mascarados.
+description: Interfaces, rota padrão, DNS, alcance (ping e HTTPS), Wi-Fi e portas em escuta. Só leitura, sem sudo; mostra os endereços e o nome do Wi-Fi como o sistema informa.
 os: linux
 kind: diagnostic
 # Alvos externos (variáveis de ambiente, todas opcionais):
@@ -16,36 +16,18 @@ steps:
         L="${TOOLKIT_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}}"
         case "$L" in en*|EN*) lang=en ;; es*|ES*) lang=es ;; *) lang=pt ;; esac
         case "$lang" in
-          en) m_addr="Addresses (public addresses are masked)"; m_mtu="Interfaces (state and MTU)"; m_route="Default route"; m_noroute="no default route"; m_noip="the 'ip' command is not available on this system" ;;
-          es) m_addr="Direcciones (las públicas se enmascaran)"; m_mtu="Interfaces (estado y MTU)"; m_route="Ruta predeterminada"; m_noroute="sin ruta predeterminada"; m_noip="el comando 'ip' no está disponible en este sistema" ;;
-          *) m_addr="Endereços (os públicos saem mascarados)"; m_mtu="Interfaces (estado e MTU)"; m_route="Rota padrão"; m_noroute="sem rota padrão"; m_noip="o comando 'ip' não existe neste sistema" ;;
+          en) m_addr="Addresses"; m_mtu="Interfaces (state and MTU)"; m_route="Default route"; m_noroute="no default route"; m_noip="the 'ip' command is not available on this system" ;;
+          es) m_addr="Direcciones"; m_mtu="Interfaces (estado y MTU)"; m_route="Ruta predeterminada"; m_noroute="sin ruta predeterminada"; m_noip="el comando 'ip' no está disponible en este sistema" ;;
+          *) m_addr="Endereços"; m_mtu="Interfaces (estado e MTU)"; m_route="Rota padrão"; m_noroute="sem rota padrão"; m_noip="o comando 'ip' não existe neste sistema" ;;
         esac
-        mask() {
-          awk '
-            function priv(a, b) { return a == 10 || a == 127 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168) || (a == 169 && b == 254) || (a == 100 && b >= 64 && b <= 127) }
-            {
-              s = $0; o = ""
-              while (match(s, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
-                ip = substr(s, RSTART, RLENGTH); split(ip, p, ".")
-                o = o substr(s, 1, RSTART - 1) (priv(p[1] + 0, p[2] + 0) ? ip : p[1] ".x.x.x")
-                s = substr(s, RSTART + RLENGTH)
-              }
-              s = o s; o = ""
-              while (match(s, /[23][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]:[0-9a-fA-F:]+/)) {
-                o = o substr(s, 1, RSTART - 1) substr(s, RSTART, 4) ":x:x"
-                s = substr(s, RSTART + RLENGTH)
-              }
-              print o s
-            }'
-        }
         if ! command -v ip >/dev/null 2>&1; then printf '%s\n' "$m_noip"; exit 0; fi
         printf '== %s\n' "$m_addr"
-        ip -brief address show 2>&1 | mask
+        ip -brief address show 2>&1
         printf '\n== %s\n' "$m_mtu"
         ip -o link show 2>&1 | awk '{ n = $2; sub(/:$/, "", n); sub(/@.*/, "", n); m = "?"; s = "?"; for (i = 1; i <= NF; i++) { if ($i == "mtu") m = $(i + 1); if ($i == "state") s = $(i + 1) } printf "%-16s %-8s mtu %s\n", n, s, m }'
         printf '\n== %s\n' "$m_route"
         r="$(ip route show default 2>/dev/null; ip -6 route show default 2>/dev/null)"
-        if [ -z "$r" ]; then printf '%s\n' "$m_noroute"; else printf '%s\n' "$r" | mask; fi
+        if [ -z "$r" ]; then printf '%s\n' "$m_noroute"; else printf '%s\n' "$r"; fi
     timeout: 30s
   - id: dns
     name: DNS configurado e resolução de um nome
@@ -58,24 +40,6 @@ steps:
           es) m_conf="Servidores DNS en uso"; m_noconf="no se encontró configuración de DNS"; m_resolve="Resolución de nombre"; m_ok="ok"; m_fail="falló"; m_nores="no hay herramienta de resolución (getent, host o nslookup)"; m_badname="TOOLKIT_DIAG_NAME inválido (use letras, dígitos, punto, guion)" ;;
           *) m_conf="Servidores DNS em uso"; m_noconf="nenhuma configuração de DNS encontrada"; m_resolve="Resolução de nome"; m_ok="ok"; m_fail="falhou"; m_nores="nenhuma ferramenta de resolução (getent, host ou nslookup)"; m_badname="TOOLKIT_DIAG_NAME inválido (use letras, dígitos, ponto, hífen)" ;;
         esac
-        mask() {
-          awk '
-            function priv(a, b) { return a == 10 || a == 127 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168) || (a == 169 && b == 254) || (a == 100 && b >= 64 && b <= 127) }
-            {
-              s = $0; o = ""
-              while (match(s, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
-                ip = substr(s, RSTART, RLENGTH); split(ip, p, ".")
-                o = o substr(s, 1, RSTART - 1) (priv(p[1] + 0, p[2] + 0) ? ip : p[1] ".x.x.x")
-                s = substr(s, RSTART + RLENGTH)
-              }
-              s = o s; o = ""
-              while (match(s, /[23][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]:[0-9a-fA-F:]+/)) {
-                o = o substr(s, 1, RSTART - 1) substr(s, RSTART, 4) ":x:x"
-                s = substr(s, RSTART + RLENGTH)
-              }
-              print o s
-            }'
-        }
         name="${TOOLKIT_DIAG_NAME:-example.com}"
         case "$name" in ''|-*|*[!A-Za-z0-9._-]*) printf '%s\n' "$m_badname"; exit 0 ;; esac
         printf '== %s\n' "$m_conf"
@@ -98,7 +62,7 @@ steps:
           have=0
         fi
         if [ "$have" = 0 ]; then printf '%s\n' "$m_nores"
-        elif [ -n "$res" ]; then printf '%s\n' "$m_ok"; printf '%s\n' "$res" | mask
+        elif [ -n "$res" ]; then printf '%s\n' "$m_ok"; printf '%s\n' "$res"
         else printf '%s\n' "$m_fail"; fi
     timeout: 30s
   - id: alcance
@@ -112,24 +76,6 @@ steps:
           es) m_ok="ok"; m_fail="falló"; m_gw="Gateway (ping)"; m_nogw="sin gateway predeterminado para probar"; m_ping="Ping"; m_noping="el comando 'ping' no está disponible"; m_https="HTTPS"; m_nocurl="el comando 'curl' no está disponible"; m_unexpected="respuesta inesperada"; m_badhost="TOOLKIT_DIAG_HOST inválido (use letras, dígitos, punto, dos puntos, guion)"; m_badurl="TOOLKIT_DIAG_URL inválida (use https:// seguido de host y ruta con letras, dígitos, . _ ~ : / -)" ;;
           *) m_ok="ok"; m_fail="falhou"; m_gw="Gateway (ping)"; m_nogw="sem gateway padrão para testar"; m_ping="Ping"; m_noping="o comando 'ping' não existe"; m_https="HTTPS"; m_nocurl="o comando 'curl' não existe"; m_unexpected="resposta inesperada"; m_badhost="TOOLKIT_DIAG_HOST inválido (use letras, dígitos, ponto, dois-pontos, hífen)"; m_badurl="TOOLKIT_DIAG_URL inválida (use https:// seguido de host e caminho com letras, dígitos, . _ ~ : / -)" ;;
         esac
-        mask() {
-          awk '
-            function priv(a, b) { return a == 10 || a == 127 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168) || (a == 169 && b == 254) || (a == 100 && b >= 64 && b <= 127) }
-            {
-              s = $0; o = ""
-              while (match(s, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
-                ip = substr(s, RSTART, RLENGTH); split(ip, p, ".")
-                o = o substr(s, 1, RSTART - 1) (priv(p[1] + 0, p[2] + 0) ? ip : p[1] ".x.x.x")
-                s = substr(s, RSTART + RLENGTH)
-              }
-              s = o s; o = ""
-              while (match(s, /[23][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]:[0-9a-fA-F:]+/)) {
-                o = o substr(s, 1, RSTART - 1) substr(s, RSTART, 4) ":x:x"
-                s = substr(s, RSTART + RLENGTH)
-              }
-              print o s
-            }'
-        }
         host="${TOOLKIT_DIAG_HOST:-1.1.1.1}"
         url="${TOOLKIT_DIAG_URL:-https://example.com/}"
         case "$host" in ''|-*|*[!A-Za-z0-9._:-]*) printf '%s\n' "$m_badhost"; exit 0 ;; esac
@@ -138,7 +84,7 @@ steps:
         probe() {
           if out="$(ping -c 3 -W 2 "$2" 2>&1)"; then st="$m_ok"; else st="$m_fail"; fi
           printf '%s: %s\n' "$1" "$st"
-          printf '%s\n' "$out" | tail -n 2 | mask
+          printf '%s\n' "$out" | tail -n 2
         }
         if command -v ping >/dev/null 2>&1; then
           gw=""
@@ -157,7 +103,7 @@ steps:
             printf '%s %s: %s (HTTP %s; tcp %s s; tls %s s; total %s s)\n' "$m_https" "$url" "$st" "$1" "$2" "$3" "$4"
           else
             printf '%s %s: %s\n' "$m_https" "$url" "$m_fail"
-            printf '%s\n' "$res" | tail -n 1 | mask
+            printf '%s\n' "$res" | tail -n 1
           fi
         else
           printf '%s\n' "$m_nocurl"
@@ -170,12 +116,12 @@ steps:
         L="${TOOLKIT_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}}"
         case "$L" in en*|EN*) lang=en ;; es*|ES*) lang=es ;; *) lang=pt ;; esac
         case "$lang" in
-          en) m_nonm="NetworkManager (nmcli) not available: Wi-Fi not checked"; m_nowifi="no Wi-Fi adapter found"; m_dev="Adapter"; m_net="network"; m_hidden="name hidden"; m_signal="Signal"; m_chan="channel"; m_rate="rate" ;;
-          es) m_nonm="NetworkManager (nmcli) no disponible: Wi-Fi no verificado"; m_nowifi="no se encontró adaptador Wi-Fi"; m_dev="Adaptador"; m_net="red"; m_hidden="nombre oculto"; m_signal="Señal"; m_chan="canal"; m_rate="velocidad" ;;
-          *) m_nonm="NetworkManager (nmcli) indisponível: Wi-Fi não verificado"; m_nowifi="nenhum adaptador Wi-Fi encontrado"; m_dev="Adaptador"; m_net="rede"; m_hidden="nome oculto"; m_signal="Sinal"; m_chan="canal"; m_rate="taxa" ;;
+          en) m_nonm="NetworkManager (nmcli) not available: Wi-Fi not checked"; m_nowifi="no Wi-Fi adapter found"; m_dev="Adapter"; m_net="network"; m_signal="Signal"; m_chan="channel"; m_rate="rate" ;;
+          es) m_nonm="NetworkManager (nmcli) no disponible: Wi-Fi no verificado"; m_nowifi="no se encontró adaptador Wi-Fi"; m_dev="Adaptador"; m_net="red"; m_signal="Señal"; m_chan="canal"; m_rate="velocidad" ;;
+          *) m_nonm="NetworkManager (nmcli) indisponível: Wi-Fi não verificado"; m_nowifi="nenhum adaptador Wi-Fi encontrado"; m_dev="Adaptador"; m_net="rede"; m_signal="Sinal"; m_chan="canal"; m_rate="taxa" ;;
         esac
         if ! command -v nmcli >/dev/null 2>&1; then printf '%s\n' "$m_nonm"; exit 0; fi
-        st="$(nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status 2>/dev/null | awk -F: -v d="$m_dev" -v n="$m_net" -v h="$m_hidden" '$2 == "wifi" { c = ($4 == "" || $4 == "--") ? "-" : n ": [" h "]"; printf "%s %s: %s, %s\n", d, $1, $3, c }')"
+        st="$(nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status 2>/dev/null | awk -F: -v d="$m_dev" -v n="$m_net" '$2 == "wifi" { c = ($4 == "" || $4 == "--") ? "-" : n ": " $4; printf "%s %s: %s, %s\n", d, $1, $3, c }')"
         if [ -z "$st" ]; then printf '%s\n' "$m_nowifi"; exit 0; fi
         printf '%s\n' "$st"
         nmcli -t -f IN-USE,SIGNAL,CHAN,RATE dev wifi list --rescan no 2>/dev/null | awk -F: -v s="$m_signal" -v c="$m_chan" -v r="$m_rate" '$1 == "*" { printf "%s: %s%%; %s %s; %s %s\n", s, $2, c, $3, r, $4; exit }'

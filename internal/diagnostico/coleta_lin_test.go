@@ -187,14 +187,18 @@ func TestLinCaminhoFeliz(t *testing.T) {
 	if len(r.GPUs) != 2 || r.GPUs[0].Name != "Intel Corporation UHD Graphics 620" || r.GPUs[1].Name != "NVIDIA Corporation GP108M [GeForce MX150]" {
 		t.Errorf("gpus: %+v", r.GPUs)
 	}
-	if len(r.Events) != 2 {
+	// os caminhos aparecem como o sistema os informou (nada é mascarado): /home/alice e /home/bob são eventos distintos
+	if len(r.Events) != 3 {
 		t.Fatalf("eventos: %+v", r.Events)
 	}
 	if e := r.Events[0]; e.Source != "kernel" || e.Message != "ata1: link down" || e.Count != 1 {
 		t.Errorf("evento 0: %+v", e)
 	}
-	if e := r.Events[1]; e.Source != "nm-dispatcher" || e.Count != 2 || e.Message != "error 12 in ~/foo" || !e.When.Equal(time.Date(2026, 11, 13, 10, 0, 0, 0, time.UTC)) {
+	if e := r.Events[1]; e.Source != "nm-dispatcher" || e.Count != 1 || e.Message != "error 12 in /home/alice/foo" || !e.When.Equal(time.Date(2026, 11, 13, 10, 0, 0, 0, time.UTC)) {
 		t.Errorf("evento 1: %+v", e)
+	}
+	if e := r.Events[2]; e.Message != "error 99 in /home/bob/foo" {
+		t.Errorf("evento 2: %+v", e)
 	}
 	if len(r.Crashes) != 3 || r.Crashes[0].Detail != "segfault: chrome" || r.Crashes[0].Kind != CrashApp ||
 		r.Crashes[1].Detail != "OOM: firefox" || r.Crashes[2].Kind != CrashKernelPanic {
@@ -425,7 +429,7 @@ func TestLinLimites(t *testing.T) {
 	}
 }
 
-func TestLinMensagemTruncadaESemCaminhoDeUsuario(t *testing.T) {
+func TestLinMensagemTruncadaEMantemOCaminho(t *testing.T) {
 	long := strings.Repeat("á", 500)
 	out := "2026-11-13T10:00:00+0000 h unit: /home/zed/x /Users/q/y " + long + "\nresto\n"
 	f := exectest.New(t)
@@ -438,7 +442,7 @@ func TestLinMensagemTruncadaESemCaminhoDeUsuario(t *testing.T) {
 		t.Fatalf("%+v", r.Events)
 	}
 	m := r.Events[0].Message
-	if strings.Contains(m, "zed") || strings.Contains(m, "/Users/q") || len([]rune(m)) != 200 || strings.Contains(m, "resto") {
+	if !strings.HasPrefix(m, "/home/zed/x /Users/q/y ") || len([]rune(m)) != 200 || strings.Contains(m, "resto") {
 		t.Errorf("mensagem: %q", m)
 	}
 	if !linSkipped(r, "falhas") {

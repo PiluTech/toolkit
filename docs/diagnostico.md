@@ -6,9 +6,9 @@ e os erros e falhas recentes do sistema.
 
 ```sh
 toolkit diagnostico                       # resumo: o que está ruim e o que fazer
-toolkit diagnostico --completo            # resumo + relatório completo (todos os dados lidos), mascarado
-toolkit diagnostico --json                # o mesmo em JSON, mascarado
-toolkit diagnostico --relatorio rel.txt   # grava resumo + relatório completo (mascarados) num arquivo NOVO (0600)
+toolkit diagnostico --completo            # resumo + relatório completo (todos os dados lidos)
+toolkit diagnostico --json                # o mesmo em JSON
+toolkit diagnostico --relatorio rel.txt   # grava resumo + relatório completo num arquivo NOVO (0600)
 ```
 
 O andamento ("Lendo o estado da máquina…") vai para o stderr; `--json` não escreve andamento. O comando sempre sai com 0
@@ -59,28 +59,22 @@ resumo diz "Nada de ruim encontrado". Os problemas saem primeiro.
 O que não pôde ser lido (administrador, ferramenta ausente, log restrito) aparece como `- info: Não foi possível ler: …`
 com a instrução (por exemplo, `sudo smartctl …`), nunca como silêncio.
 
-## Dados sensíveis
+## Informações como o sistema informa
 
-O relatório completo, o `--json` e o arquivo de `--relatorio` passam por `diagnostico.MaskText`, que mascara: nome do
-usuário e nome da máquina (e variáveis `USER`, `USERNAME`, `COMPUTERNAME`, `HOSTNAME`) como `[pessoal]`; pastas pessoais
-(`C:\Users\NOME`, `/Users/NOME`, `/home/NOME`) como `[usuário]`; e-mails; compartilhamentos de rede (`\\SERVIDOR\`);
-identificadores da máquina (número de série, UUID/GUID, UDID, ECID, WWN, IMEI, MAC: `diagfmt.Redact`) como `[***]`; e IPs
-públicos (`A.x.x.x`; IPv6 global `2001:x:x`; IPs privados ficam). Os coletores nem pedem série/UUID/MAC/hostname ao sistema,
-mensagens de evento entram só na primeira linha e os relatórios de falha do macOS nunca são abertos. O arquivo de
-`--relatorio` é criado com permissão 0600 e o comando **nunca sobrescreve** um arquivo que já existe; o caminho que o comando
-mostra (confirmação e erros do Open/Write/Close, que repetem o caminho) também sai mascarado.
-
-Detalhes da máscara: o `--json` mascara os **valores de texto já decodificados** e só então serializa (`MaskDocument`): as
-chaves, os números e os tipos do contrato nunca mudam (um nome pessoal como `report` ou `Source` não toca as chaves) e os
-escapes do JSON (aspas e barras de um serial ou de um caminho do Windows) nunca se perdem. Nomes pessoais de 3 caracteres ou
-mais são mascarados em qualquer posição; nomes curtos (2 caracteres, ex.: usuário "Li", máquina "PC") por TOKEN, só quando são a
-palavra inteira, sem diferenciar maiúsculas (`li`, `LI`, `Pc`; `PCI`, `list` e `Lisa` ficam). Um nome de 1 caractere não dá para distinguir de texto comum e é
-ignorado (limite).
+O toolkit é uma ferramenta de **análise**: o resumo, o `--completo`, o `--json` e o arquivo de `--relatorio` mostram as
+informações da máquina **exatamente como o sistema as informa**, sem máscara nenhuma (nome do usuário e da máquina, pastas
+pessoais, e-mails, IPs, UUIDs, MACs e números de série aparecem inteiros quando o sistema os informa). O único tratamento é
+deixar os números legíveis (tamanhos em GB, frequências em MT/s, porcentagens). Duas coisas continuam por segurança do
+arquivo, e nenhuma esconde dado: o `--relatorio` cria o arquivo com permissão 0600 e **nunca sobrescreve** um arquivo que já
+existe. Os coletores não pedem número de série, UUID, MAC nem nome da máquina ao sistema (só aparecem se o próprio sistema os
+colocar num texto, como uma mensagem de erro); mensagens de evento entram só na primeira linha, e os relatórios de falha do
+macOS nunca são abertos (só os nomes dos arquivos). Como o relatório mostra tudo, **trate o arquivo gerado como dado pessoal**
+antes de compartilhar.
 
 ## Testes
 
-`internal/diagnostico` (coletores com saídas falsas por SO, regras, relatório, máscara), `internal/cli/diagnostico_test.go`
-(comando, máscara no `--completo`/`--json`/`--relatorio`, não sobrescreve) e `internal/diagfmt/redact_test.go`. Nenhum teste
+`internal/diagnostico` (coletores com saídas falsas por SO, regras, relatório), `internal/cli/diagnostico_test.go`
+(comando; `--completo`, `--json` e `--relatorio` sem máscara; não sobrescreve). Nenhum teste
 toca a máquina real; todo `exec.Cmd` dos coletores é `ReadOnly` e sem `Elevate` (verificado nos testes).
 
 ## Limites

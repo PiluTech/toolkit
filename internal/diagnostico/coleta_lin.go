@@ -28,7 +28,6 @@ const (
 var (
 	errLinNoTool = errors.New("ferramenta ausente")
 
-	linHomeRe    = regexp.MustCompile(`/(?:home|Users)/[^/\s:]+`)
 	linDigitsRe  = regexp.MustCompile(`[0-9]+`)
 	linPidRe     = regexp.MustCompile(`\[[0-9]+\]$`)
 	linOOMRe     = regexp.MustCompile(`Out of memory: Killed process [0-9]+ \(([^)]+)\)`)
@@ -677,7 +676,6 @@ type linLine struct {
 
 func linClean(s string) string {
 	s = firstLine(s)
-	s = linHomeRe.ReplaceAllString(s, "~")
 	rs := []rune(s)
 	if len(rs) > linMsgMax {
 		s = string(rs[:linMsgMax])

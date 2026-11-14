@@ -56,13 +56,13 @@ func TestDiagMemoriaRealOutputIsUnderstoodByTheRenderers(t *testing.T) {
 		cancel()
 		out := stdout.Bytes()
 		if err != nil {
-			t.Logf("%s: o comando saiu com erro (%v); a saída é avaliada mesmo assim\nstderr: %.500s", st.ID, err, diagfmt.Redact(stderr.String()))
+			t.Logf("%s: o comando saiu com erro (%v); a saída é avaliada mesmo assim\nstderr: %.500s", st.ID, err, stderr.String())
 		}
 		summary, rerr := diagfmt.Render(st.Render, string(out), diagfmt.PT)
 		if rerr != nil || strings.TrimSpace(summary) == "" {
-			t.Errorf("%s: o renderizador %s não entendeu a saída real: %v\n--- saída crua, sem identificadores (até 2000 bytes) ---\n%.2000s", st.ID, st.Render, rerr, diagfmt.Redact(string(out)))
+			t.Errorf("%s: o renderizador %s não entendeu a saída real: %v\n--- saída crua (até 2000 bytes) ---\n%.2000s", st.ID, st.Render, rerr, string(out))
 			continue
 		}
-		t.Logf("%s:\n%s", st.ID, diagfmt.Redact(summary))
+		t.Logf("%s:\n%s", st.ID, summary)
 	}
 }

@@ -66,7 +66,7 @@ func TestEngineMostraSoOResumoAteHaverDetalhes(t *testing.T) {
 		t.Fatalf("resumo: %q (%s)", sr.Output, sr.Outcome)
 	}
 	sr = runRender(t, true, envMap(nil), exectest.Exit(0, "8589934592 bytes\n"))
-	for _, want := range []string{"Resumo: 8589934592 bytes", "-- Detalhes (saída original, sem os identificadores da máquina) --", "8589934592 bytes\n"} {
+	for _, want := range []string{"Resumo: 8589934592 bytes", "-- Detalhes (saída original) --", "8589934592 bytes\n"} {
 		if !strings.Contains(sr.Output, want) {
 			t.Errorf("detalhes sem %q:\n%s", want, sr.Output)
 		}
@@ -84,14 +84,14 @@ func TestEngineResumoNosTresIdiomas(t *testing.T) {
 		}
 	}
 	sr := runRender(t, true, envMap(map[string]string{"TOOLKIT_LANG": "en"}), exectest.Exit(0, "x"))
-	if !strings.Contains(sr.Output, "-- Details (original output, without the machine identifiers) --") {
+	if !strings.Contains(sr.Output, "-- Details (original output) --") {
 		t.Errorf("cabeçalho dos detalhes em inglês: %q", sr.Output)
 	}
 }
 
-// Lupa #56: sem --detalhes a saída crua NUNCA aparece (nem no fallback do renderizador que falha); com --detalhes
-// aparece sem os identificadores da máquina.
-func TestEngineRenderQueFalhaNaoMostraACruaSemDetalhes(t *testing.T) {
+// O toolkit mostra as informações do PC como são (decisão do Paulo: é uma ferramenta de análise). Sem --detalhes a saída
+// crua não aparece (nem no fallback do renderizador que falha); com --detalhes aparece INTEIRA, sem máscara.
+func TestEngineRenderQueFalhaMostraACruaSoComDetalhesESemMascara(t *testing.T) {
 	src := strings.Replace(diagRender, "t-resumo", "t-erro", 1)
 	for name, raw := range map[string]string{
 		"json válido":   `{"disks":[{"_name":"SSD","device_serial":"SN-SECRETO-1","volume_uuid":"4C4C4544-0042-5710-8039-B2C04F485932"}]}`,
@@ -110,21 +110,21 @@ func TestEngineRenderQueFalhaNaoMostraACruaSemDetalhes(t *testing.T) {
 			if rep.Steps[0].Outcome != OutcomeDone || !strings.Contains(out, "não deu para resumir") || !strings.Contains(out, "--detalhes") {
 				t.Errorf("%s detalhes=%v: aviso ausente (a etapa continua ok):\n%s", name, details, out)
 			}
-			if strings.Contains(out, "SN-SECRETO-1") || strings.Contains(out, "4C4C4544") {
-				t.Errorf("%s detalhes=%v: identificador na saída:\n%s", name, details, out)
+			if strings.Contains(out, "[***]") {
+				t.Errorf("%s detalhes=%v: nada é mascarado:\n%s", name, details, out)
 			}
-			if !details && (strings.Contains(out, "_name") || strings.Contains(out, "Model: X")) {
+			if details && !strings.Contains(out, "SN-SECRETO-1") {
+				t.Errorf("%s: com --detalhes a original aparece inteira:\n%s", name, out)
+			}
+			if !details && (strings.Contains(out, "SN-SECRETO-1") || strings.Contains(out, "_name") || strings.Contains(out, "Model: X")) {
 				t.Errorf("%s: sem --detalhes a saída crua não aparece:\n%s", name, out)
-			}
-			if details && !strings.Contains(out, "[***]") {
-				t.Errorf("%s: com --detalhes a original aparece redigida:\n%s", name, out)
 			}
 		}
 	}
 }
 
-// Com resumo ok, --detalhes mostra a original redigida; a falha do comando também não vaza identificador.
-func TestEngineDetalhesEFalhaDoComandoRedigemIdentificadores(t *testing.T) {
+// Com resumo ok, --detalhes mostra a original como veio; a falha do comando também sai como veio.
+func TestEngineDetalhesEFalhaDoComandoSemMascara(t *testing.T) {
 	raw := `{"x":[{"device_serial":"SN-SECRETO-1"}]} 8589934592 bytes`
 	e0 := newEnv(t, linuxInfo())
 	e0.eng.Details, e0.eng.Getenv = true, envMap(nil)
@@ -134,14 +134,14 @@ func TestEngineDetalhesEFalhaDoComandoRedigemIdentificadores(t *testing.T) {
 		t.Fatal(err0)
 	}
 	sr := rep0.Steps[0]
-	if strings.Contains(sr.Output, "SN-SECRETO-1") || !strings.Contains(sr.Output, "8589934592 bytes") || !strings.Contains(sr.Output, "[***]") {
-		t.Errorf("detalhes redigidos:\n%s", sr.Output)
+	if !strings.Contains(sr.Output, "SN-SECRETO-1") || !strings.Contains(sr.Output, "8589934592 bytes") || strings.Contains(sr.Output, "[***]") {
+		t.Errorf("detalhes sem máscara:\n%s", sr.Output)
 	}
 	e := newEnv(t, linuxInfo())
 	e.run.On(sh("le-memoria"), exectest.Exit(3, `{"device_serial":"SN-SECRETO-1"} falhou`))
 	rep, err := e.eng.Run(context.Background(), e.recipe(strings.Replace(diagRender, "t-resumo", "t-fixo", 1)), RunOptions{})
-	if err == nil || rep.Steps[0].Outcome != OutcomeFailed || strings.Contains(rep.Steps[0].Output, "SN-SECRETO-1") {
-		t.Errorf("a saída de uma falha não pode ter identificador: %v\n%+v", err, rep.Steps[0])
+	if err == nil || rep.Steps[0].Outcome != OutcomeFailed || !strings.Contains(rep.Steps[0].Output, "SN-SECRETO-1") || strings.Contains(rep.Steps[0].Output, "[***]") {
+		t.Errorf("a saída de uma falha aparece como veio: %v\n%+v", err, rep.Steps[0])
 	}
 }
 
@@ -154,9 +154,8 @@ func TestEngineRenderNaoRodaQuandoAEtapaFalha(t *testing.T) {
 	}
 }
 
-// Lupa #56 (rodada 3): o RESUMO também sai redigido (ele nasce da entrada original): um FriendlyName com UUID ou MAC
-// não reaparece, com e sem detalhes.
-func TestEngineResumoTambemSaiSemIdentificadores(t *testing.T) {
+// O resumo mostra o nome do disco como o sistema o informou (UUID e MAC no nome incluídos), com e sem detalhes.
+func TestEngineResumoMostraONomeComoVeio(t *testing.T) {
 	const uuid, mac = "4C4C4544-0042-5710-8039-B2C04F485932", "aa:bb:cc:dd:ee:ff"
 	raw := `[{"FriendlyName":"Disco ` + uuid + ` ` + mac + `","MediaType":"SSD","HealthStatus":"Healthy","OperationalStatus":"OK","Size":256060514304,"BusType":"NVMe"}]`
 	src := strings.Replace(diagRender, "t-resumo", "windows-disks", 1)
@@ -169,8 +168,8 @@ func TestEngineResumoTambemSaiSemIdentificadores(t *testing.T) {
 			t.Fatal(err)
 		}
 		out := rep.Steps[0].Output
-		if strings.Contains(out, uuid) || strings.Contains(out, mac) || !strings.Contains(out, "Disco: Disco [***] [***]") || !strings.Contains(out, "256 GB") {
-			t.Errorf("detalhes=%v: o resumo e os detalhes saem sem UUID/MAC:\n%s", details, out)
+		if !strings.Contains(out, "Disco: Disco "+uuid+" "+mac) || !strings.Contains(out, "256 GB") || strings.Contains(out, "[***]") {
+			t.Errorf("detalhes=%v: o resumo mostra o nome como veio:\n%s", details, out)
 		}
 	}
 }
