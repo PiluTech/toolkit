@@ -246,7 +246,7 @@ func (m *Model) tooSmall() string {
 func (m *Model) helpBody() string {
 	rows := [][2]string{
 		{"Tab / Shift+Tab", "próxima aba / anterior"},
-		{"1 a 4", "Apps, Receitas, Diagnóstico, Log"},
+		{"1 a 5", "Apps, Receitas, Diagnóstico, Log, Privacidade"},
 		{"↑ ↓  j k", "mover o cursor ou rolar"},
 		{"g / G  PgUp / PgDn", "início, fim, página"},
 		{"→ l  ← h", "foco nas etapas / volta à lista (Receitas, Diagnóstico)"},

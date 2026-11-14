@@ -1,0 +1,611 @@
+package tui
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
+	"github.com/PiluTech/toolkit/internal/textsafe"
+)
+
+// Erros que o backend de privacidade devolve para a aba mostrar a instrução certa.
+var (
+	// ErrPrivNeedsAdmin: o plano tem itens de administrador e o processo não é administrador (nada foi mudado).
+	ErrPrivNeedsAdmin = errors.New("privacidade: exige administrador")
+	// ErrPrivNoBackup: não há backup para desfazer.
+	ErrPrivNoBackup = errors.New("privacidade: sem backup")
+)
+
+// PrivProfile é um perfil de privacidade ("basico" ou "recomendado").
+type PrivProfile string
+
+// Perfis da aba.
+const (
+	PrivBasico      PrivProfile = "basico"
+	PrivRecomendado PrivProfile = "recomendado"
+)
+
+// Estados de um ajuste lido do sistema.
+const (
+	PrivApplied = "applied" // todos os valores já estão como o perfil manda
+	PrivPending = "pending" // nenhum está
+	PrivPartial = "partial" // alguns
+	PrivAbsent  = "absent"  // nada a mudar nesta versão do Windows (serviço ou tarefa ausente)
+)
+
+// PrivSetting é um ajuste do catálogo com o estado atual.
+type PrivSetting struct {
+	Title string
+	Admin bool // exige administrador (só o perfil recomendado o inclui)
+	State string
+}
+
+// PrivInfo é o que a aba carrega. Supported=false fora do Windows: a aba só avisa.
+type PrivInfo struct {
+	Supported bool
+	OS        string
+	Edition   string
+	IsAdmin   bool
+	Settings  []PrivSetting
+}
+
+// PrivPlan é um plano pronto para mostrar (texto já formatado, na língua do usuário).
+type PrivPlan struct {
+	Text       string
+	Pending    int
+	NeedsAdmin bool // alguma mudança pendente exige administrador
+	IsAdmin    bool
+}
+
+// PrivResult é o que uma aplicação ou restauração fez.
+type PrivResult struct {
+	Applied    int
+	BackupPath string
+	Nothing    bool // desfazer sem nada a restaurar (o backup foi removido)
+}
+
+// PrivacyBackend liga a aba ao pacote privacidade. Load e Plan/UndoPlan só leem; Apply e Undo mudam o sistema e
+// só são chamados depois da confirmação [s/N] dentro da aba.
+type PrivacyBackend interface {
+	Load(ctx context.Context) (PrivInfo, error)
+	Plan(ctx context.Context, p PrivProfile, onlyUser bool) (PrivPlan, error)
+	Apply(ctx context.Context, p PrivProfile, onlyUser bool) (PrivResult, error)
+	UndoPlan(ctx context.Context) (PrivPlan, error)
+	Undo(ctx context.Context) (PrivResult, error)
+}
+
+type privKind int
+
+const (
+	privView privKind = iota // só ver o plano
+	privApply
+	privUndo
+)
+
+type privBusy int
+
+const (
+	busyNone privBusy = iota
+	busyPlan
+	busyApply
+)
+
+type privLoadedMsg struct {
+	info PrivInfo
+	err  error
+}
+
+type privPlanMsg struct {
+	seq  int
+	kind privKind
+	plan PrivPlan
+	err  error
+}
+
+type privDoneMsg struct {
+	kind privKind
+	res  PrivResult
+	err  error
+}
+
+// PrivacyTab é a aba Privacidade (só Windows).
+type PrivacyTab struct {
+	be    PrivacyBackend
+	ctx   context.Context
+	theme Theme
+
+	loading bool
+	loadErr error
+	info    PrivInfo
+
+	cur      int  // 0 basico, 1 recomendado
+	onlyUser bool // aplicar só os itens do usuário (--somente-usuario)
+	scroll   int
+	lastW    int
+	lastH    int
+	frame    int
+
+	busy    privBusy
+	seq     int
+	view    bool // mostrando um plano
+	kind    privKind
+	plan    PrivPlan
+	profile PrivProfile // perfil do plano mostrado
+	asking  bool
+	only    bool // onlyUser do plano mostrado
+	notice  string
+	warn    bool // o aviso é de problema (símbolo "!")
+	result  string
+}
+
+// NewPrivacyTab cria a aba. O backend decide o que é "suportado" (no real, GOOS == windows).
+func NewPrivacyTab(ctx context.Context, be PrivacyBackend, th Theme) *PrivacyTab {
+	return &PrivacyTab{be: be, ctx: ctx, theme: th, loading: true}
+}
+
+// SetContext troca o contexto das chamadas ao backend.
+func (t *PrivacyTab) SetContext(ctx context.Context) { t.ctx = ctx }
+
+// Title implementa Tab.
+func (t *PrivacyTab) Title() string { return "Privacidade" }
+
+// Short implementa Tab.
+func (t *PrivacyTab) Short() string { return "Priv" }
+
+// Init lê o estado (assíncrono: nunca bloqueia o Update).
+func (t *PrivacyTab) Init() tea.Cmd { return tea.Batch(t.loadCmd(), t.theme.Tick()) }
+
+// Reload relê o estado depois de uma execução.
+func (t *PrivacyTab) Reload() tea.Cmd { return t.loadCmd() }
+
+func (t *PrivacyTab) loadCmd() tea.Cmd {
+	be, ctx := t.be, t.ctx
+	return func() tea.Msg {
+		info, err := be.Load(ctx)
+		return privLoadedMsg{info: info, err: err}
+	}
+}
+// Capturing implementa Tab: durante a confirmação [s/N] e a aplicação, todas as teclas são da aba (q, Tab e os números não saem).
+// Capturing diz que, durante a confirmação [s/N] e a aplicação, todas as teclas são da aba (q, Tab e os números não saem).
+func (t *PrivacyTab) Capturing() bool { return t.asking || t.busy == busyApply }
+
+// Selected implementa Tab.
+func (t *PrivacyTab) Selected() int { return 0 }
+
+func (t *PrivacyTab) profileNow() PrivProfile {
+	if t.cur == 1 {
+		return PrivRecomendado
+	}
+	return PrivBasico
+}
+
+func (t *PrivacyTab) usable() bool { return !t.loading && t.loadErr == nil && t.info.Supported }
+
+// Update trata dados carregados, planos, resultados, o spinner e as teclas.
+func (t *PrivacyTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
+	switch msg := msg.(type) {
+	case privLoadedMsg:
+		t.loading = false
+		if msg.err != nil {
+			t.loadErr = msg.err
+			return t, nil
+		}
+		t.loadErr = nil
+		t.info = cleanPrivInfo(msg.info)
+	case privPlanMsg:
+		if msg.seq != t.seq || t.busy != busyPlan {
+			return t, nil // plano atrasado de uma tecla anterior
+		}
+		t.busy = busyNone
+		t.onPlan(msg)
+	case privDoneMsg:
+		t.onDone(msg)
+		return t, t.loadCmd()
+	case tickMsg:
+		t.frame++
+		if t.loading || t.busy != busyNone {
+			return t, t.theme.Tick()
+		}
+	case tea.KeyPressMsg:
+		return t, t.key(msg.String())
+	}
+	return t, nil
+}
+
+func cleanPrivInfo(i PrivInfo) PrivInfo {
+	i.OS, i.Edition = textsafe.Line(i.OS), textsafe.Line(i.Edition)
+	s := make([]PrivSetting, len(i.Settings))
+	for k, v := range i.Settings {
+		s[k] = PrivSetting{Title: textsafe.Line(v.Title), Admin: v.Admin, State: v.State}
+	}
+	i.Settings = s
+	return i
+}
+
+func (t *PrivacyTab) setNotice(s string, warn bool) { t.notice, t.warn = textsafe.Line(s), warn }
+
+func (t *PrivacyTab) onPlan(m privPlanMsg) {
+	t.scroll, t.asking = 0, false
+	if m.err != nil {
+		t.view = false
+		switch {
+		case errors.Is(m.err, ErrPrivNoBackup):
+			t.setNotice("Não há backup de privacidade: nada a desfazer.", false)
+		default:
+			t.setNotice("erro: "+m.err.Error(), true)
+		}
+		return
+	}
+	t.view, t.kind, t.plan = true, m.kind, m.plan
+	t.plan.Text = textsafe.Multiline(m.plan.Text)
+	switch {
+	case m.kind == privView:
+		t.setNotice("Só leitura: nada foi alterado. Esc volta.", false)
+	case m.kind == privApply && m.plan.Pending == 0:
+		t.setNotice("Nada a fazer: tudo já está como o perfil manda.", false)
+	case m.plan.NeedsAdmin && !m.plan.IsAdmin && m.kind == privApply:
+		t.setNotice("Este plano tem itens que exigem administrador e este terminal não é: nada foi alterado. Abra o terminal como administrador (botão direito, \"Executar como administrador\") e rode o toolkit de novo, ou volte (Esc) e use m para aplicar só o que é do usuário. O toolkit nunca eleva sozinho.", true)
+	case m.plan.NeedsAdmin && !m.plan.IsAdmin && m.kind == privUndo:
+		t.setNotice("O backup tem itens que exigem administrador e este terminal não é: nada foi alterado. Abra o terminal como administrador e tente desfazer de novo.", true)
+	default:
+		t.asking = true
+		t.notice = ""
+	}
+}
+
+func (t *PrivacyTab) onDone(m privDoneMsg) {
+	t.busy, t.asking, t.view, t.scroll = busyNone, false, false, 0
+	verb := "Aplicado"
+	if m.kind == privUndo {
+		verb = "Restaurado"
+	}
+	switch {
+	case m.err != nil && errors.Is(m.err, ErrPrivNeedsAdmin):
+		t.setNotice("Precisa de administrador: nada foi alterado. Abra o terminal como administrador e tente de novo.", true)
+		t.result = ""
+	case m.err != nil:
+		t.setNotice("erro: "+m.err.Error(), true)
+		t.result = ""
+		if m.res.Applied > 0 {
+			t.result = fmt.Sprintf("%s antes da falha: %d mudança(s). O backup guarda os valores originais; d desfaz.", verb, m.res.Applied)
+		}
+	case m.res.Nothing:
+		t.setNotice("O backup existia, mas tudo já estava como antes: nada a restaurar (o backup foi removido).", false)
+		t.result = ""
+	case m.kind == privUndo:
+		t.setNotice(fmt.Sprintf("Restaurado: %d item(ns). O backup foi removido.", m.res.Applied), false)
+		t.result = fmt.Sprintf("Restaurado: %d item(ns).", m.res.Applied)
+	default:
+		t.setNotice(fmt.Sprintf("Aplicado: %d mudança(s). Backup em %s. d desfaz.", m.res.Applied, textsafe.Line(m.res.BackupPath)), false)
+		t.result = fmt.Sprintf("Aplicado: %d mudança(s). Backup em %s.", m.res.Applied, textsafe.Line(m.res.BackupPath))
+	}
+}
+
+// key trata as teclas. Mudar o sistema só acontece depois do plano na tela e do "s" (ou "y") na confirmação.
+func (t *PrivacyTab) key(k string) tea.Cmd {
+	if t.loading || t.busy != busyNone || !t.usable() {
+		return nil
+	}
+	if t.asking {
+		switch k {
+		case "up", "down", "pgup", "pgdown":
+			t.scrollKey(k)
+			return nil
+		case "s", "S", "y", "Y":
+			return t.confirm()
+		}
+		t.asking, t.view = false, false
+		t.setNotice("Cancelado: nada foi alterado.", false)
+		return nil
+	}
+	if t.view {
+		switch k {
+		case "up", "down", "pgup", "pgdown":
+			t.scrollKey(k)
+		case "esc", "enter", "left", "backspace":
+			t.view, t.scroll, t.notice = false, 0, ""
+		}
+		return nil
+	}
+	t.notice = ""
+	switch k {
+	case "up", "k":
+		t.cur = 0
+	case "down", "j":
+		t.cur = 1
+	case "pgup", "pgdown":
+		t.scrollKey(k)
+	case "m":
+		t.onlyUser = !t.onlyUser
+	case "p":
+		return t.planCmd(privView)
+	case "a":
+		return t.planCmd(privApply)
+	case "d":
+		return t.planCmd(privUndo)
+	}
+	return nil
+}
+
+func (t *PrivacyTab) scrollKey(k string) {
+	page := max(t.lastH/2, 1)
+	switch k {
+	case "up":
+		t.scroll = max(t.scroll-1, 0)
+	case "down":
+		t.scroll++
+	case "pgup":
+		t.scroll = max(t.scroll-page, 0)
+	case "pgdown":
+		t.scroll += page
+	}
+}
+
+func (t *PrivacyTab) planCmd(kind privKind) tea.Cmd {
+	t.busy = busyPlan
+	t.seq++
+	seq, be, ctx, p, only := t.seq, t.be, t.ctx, t.profileNow(), t.onlyUser
+	t.profile, t.only = p, only
+	return tea.Batch(func() tea.Msg {
+		var plan PrivPlan
+		var err error
+		if kind == privUndo {
+			plan, err = be.UndoPlan(ctx)
+		} else {
+			plan, err = be.Plan(ctx, p, only && kind == privApply)
+		}
+		return privPlanMsg{seq: seq, kind: kind, plan: plan, err: err}
+	}, t.theme.Tick())
+}
+
+func (t *PrivacyTab) confirm() tea.Cmd {
+	t.asking, t.busy, t.notice = false, busyApply, ""
+	be, ctx, p, only, kind := t.be, t.ctx, t.profile, t.only, t.kind
+	return tea.Batch(func() tea.Msg {
+		var res PrivResult
+		var err error
+		if kind == privUndo {
+			res, err = be.Undo(ctx)
+		} else {
+			res, err = be.Apply(ctx, p, only)
+		}
+		return privDoneMsg{kind: kind, res: res, err: err}
+	}, t.theme.Tick())
+}
+
+// Keys implementa Tab.
+func (t *PrivacyTab) Keys() []KeyHint {
+	switch {
+	case t.loading || t.loadErr != nil || !t.info.Supported:
+		return nil
+	case t.busy == busyApply:
+		return nil
+	case t.asking:
+		return []KeyHint{{"s", "confirmar"}, {"n", "cancelar"}, {"↑↓", "rolar"}}
+	case t.view:
+		return []KeyHint{{"↑↓", "rolar"}, {"Esc", "voltar"}}
+	}
+	only := "só usuário"
+	if t.onlyUser {
+		only += " ✓"
+	}
+	return []KeyHint{{"↑↓", "perfil"}, {"p", "ver plano"}, {"a", "aplicar"}, {"d", "desfazer"}, {"m", only}}
+}
+
+// Status implementa Tab: a pergunta [s/N], o aviso ou o resultado.
+func (t *PrivacyTab) Status() string {
+	switch {
+	case t.asking && t.kind == privUndo && t.plan.Pending == 0:
+		return "Tudo já está como antes. Remover o backup? [s/N]"
+	case t.asking && t.kind == privUndo:
+		return "Restaurar estes itens do backup? [s/N]"
+	case t.asking:
+		return fmt.Sprintf("Aplicar o perfil %s? O valor original de cada item será guardado em backup. [s/N]", t.profile)
+	case t.busy == busyApply:
+		return t.theme.Spin(t.frame) + " Aplicando… não feche a janela."
+	case t.notice != "" && t.warn:
+		return SymWarn + " " + t.notice
+	case t.notice != "":
+		return t.notice
+	}
+	return ""
+}
+
+// More implementa Tab.
+func (t *PrivacyTab) More() int {
+	if !t.usable() {
+		return 0
+	}
+	var n int
+	if t.view {
+		n = len(t.planLines(t.lastW)) - (t.scroll + t.lastH - 1)
+	} else {
+		n = len(t.mainLines(t.lastW)) - (t.scroll + t.lastH)
+	}
+	return max(n, 0)
+}
+
+func (t *PrivacyTab) spin() string { return t.theme.Spin(t.frame) }
+
+// View desenha o corpo.
+func (t *PrivacyTab) View(w, h int) string {
+	t.lastW, t.lastH = w, h
+	switch {
+	case t.loading:
+		return " " + t.theme.Accent().Render(t.spin()) + " Lendo o estado de privacidade…"
+	case t.loadErr != nil:
+		return " " + t.theme.Err().Render(SymFail+" erro:") + " não deu para ler a privacidade (" + textsafe.Line(t.loadErr.Error()) + ")"
+	case !t.info.Supported:
+		return " A privacidade só existe no Windows (este sistema é " + t.info.OS + "). Nada a mudar aqui."
+	}
+	var lines []string
+	if t.view {
+		lines = t.fitPlan(w, h)
+	} else {
+		t.scroll = max(min(t.scroll, max(len(t.mainLines(w))-h, 0)), 0)
+		all := t.mainLines(w)
+		lines = all[min(t.scroll, len(all)):min(t.scroll+h, len(all))]
+	}
+	for i := range lines {
+		lines[i] = clip(lines[i], w)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (t *PrivacyTab) fitPlan(w, h int) []string {
+	all := t.planLines(w)
+	room := max(h-1, 1)
+	t.scroll = max(min(t.scroll, max(len(all)-room, 0)), 0)
+	title := "Plano do perfil " + string(t.profile)
+	switch t.kind {
+	case privUndo:
+		title = "O que será restaurado (valor atual -> original)"
+	case privApply:
+		if t.only {
+			title += " · só itens do usuário"
+		}
+	}
+	head := " " + t.theme.Title().Render(titleCase(t.theme, title))
+	return append([]string{head}, all[min(t.scroll, len(all)):min(t.scroll+room, len(all))]...)
+}
+
+func (t *PrivacyTab) planLines(w int) []string {
+	var out []string
+	for _, l := range strings.Split(strings.TrimRight(t.plan.Text, "\n"), "\n") {
+		if isUndoHint(l) { // o comando manual de cada item cansa a leitura; o backup já restaura (tecla d)
+			continue
+		}
+		out = append(out, wrapLine(" "+l, w)...)
+	}
+	return out
+}
+
+func (t *PrivacyTab) mainLines(w int) []string {
+	var out []string
+	if !t.info.IsAdmin {
+		out = append(out, wrapLine(" "+t.theme.Warn().Render(SymWarn+" aviso:")+" este terminal não é administrador. O perfil recomendado só aplica num terminal aberto como administrador (botão direito, \"Executar como administrador\"); aqui, m aplica só os itens do usuário. O toolkit nunca eleva sozinho.", w)...)
+	}
+	head := "Privacidade do Windows"
+	adm := "administrador: não"
+	if t.info.Edition != "" {
+		adm = "edição " + t.info.Edition + " · " + adm
+	}
+	if t.info.IsAdmin {
+		adm = strings.Replace(adm, "administrador: não", "administrador: sim", 1)
+	}
+	out = append(out, " "+t.theme.Title().Render(titleCase(t.theme, head))+" · "+adm)
+	if t.result != "" {
+		out = append(out, " "+t.theme.OK().Render(SymOK+" "+t.result))
+	}
+	profiles := []struct {
+		id   PrivProfile
+		desc string
+	}{
+		{PrivBasico, "só o que é do usuário · não exige administrador"},
+		{PrivRecomendado, "básico + política, serviço e tarefas · exige administrador"},
+	}
+	for i, p := range profiles {
+		cursor, name := " ", cell(string(p.id), 12)
+		if i == t.cur {
+			cursor, name = ">", t.theme.Bold().Render(name)
+		}
+		out = append(out, clip(" "+cursor+" "+name+"  "+p.desc, w))
+	}
+	if t.onlyUser {
+		out = append(out, " "+t.theme.Accent().Render("[x]")+" aplicar só os itens do usuário (--somente-usuario): o que exige administrador fica de fora")
+	}
+	title := " Ajustes do perfil " + string(t.profileNow()) + " "
+	out = append(out, SymRule+t.theme.Title().Render(title)+strings.Repeat(SymRule, max(w-lipgloss.Width(title)-1, 1)))
+	shown := 0
+	for _, s := range t.info.Settings {
+		if t.cur == 0 && s.Admin {
+			continue
+		}
+		shown++
+		sym, word, style := t.settingState(s.State)
+		adm := ""
+		if s.Admin {
+			adm = " [admin]"
+		}
+		out = append(out, clip(" "+style.Render(cell(sym+" "+word, 16))+" "+s.Title+adm, w))
+	}
+	if shown == 0 {
+		out = append(out, " Nenhum ajuste para este perfil.")
+	}
+	return out
+}
+
+func (t *PrivacyTab) settingState(st string) (string, string, Paint) {
+	switch st {
+	case PrivApplied:
+		return SymOK, "aplicado", t.theme.OK()
+	case PrivPartial:
+		return SymWarn, "parcial", t.theme.Warn()
+	case PrivAbsent:
+		return SymSkipped, "não se aplica", t.theme.Muted()
+	}
+	return SymPending, "pendente", Paint{}
+}
+
+// isUndoHint reconhece a linha "desfazer: <comando>" do plano (nas três línguas).
+func isUndoHint(l string) bool {
+	l = strings.TrimSpace(l)
+	return strings.HasPrefix(l, "desfazer:") || strings.HasPrefix(l, "undo:") || strings.HasPrefix(l, "deshacer:")
+}
+
+// wrapLine quebra s em linhas de no máximo w colunas, nos espaços, mantendo o recuo da primeira.
+func wrapLine(s string, w int) []string {
+	if w < 10 || lipgloss.Width(s) <= w {
+		return []string{s}
+	}
+	indent := s[:len(s)-len(strings.TrimLeft(s, " "))]
+	var out []string
+	cur := indent
+	for _, word := range strings.Fields(s) {
+		for lipgloss.Width(word) > w-len(indent)-2 { // palavra maior que a linha (caminho de registro): corta
+			if room := w - lipgloss.Width(cur) - 1; strings.TrimSpace(cur) != "" && room >= 12 {
+				head, rest := splitWidth(word, room)
+				out = append(out, cur+" "+head)
+				cur, word = indent+"  ", rest
+				continue
+			}
+			if strings.TrimSpace(cur) != "" {
+				out = append(out, cur)
+				cur = indent + "  "
+			}
+			head, rest := splitWidth(word, max(w-len(indent)-2, 1))
+			out = append(out, cur+head)
+			cur, word = indent+"  ", rest
+		}
+		switch {
+		case strings.TrimSpace(cur) == "":
+			cur += word
+		case lipgloss.Width(cur)+1+lipgloss.Width(word) <= w:
+			cur += " " + word
+		default:
+			out = append(out, cur)
+			cur = indent + "  " + word
+		}
+	}
+	if strings.TrimSpace(cur) != "" {
+		out = append(out, cur)
+	}
+	return out
+}
+
+// splitWidth separa s em um começo de no máximo w colunas e o resto.
+func splitWidth(s string, w int) (string, string) {
+	n := 0
+	for i, r := range s {
+		rw := lipgloss.Width(string(r))
+		if n+rw > w {
+			return s[:i], s[i:]
+		}
+		n += rw
+	}
+	return s, ""
+}
