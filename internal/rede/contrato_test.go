@@ -170,6 +170,12 @@ func TestContratoWindows(t *testing.T) {
 						t.Errorf("cmdlet fora da lista: %s\n%s", m, script)
 					}
 				}
+				// toda consulta Get-* roda com -ErrorAction Stop (dentro do try/catch que dá o status por subconsulta)
+				probe := "Get-Command Get-DnsClientDohServerAddress -ErrorAction SilentlyContinue"
+				body := strings.ReplaceAll(script, probe, "")
+				if g, e := strings.Count(body, "Get-"), strings.Count(body, "-ErrorAction Stop"); g != e {
+					t.Errorf("%d consultas Get-* mas %d com -ErrorAction Stop:\n%s", g, e, script)
+				}
 				for _, b := range psBanned {
 					if strings.Contains(script, b) {
 						t.Errorf("termo proibido %q no script:\n%s", b, script)

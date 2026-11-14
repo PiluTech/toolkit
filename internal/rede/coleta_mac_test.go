@@ -226,9 +226,27 @@ func TestMacWiFiSemTokenReconhecido(t *testing.T) {
 	}
 }
 
+// Security vazio ou só pontuação NÃO é "aberto": risco alto exige evidência (NONE/OPEN explícito).
+func TestMacWiFiSecurityVazioNaoViraAberto(t *testing.T) {
+	for _, blank := range []string{"", "--", "<redacted>"} {
+		x := newMacFX()
+		x.out[macIpconfig+" getsummary en0"] = "<dictionary> {\n  SSID : REDE-FAKE\n  Security : " + blank + "\n}\n"
+		r, _ := x.run(t, true)
+		if r.WiFi == nil || r.WiFi.Security != SecUnknown {
+			t.Fatalf("Security %q: %+v", blank, r.WiFi)
+		}
+		fs := Analyze(r, diagfmt.PT)
+		none(t, fs, "wifi-aberto")
+		f := want(t, fs, "wifi-desconhecido", SevInfo)
+		if !strings.Contains(f.Title, "não verificada") {
+			t.Errorf("deve aparecer 'não verificada': %q", f.Title)
+		}
+	}
+}
+
 func TestMacSecurity(t *testing.T) {
 	for in, want := range map[string]Security{
-		"NONE": SecOpen, "OPEN": SecOpen, "": SecOpen, "WEP": SecWEP, "WPA_PSK": SecWPA, "WPA2_PSK": SecWPA2, "WPA3_SAE": SecWPA3,
+		"NONE": SecOpen, "OPEN": SecOpen, "": SecUnknown, "  ": SecUnknown, "-": SecUnknown, "--": SecUnknown, "<redacted>": SecUnknown, "WEP": SecWEP, "WPA_PSK": SecWPA, "WPA2_PSK": SecWPA2, "WPA3_SAE": SecWPA3,
 		"WPA2_ENT": SecEnterprise, "WPA3_ENT": SecEnterprise, "WPA2_PSK_WPA3_SAE": SecWPA2, "OWE": SecUnknown, "XYZ": SecUnknown,
 	} {
 		if got := macSecurity(in); got != want {

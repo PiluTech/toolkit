@@ -163,7 +163,10 @@ func nmcliSplit(line string) []string {
 // nmSecurity classifica o campo SECURITY do nmcli ("WPA2", "WPA1 WPA2", "WPA3", "WPA2 WPA3", "WEP", "802.1X", "--").
 func nmSecurity(s string) Security {
 	s = strings.TrimSpace(s)
-	if s == "" || s == "--" {
+	if s == "" {
+		return SecUnknown // vazio/ilegível não é evidência de rede aberta (o nmcli diz "--" explicitamente quando é aberta)
+	}
+	if s == "--" {
 		return SecOpen
 	}
 	if strings.Contains(s, "802.1X") {
@@ -234,15 +237,15 @@ var (
 )
 
 // parseResolvectl lê "resolvectl status": os servidores por seção (Global e Link N) e o DNS sobre TLS de cada uma.
-func parseResolvectl(out string) (servers []DNSServer, enc Tri) {
+func parseResolvectl(out string) (servers []DNSServer, enc Tri, mode DNSMode) {
 	type section struct {
 		name    string
 		servers []string
-		dot     Tri
+		dot     DNSMode // "" = a seção não informou
 	}
 	var secs []*section
 	var cur *section
-	var global Tri
+	var global DNSMode
 	inServers := false
 	for _, raw := range strings.Split(out, "\n") {
 		line := strings.TrimRight(raw, "\r")
@@ -274,14 +277,18 @@ func parseResolvectl(out string) (servers []DNSServer, enc Tri) {
 				inServers = true
 			case "Protocols":
 				if m := dotRe.FindStringSubmatch(v); m != nil {
-					t := m[1]
-					if t == "" {
-						t = map[string]string{"yes": "+", "opportunistic": "+", "no": "-"}[m[2]]
+					// "+DNSOverTLS" e "=yes" = estrito; "=opportunistic" admite DNS em claro; "-" e "=no" = desligado
+					st := m[1]
+					if st == "" {
+						st = m[2]
 					}
-					if t == "+" {
-						cur.dot = Yes
-					} else {
-						cur.dot = No
+					switch st {
+					case "+", "yes":
+						cur.dot = DNSModeStrict
+					case "opportunistic":
+						cur.dot = DNSModeOpportunistic
+					default:
+						cur.dot = DNSModeOff
 					}
 					if cur.name == "" {
 						global = cur.dot
@@ -294,36 +301,40 @@ func parseResolvectl(out string) (servers []DNSServer, enc Tri) {
 			cur.servers = append(cur.servers, strings.Fields(trim)...)
 		}
 	}
-	allYes, anyNo, withServers := true, false, 0
+	anyOff, anyOpp, anyUnknown, withServers := false, false, false, 0
 	for _, s := range secs {
 		if len(s.servers) == 0 {
 			continue
 		}
 		withServers++
 		dot := s.dot
-		if dot == Unknown {
+		if dot == "" {
 			dot = global
 		}
 		for _, a := range s.servers {
 			servers = append(servers, DNSServer{Addr: a, Interface: s.name})
 		}
 		switch dot {
-		case No:
-			anyNo = true
-			allYes = false
-		case Unknown:
-			allYes = false
+		case DNSModeOff:
+			anyOff = true
+		case DNSModeOpportunistic:
+			anyOpp = true
+		case DNSModeStrict:
+		default:
+			anyUnknown = true
 		}
 	}
 	switch {
 	case withServers == 0:
-		return servers, Unknown
-	case anyNo:
-		return servers, No
-	case allYes:
-		return servers, Yes
+		return servers, Unknown, DNSModeUnknown
+	case anyOff:
+		return servers, No, DNSModeOff
+	case anyUnknown:
+		return servers, Unknown, DNSModeUnknown
+	case anyOpp: // DoT oportunista admite DNS em claro: a criptografia efetiva não está provada
+		return servers, Unknown, DNSModeOpportunistic
 	}
-	return servers, Unknown
+	return servers, Yes, DNSModeStrict
 }
 
 // cutKey separa "Chave: valor" (dois-pontos seguido de espaço, ou no fim da linha). Um IPv6 nunca tem ": ", então a linha
@@ -341,9 +352,15 @@ func cutKey(s string) (k, v string, ok bool) {
 func linDNS(ctx context.Context, d Deps, r *Report, skip skipFn) {
 	if rc := d.which("resolvectl"); rc != "" {
 		if out, err := d.run(ctx, unixCmd(rc, "status")); err == nil {
-			servers, enc := parseResolvectl(out)
+			servers, enc, mode := parseResolvectl(out)
 			if len(servers) > 0 {
-				r.DNS = DNS{Servers: dedupeDNS(servers), Encrypted: enc, Note: "resolvectl"}
+				r.DNS = DNS{Servers: dedupeDNS(servers), Encrypted: enc, Mode: mode, AllowFallback: Unknown, Note: "resolvectl"}
+				switch mode {
+				case DNSModeStrict:
+					r.DNS.AllowFallback = No
+				case DNSModeOpportunistic:
+					r.DNS.AllowFallback = Yes
+				}
 				return
 			}
 		}
@@ -364,7 +381,7 @@ func linDNS(ctx context.Context, d Deps, r *Report, skip skipFn) {
 		skip("dns", "o /etc/resolv.conf não lista nenhum servidor DNS", "/etc/resolv.conf lists no DNS server", "/etc/resolv.conf no lista ningún servidor DNS", false)
 		return
 	}
-	r.DNS = DNS{Servers: servers, Encrypted: Unknown, Note: diagfmt.T(d.Lang, "/etc/resolv.conf: DoH/DoT não informado", "/etc/resolv.conf: DoH/DoT not reported", "/etc/resolv.conf: DoH/DoT no informado")}
+	r.DNS = DNS{Servers: servers, Encrypted: Unknown, Mode: DNSModeUnknown, AllowFallback: Unknown, Note: diagfmt.T(d.Lang, "/etc/resolv.conf: DoH/DoT não informado", "/etc/resolv.conf: DoH/DoT not reported", "/etc/resolv.conf: DoH/DoT no informado")}
 }
 
 func dedupeDNS(in []DNSServer) []DNSServer {

@@ -224,7 +224,7 @@ func TestLinuxWiFiSemConexaoOuSemNmcli(t *testing.T) {
 
 func TestNmSecurity(t *testing.T) {
 	for in, want := range map[string]Security{
-		"": SecOpen, "--": SecOpen, "WEP": SecWEP, "WPA1": SecWPA, "WPA1 WPA2": SecWPA, "WPA2": SecWPA2, "WPA3": SecWPA3,
+		"": SecUnknown, "  ": SecUnknown, "--": SecOpen, "WEP": SecWEP, "WPA1": SecWPA, "WPA1 WPA2": SecWPA, "WPA2": SecWPA2, "WPA3": SecWPA3,
 		"WPA2 WPA3": SecWPA2, "WPA3 WPA2": SecWPA2, "WPA2 802.1X": SecEnterprise, "802.1X": SecEnterprise, "OWE": SecUnknown, "XYZ": SecUnknown,
 	} {
 		if got := nmSecurity(in); got != want {
@@ -238,17 +238,29 @@ func TestLinuxDNSResolvectl(t *testing.T) {
 	if len(r.DNS.Servers) != 2 || r.DNS.Servers[0].Addr != "192.0.2.1" || r.DNS.Servers[1].Addr != "2001:db8::1" || r.DNS.Servers[0].Interface != "enp0s3" {
 		t.Errorf("servidores: %+v", r.DNS.Servers)
 	}
-	if r.DNS.Encrypted != No {
-		t.Errorf("-DNSOverTLS = não: %v", r.DNS.Encrypted)
+	if r.DNS.Encrypted != No || r.DNS.Mode != DNSModeOff {
+		t.Errorf("-DNSOverTLS = não: %v %v", r.DNS.Encrypted, r.DNS.Mode)
 	}
 	x := newLinFX()
-	x.out["/usr/bin/resolvectl status"] = strings.ReplaceAll(linResolv, "-DNSOverTLS", "+DNSOverTLS")
-	if r, _ = x.run(t, true); r.DNS.Encrypted != Yes {
-		t.Errorf("+DNSOverTLS = sim: %v", r.DNS.Encrypted)
+	// DoT estrito: a única forma de provar "criptografado"
+	for _, strict := range []string{"+DNSOverTLS", "DNSOverTLS=yes"} {
+		x.out["/usr/bin/resolvectl status"] = strings.ReplaceAll(linResolv, "-DNSOverTLS", strict)
+		if r, _ = x.run(t, true); r.DNS.Encrypted != Yes || r.DNS.Mode != DNSModeStrict || r.DNS.AllowFallback != No {
+			t.Errorf("%s = estrito: %v %v %v", strict, r.DNS.Encrypted, r.DNS.Mode, r.DNS.AllowFallback)
+		}
 	}
+	// DoT oportunista admite DNS em claro: não é "criptografado"
 	x.out["/usr/bin/resolvectl status"] = strings.ReplaceAll(linResolv, "-DNSOverTLS", "DNSOverTLS=opportunistic")
-	if r, _ = x.run(t, true); r.DNS.Encrypted != Yes {
-		t.Errorf("opportunistic: %v", r.DNS.Encrypted)
+	r, _ = x.run(t, true)
+	if r.DNS.Encrypted != Unknown || r.DNS.Mode != DNSModeOpportunistic || r.DNS.AllowFallback != Yes {
+		t.Errorf("opportunistic: %v %v %v", r.DNS.Encrypted, r.DNS.Mode, r.DNS.AllowFallback)
+	}
+	if txt := DNSModeText(r.DNS, diagfmt.PT); !strings.Contains(txt, "oportunista") || !strings.Contains(txt, "DNS em claro") {
+		t.Errorf("o texto do modo deve dizer 'oportunista' e 'DNS em claro': %q", txt)
+	}
+	fs := Analyze(func() *Report { r.DNS.Servers = []DNSServer{{Addr: "203.0.113.53"}}; return r }(), diagfmt.PT)
+	if f := want(t, fs, "dns-publico-nao-verificado", SevInfo); !strings.Contains(f.Detail, "oportunista") {
+		t.Errorf("o achado deve dizer 'oportunista': %q", f.Detail)
 	}
 	// lista de servidores em várias linhas
 	x.out["/usr/bin/resolvectl status"] = "Link 2 (eth0)\n         Protocols: +DefaultRoute\n       DNS Servers: 192.0.2.1\n                    2001:db8::1\n                    198.51.100.1\n"

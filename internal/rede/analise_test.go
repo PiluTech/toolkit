@@ -356,3 +356,20 @@ func TestPortaIgualEmV4EV6NaoRepeteODetalhe(t *testing.T) {
 		t.Errorf("detalhe repetido: %q", f.Detail)
 	}
 }
+
+// DNS oportunista: o achado e o modo saem nos três idiomas, sem afirmar criptografia.
+func TestDNSOportunistaNosTresIdiomas(t *testing.T) {
+	for _, fb := range []Tri{Yes, Unknown} {
+		r := healthy()
+		r.DNS = DNS{Servers: []DNSServer{{Addr: "203.0.113.53"}}, Encrypted: Unknown, Mode: DNSModeOpportunistic, AllowFallback: fb}
+		seen := map[string]bool{}
+		for _, l := range []Lang{diagfmt.PT, diagfmt.EN, diagfmt.ES} {
+			f := want(t, Analyze(r, l), "dns-publico-nao-verificado", SevInfo)
+			txt := DNSModeText(r.DNS, l)
+			if txt == "" || f.Title == "" || !strings.Contains(f.Detail, txt) || seen[txt] {
+				t.Errorf("fb=%v lang=%v: %q / %q", fb, l, f.Detail, txt)
+			}
+			seen[txt] = true
+		}
+	}
+}

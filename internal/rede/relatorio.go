@@ -87,8 +87,15 @@ func Full(r *Report, l Lang) string {
 		}
 	}
 	fmt.Fprintf(&b, "DoH/DoT: %s", triWord(r.DNS.Encrypted, l))
+	var extra []string
 	if r.DNS.Note != "" {
-		fmt.Fprintf(&b, " (%s)", r.DNS.Note)
+		extra = append(extra, r.DNS.Note)
+	}
+	if m := DNSModeText(r.DNS, l); m != "" {
+		extra = append(extra, m)
+	}
+	if len(extra) > 0 {
+		fmt.Fprintf(&b, " (%s)", strings.Join(extra, "; "))
 	}
 	b.WriteByte('\n')
 	h(t("Portas em escuta", "Listening ports", "Puertos en escucha"))

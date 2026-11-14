@@ -60,8 +60,9 @@ Decisões e desvios do plano, por SO:
   possivelmente varrer) redes vizinhas e o `wdutil` exige `sudo`; por isso o tipo de segurança sai de `ipconfig getsummary`,
   uma leitura passiva do que o configd já sabe (sem varredura, sem `sudo`). Só as linhas `SSID :` e `Security :` do nível
   da interface (2 espaços de recuo) são lidas; o resto (pacote DHCP em várias linhas) é ignorado. O macOS costuma devolver
-  `SSID : <redacted>`: o nome aparece como "o sistema não informou o nome". Token de `Security` desconhecido vira
-  "não verificado" (nunca "seguro"); sem o campo, vira "não lido" com a explicação (formato **A VERIFICAR** por versão).
+  `SSID : <redacted>`: o nome aparece como "o sistema não informou o nome". "Aberto" só com o token explícito `NONE` ou
+  `OPEN`; `Security` vazio, só pontuação ou token desconhecido vira "não verificado" (nunca "aberto" nem "seguro", porque
+  risco alto exige evidência); sem o campo, vira "não lido" com a explicação (formato **A VERIFICAR** por versão).
   `ipconfig setverbose` e qualquer subcomando de escrita estão fora (teste de lista fechada).
 - **macOS, portas.** O `lsof` sem administrador só vê os processos do próprio usuário, então "sem porta sensível no `lsof`"
   não seria um dado. O conjunto de portas vem do `netstat -an -p tcp` (lista todos os sockets em escuta) e o `lsof` só dá o
@@ -75,9 +76,24 @@ Decisões e desvios do plano, por SO:
   página de código do console: só se confia nos VALORES (`WPA3`, `WPA2`, `TKIP`, `CCMP`, `Open`/`Aberto`/`Abierto`...) e no
   prefixo ASCII dos nomes dos campos (`Auth*`, `Autentic*`, `Cipher`, `Cifr*`). O que não for reconhecido vira
   "não verificado" com o texto original.
-- **Windows, DoH.** `Get-DnsClientDohServerAddress` só existe no Windows recente; sem ele o DoH fica "não informado". Com
-  ele, o DNS conta como criptografado só se o servidor tem modelo DoH com `AutoUpgrade` ligado (A VERIFICAR na VM se isso
-  equivale a "em uso").
+- **Windows, status por subconsulta.** O PowerShell engole o erro de um `Get-*` e sai com código 0, então "lista vazia" não
+  provaria nada. Cada consulta roda num `try/catch` com `-ErrorAction Stop` e o script devolve, por subconsulta,
+  `{ok:true,data:[...]}` ou `{ok:false,err:"<tipo do erro>"}` (só o tipo, nunca a mensagem). O parser só aceita `ok`
+  booleano verdadeiro com `data` presente; campo ausente, `ok` como texto ou subconsulta ausente é FALHA. Vazio legítimo
+  (`ok:true`, `data` vazio) continua sendo leitura (sem rota padrão, nenhuma porta). Falha vira `Skipped` da área
+  (`rotas`, `portas`, `interfaces`, `perfil`, `firewall`, `dns`, `ipv6`) citando o cmdlet e o tipo do erro, e NUNCA vira
+  "sem gateway", "nenhuma porta escutando" nem achado de offline. As portas só contam como lidas com TCP e UDP ok; as
+  interfaces só entram com adaptadores e IPs ok. As rotas e as conexões TCP são lidas por `Get-NetRoute`/
+  `Get-NetTCPConnection` sem filtro e filtradas no pipeline (os filtros do cmdlet erram quando nada casa). **A VERIFICAR** na VM.
+- **DNS criptografado: modo e fallback.** O modelo guarda o MODO configurado (`DNS.Mode`: `strict`, `opportunistic`, `off`,
+  `unknown`) e se há fallback para DNS em claro (`DNS.AllowFallback`, tri-estado). `Encrypted=Yes` só quando a configuração
+  prova: Windows = DoH com `AutoUpgrade` E `AllowFallbackToUdp=false` em todos os servidores; Linux = `DNSOverTLS=yes`
+  (`+DNSOverTLS`). `AutoUpgrade` com fallback permitido, ou com o fallback não lido, e o DoT `opportunistic` do
+  `resolvectl` ficam `Encrypted=Unknown` com modo `opportunistic` e o texto "configurado para tentar DoH/DoT; pode cair para
+  DNS em claro" (ou "fallback não lido"); sem DoH/DoT configurado, `No`. Nunca há consulta externa para confirmar. O
+  cmdlet de DoH ausente (Windows antigo) deixa tudo "não informado"; o cmdlet presente que falha vira `Skipped`. **A
+  VERIFICAR** na VM o nome exato das propriedades `AutoUpgrade`/`AllowFallbackToUdp` e, no Linux, como o `resolvectl`
+  imprime o modo oportunista (`DNSOverTLS=opportunistic`).
 
 ## Achados e severidades
 
@@ -103,7 +119,7 @@ como informativo ou em "Não lidos", e o resumo nunca diz "nada de ruim" quando 
 | `perfil-publico-compartilhando` | média | perfil Public (Windows) e SMB (445/139) escutando em endereço não local |
 | `perfil-privado-rede-aberta` | média | perfil Private (Windows) numa rede Wi-Fi aberta |
 | `dns-publico` | baixa | DNS em endereço público, sem DoH/DoT |
-| `dns-publico-nao-verificado` | info | DNS em endereço público, sem informação sobre DoH/DoT |
+| `dns-publico-nao-verificado` | info | DNS em endereço público, sem informação sobre DoH/DoT, ou DoH/DoT oportunista (pode usar DNS em claro) |
 | `ipv6-sem-privacidade` | baixa | IPv6 global presente e endereços temporários desligados |
 | `sem-gateway` | média | tabela de rotas lida e sem rota padrão |
 | `ip-publico` | info | sempre: "não consultado (sob pedido, PR seguinte)" |
