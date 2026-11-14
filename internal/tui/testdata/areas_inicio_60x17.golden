@@ -1,17 +1,17 @@
- [0 Iníc › Iníc] 1 Inst  2 Máq  3 Seg  4 Rede  5 Hist v0.1.0
+ [0 Iníc] 1 Inst  2 Máq  3 Seg  4 Rede  5 Hist       v0.1.0
 ────────────────────────────────────────────────────────────
- Bem-vindo ao toolkit. Escolha uma área:
- 1 Instalar   2 Máquina   3 Segurança
- 4 Rede   5 Histórico
- Tab troca de seção, ? ajuda, q sai.
+ O QUE VOCÊ QUER FAZER?
 
-
-
-
-
-
-
-
-────────────────────────────────────────────────────────────
-
- ? ajuda  q sair
+ > 1 Instalar programas
+     Escolha os programas do catálogo e instale todos de
+     uma vez.
+   2 Preparar a máquina com uma receita
+     Uma receita faz vários passos em sequência e continua
+     após reiniciar.
+   3 Ver a saúde da máquina
+     Diagnóstico só de leitura: hardware, série, UUID, MAC
+     e o que está ruim.
+   4 Remover apps nativos do Windows
+────────────────────────────────────────── ↓ mais 11 linhas
+ Enter abre 1 Instalar › Apps
+ ↑↓ mover  Enter abrir  1-7 ir direto  ? ajuda  q sair

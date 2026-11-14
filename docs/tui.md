@@ -20,7 +20,7 @@ saída. Em CI (`CI`, `GITHUB_ACTIONS`, `TF_BUILD` e semelhantes ligadas; vazio, 
 
 ## Áreas e seções (fase 3 do redesign, variante A)
 
-A raiz tem **áreas**, cada uma com **seções** (as abas): `0 Início` (orientação), `1 Instalar` (Apps, Receitas), `2 Máquina`
+A raiz tem **áreas**, cada uma com **seções** (as abas): `0 Início` (objetivos que levam às outras áreas, abaixo), `1 Instalar` (Apps, Receitas), `2 Máquina`
 (Diagnóstico, Apps nativos), `3 Segurança` (Privacidade), `4 Rede` (Análise: seção que ainda não existe e aparece com a
 explicação, em vez de sumir) e `5 Histórico` (Execuções, o Log). Tudo continua numa lista PLANA de seções (`Model.tabs`):
 execução, seleção, `Reloader`, resultados e origens seguem por índice plano; `Model.areas` só agrupa os índices.
@@ -33,6 +33,31 @@ legado (uma área por aba, números 1 a N, Tab percorre todas, sem a linha 2) e 
 - Linha 2: `Área › [Seção]  Outra` e, à direita, `admin: sim/não` (`Options.IsAdmin`, a mesma detecção do diagnóstico), com
   `N marcados ·` antes a partir de 100 colunas. Linha 3: régua. O corpo fica com H−6 linhas.
 - Abaixo de 24 linhas a linha 2 some e a seção vai na linha 1 (`[2 Máq › Diag]`); o corpo fica com H−5.
+### Início (área 0): "O que você quer fazer?"
+
+Seção interativa (`internal/tui/inicio_tab.go`, montada em `internal/cli/tui_inicio.go`): uma lista por OBJETIVO, cada um com
+título, uma frase didática (quebra na largura, nunca leva reticências) e, quando vale, uma etiqueta de estado ou requisito
+(símbolo + palavra, nunca só cor). Os sete objetivos: Instalar programas (1 Apps), Preparar a máquina com uma receita (1
+Receitas), Ver a saúde da máquina (2 Diagnóstico), Remover apps nativos do Windows (2 Apps nativos; `! só Windows` fora do
+Windows), Proteger a privacidade do Windows (3 Privacidade; `! só Windows` fora do Windows, `! pede administrador para alguns
+itens` no Windows sem administrador), Analisar a rede (4 Análise; `○ em breve`) e Ver o que já rodou (5 Execuções). As etiquetas
+usam só o que o cli já sabe (GOOS e `Options.IsAdmin`): nada é lido do sistema. A etiqueta vai à direita do título quando cabe,
+senão numa linha própria. Com folga há uma linha em branco entre os itens (120x40); em 80x24 a lista compacta e cabe inteira.
+Abaixo disso rola, mantendo o item do cursor inteiro na tela, e a régua mostra `↓ mais N linhas`.
+
+- `↑↓`/`jk` movem (`g`/`G` vão ao primeiro/último), `Enter` abre a área e a seção do item, `1` a `7` vão direto ao item. A linha de
+  estado diz para onde o Enter leva (`Enter abre 2 Máquina › Diagnóstico`). O Enter abre mesmo a seção que não existe no SO
+  (ela explica o motivo).
+- Contrato: a seção implementa `KeyClaimer` (`Claims(key)`): com a raiz em navegação normal (sem Revisão, execução, modal nem
+  pergunta) Enter e `1`..`7` vão a ela ANTES da Revisão e da troca de área; em qualquer outro modo valem as regras da raiz (em
+  execução `3` continua sendo a área Segurança, só leitura). Para navegar ela devolve `tui.GoToMsg{Area, Section}` e a RAIZ decide
+  (`Model.goTo`): ignora o pedido durante Revisão, execução, modal, pergunta `[s/N]` ou seção que captura teclas
+  (confirmação aberta); área inexistente é ignorada e seção inexistente abre a área na última seção visitada. O contrato `Tab`
+  não mudou. Dentro do Início, `0` fica no Início e `8`/`9` não fazem nada; as demais áreas se abrem pelo Enter ou pelo número do item.
+- Teste integrado (Lupa): com `PrivacyTab` e `NativeAppsTab` reais e backends falsos, uma confirmação aberta não é abandonada por
+  `0`..`5`, Tab, Shift+Tab, setas nem `GoToMsg`, nada é aplicado antes do `s`, o ID aplicado é o do plano exibido, e depois de
+  cancelar Tab e os números voltam a funcionar.
+
 - `0` a `5` vão para a área (na última seção visitada dela); Tab e Shift+Tab trocam de seção DENTRO da área (dão a volta, não
   saem). Números e Tab não agem durante confirmação, Revisão, execução (só leitura) e modal; seção capturando texto recebe tudo.
 

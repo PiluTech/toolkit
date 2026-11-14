@@ -634,8 +634,8 @@ func TestOpenTUIPassesAdminAndExplainsMissingSections(t *testing.T) {
 		if v := areas[4].Tabs[0].View(80, 10); !strings.Contains(v, "A análise de rede ainda não existe nesta versão") {
 			t.Errorf("Rede/Análise sem explicação: %q", v)
 		}
-		if v := areas[0].Tabs[0].View(100, 10); !strings.Contains(v, "Histórico") || !strings.Contains(v, "Tab") {
-			t.Errorf("Início sem as áreas e as teclas: %q", v)
+		if v := areas[0].Tabs[0].View(100, 40); !strings.Contains(v, "Ver o que já rodou") || !strings.Contains(v, "Instalar programas") {
+			t.Errorf("Início sem os objetivos: %q", v)
 		}
 	}
 }

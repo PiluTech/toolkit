@@ -177,7 +177,7 @@ func openTUI(cmd *cobra.Command, deps Deps, rd RecipeDeps, notifier *updateNotif
 	if notifier != nil {
 		notifier.silence = true // a faixa da TUI já avisou: sem linha no fim
 	}
-	err := deps.TUI.run(ctx, opts, tuiAreas(ctx, deps, rd, th)...)
+	err := deps.TUI.run(ctx, opts, tuiAreas(ctx, deps, rd, th, opts.IsAdmin)...)
 	if errors.Is(err, tui.ErrUpdateRequested) {
 		// o usuário escolheu Atualizar: a TUI já fechou; roda o mesmo `toolkit update` do terminal
 		return runUpdate(ctx, cmd.OutOrStdout(), deps, updateFlags{})
@@ -185,15 +185,12 @@ func openTUI(cmd *cobra.Command, deps Deps, rd RecipeDeps, notifier *updateNotif
 	return err
 }
 
-// tuiAreas monta as áreas da TUI (modo cli): Início, Instalar, Máquina, Segurança, Rede e Histórico, cada uma com as suas
+// tuiAreas monta as áreas da TUI (modo cli; admin vem de Options.IsAdmin): Início, Instalar, Máquina, Segurança, Rede e Histórico, cada uma com as suas
 // seções. A seção de uma área que ainda não existe (Rede) aparece com a explicação em vez de sumir.
-func tuiAreas(ctx context.Context, deps Deps, rd RecipeDeps, th tui.Theme) []tui.AreaDef {
+func tuiAreas(ctx context.Context, deps Deps, rd RecipeDeps, th tui.Theme, admin bool) []tui.AreaDef {
 	execs := tui.NewLogTab(th, "")
 	execs.SetNames(msg.TUISecaoExecucoes, msg.TUISecaoExecucoesShort, msg.TUIDetalhesHistorico)
-	return []tui.AreaDef{
-		{Key: "inicio", Title: msg.TUIAreaInicio, Short: msg.TUIAreaInicioShort, Tabs: []tui.Tab{
-			tui.NewInfoTab(msg.TUIAreaInicio, msg.TUIAreaInicioShort, msg.TUIInicioText),
-		}},
+	areas := []tui.AreaDef{
 		{Key: "instalar", Title: msg.TUIAreaInstalar, Short: msg.TUIAreaInstalarShort, Tabs: []tui.Tab{
 			tui.NewAppsTab(ctx, &appsBackend{deps: deps}, th, deps.GOOS),
 			tui.NewRecipesTab(ctx, &recipesBackend{deps: deps, rd: rd}, th, false),
@@ -212,6 +209,9 @@ func tuiAreas(ctx context.Context, deps Deps, rd RecipeDeps, th tui.Theme) []tui
 			execs,
 		}},
 	}
+	// o Início (área 0) aponta para as outras áreas, por isso é montado por último e entra na frente
+	inicio := tui.AreaDef{Key: "inicio", Title: msg.TUIAreaInicio, Short: msg.TUIAreaInicioShort, Tabs: []tui.Tab{newInicioTab(areas, deps.GOOS, admin, th)}}
+	return append([]tui.AreaDef{inicio}, areas...)
 }
 
 // appsBackend liga a aba Apps ao catálogo e aos providers (somente leitura).
