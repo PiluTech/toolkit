@@ -195,3 +195,135 @@ func TestDiagnosticoSoSemSuporteNaoExecutaNada(t *testing.T) {
 		t.Fatalf("%v\n%s", err, out)
 	}
 }
+
+// Lupa #62: nenhum campo vindo do sistema chega ao terminal com sequência de escape (OSC 52 de área de transferência,
+// CSI de limpar a tela, C1, BEL...). A limpeza é no limite da saída textual e preserva os dados legíveis, LF e Tab.
+const (
+	escOSC = "\x1b]52;c;ZXZpbA==\x07"
+	escCSI = "\x1b[2J"
+	escC1  = "\u009b31m"
+)
+
+func hostileReport() *diagnostico.Report {
+	r := diagReport()
+	r.Hardware.Model = "Note" + escOSC + " X"
+	r.Disks = []diagnostico.Disk{{Name: "SSD" + escCSI + "ruim", Health: diagnostico.HealthBad, HealthRaw: "FAILING" + escC1}}
+	r.Events = []diagnostico.Event{{Source: "kern" + escCSI + "el", Level: "erro", Count: 2, Message: "falha\ttab " + escOSC + " fim" + escC1}}
+	r.GPUs = []diagnostico.GPU{{Name: "GPU" + escOSC}}
+	r.Crashes = []diagnostico.Crash{{Kind: diagnostico.CrashApp, Detail: "app" + escCSI}}
+	return r
+}
+
+func hostileDeps(t *testing.T) Deps {
+	deps := diagDeps(t, nil)
+	deps.Diag.Collect = func(context.Context, string, diagnostico.Deps) *diagnostico.Report { return hostileReport() }
+	return deps
+}
+
+func noRawControls(t *testing.T, where, s string) {
+	t.Helper()
+	for _, r := range s {
+		if r != '\n' && r != '\t' && (r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f)) {
+			t.Errorf("%s: controle %U chegou à saída: %q", where, r, s)
+			return
+		}
+	}
+}
+
+func TestDiagnosticoSaidaTextualSemSequenciasDeEscape(t *testing.T) {
+	for name, args := range map[string][]string{"resumo": nil, "--completo": {"--completo"}} {
+		out, errOut, err := runDiag(t, hostileDeps(t), args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		noRawControls(t, name+" stdout", out)
+		noRawControls(t, name+" stderr", errOut)
+		for _, want := range []string{"SSD", "ruim", "FAILING", `\x1b`} {
+			if !strings.Contains(out, want) {
+				t.Errorf("%s: os dados legíveis e o controle escapado e visível (%q):\n%s", name, want, out)
+			}
+		}
+	}
+	// --completo: tab dentro do campo preservado, e os outros campos legíveis
+	out, _, _ := runDiag(t, hostileDeps(t), "--completo")
+	for _, want := range []string{"falha\ttab ", "Note", "GPU", "app"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("faltou %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestDiagnosticoRelatorioArquivoSemSequenciasDeEscape(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rel.txt")
+	out, _, err := runDiag(t, hostileDeps(t), "--relatorio", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	noRawControls(t, "stdout", out)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	noRawControls(t, "arquivo", string(data))
+	if !strings.Contains(string(data), `\x1b`) || !strings.Contains(string(data), "falha\ttab ") {
+		t.Errorf("controle escapado e visível, tab preservado:\n%s", data)
+	}
+}
+
+func TestDiagnosticoJSONSemControlesCruNaSaida(t *testing.T) {
+	out, _, err := runDiag(t, hostileDeps(t), "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	noRawControls(t, "--json", out)
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("o JSON continua válido: %v\n%s", err, out)
+	}
+	// o dado original sobrevive decodificado (o JSON escapa o controle como \u00xx)
+	rep, _ := doc["report"].(map[string]any)
+	hw, _ := rep["Hardware"].(map[string]any)
+	if !strings.Contains(hw["Model"].(string), "Note") {
+		t.Errorf("modelo: %v", hw["Model"])
+	}
+}
+
+// Erros: o PathError repete o caminho, e o Write/Close também podem trazê-lo: tudo passa pela limpeza, e o root imprime
+// qualquer erro (de qualquer comando) limpo.
+func TestDiagnosticoErrosDeArquivoComControleNoNomeSaemLimpos(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("nomes de arquivo com ESC/BEL não existem no Windows")
+	}
+	dir := t.TempDir()
+	evil := filepath.Join(dir, "rel"+escCSI+"x"+escOSC+".txt")
+	if err := os.WriteFile(evil, []byte("existente"), 0o600); err != nil {
+		t.Skip("o sistema de arquivos não aceita o nome:", err)
+	}
+	for name, path := range map[string]string{"arquivo existente": evil, "pasta inexistente": filepath.Join(dir, "nao"+escCSI+"existe", "rel.txt")} {
+		var o, e bytes.Buffer
+		code := ExecuteWith(context.Background(), &o, &e, diagDeps(t, nil), []string{"diagnostico", "--no-update-check", "--relatorio", path})
+		if code == 0 {
+			t.Fatalf("%s: deveria falhar", name)
+		}
+		noRawControls(t, name+" stderr", e.String())
+		noRawControls(t, name+" stdout", o.String())
+		if !strings.Contains(e.String(), `\x1b`) || !strings.Contains(e.String(), "não deu para gravar o relatório") {
+			t.Errorf("%s: o erro limpo e legível: %q", name, e.String())
+		}
+	}
+	if b, _ := os.ReadFile(evil); string(b) != "existente" {
+		t.Error("o arquivo existente foi alterado")
+	}
+}
+
+func TestRootImprimeQualquerErroSemSequenciasDeEscape(t *testing.T) {
+	var o, e bytes.Buffer
+	code := ExecuteWith(context.Background(), &o, &e, Deps{GOOS: "linux", EmbeddedYML: []byte(embedded)}, []string{"comando" + escCSI + "inexistente" + escOSC})
+	if code == 0 {
+		t.Fatal("comando desconhecido é erro")
+	}
+	noRawControls(t, "stderr", e.String())
+	if !strings.Contains(e.String(), "erro: ") || !strings.Contains(e.String(), `\x1b`) {
+		t.Errorf("%q", e.String())
+	}
+}

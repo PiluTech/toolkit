@@ -71,6 +71,11 @@ colocar num texto, como uma mensagem de erro); mensagens de evento entram só na
 macOS nunca são abertos (só os nomes dos arquivos). Como o relatório mostra tudo, **trate o arquivo gerado como dado pessoal**
 antes de compartilhar.
 
+Única limpeza que fica (não esconde dado, protege o terminal): todo texto que vem do sistema (nome de disco, modelo, mensagem de log)
+passa por `textsafe.Multiline` no limite da saída (resumo, `--completo`, arquivo de `--relatorio` e todo erro do comando): LF e Tab e os
+dados legíveis ficam; ESC, BEL, CSI, OSC (como o OSC 52 que escreve na área de transferência), C1 e bidi saem escapados e
+visíveis (`\x1b`), sem efeito. No `--json` os caracteres C1 e de formatação viram `\uXXXX` (JSON válido, mesmo dado).
+
 ## Testes
 
 `internal/diagnostico` (coletores com saídas falsas por SO, regras, relatório), `internal/cli/diagnostico_test.go`

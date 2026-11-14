@@ -3,16 +3,20 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
 	"github.com/PiluTech/toolkit/internal/diagfmt"
 	"github.com/PiluTech/toolkit/internal/diagnostico"
 	"github.com/PiluTech/toolkit/internal/msg"
+	"github.com/PiluTech/toolkit/internal/textsafe"
 )
 
 // DiagDeps são os pontos injetáveis do `toolkit diagnostico` (os testes nunca tocam a máquina real).
@@ -101,21 +105,23 @@ func runDiagnostico(ctx context.Context, out, errOut io.Writer, deps Deps, f dia
 		if err != nil {
 			return err
 		}
-		_, err = fmt.Fprintln(out, string(b))
+		_, err = fmt.Fprintln(out, jsonSafe(string(b)))
 		return err
 	}
 
 	// O toolkit mostra as informações do PC como elas são (é uma ferramenta de análise): nenhum dado é escondido.
-	summary := diagnostico.Summary(rep, findings, lang)
+	// Nenhum campo do sistema chega ao terminal (nem ao arquivo) como sequência de controle: a limpeza é no limite da saída
+	// textual e preserva os dados legíveis, LF e Tab (textsafe.Multiline).
+	summary := textsafe.Multiline(diagnostico.Summary(rep, findings, lang))
 	switch {
 	case f.report != "":
-		if err := writeReport(f.report, summary+"\n"+diagnostico.Full(rep, lang)); err != nil {
+		if err := writeReport(f.report, summary+"\n"+textsafe.Multiline(diagnostico.Full(rep, lang))); err != nil {
 			return err
 		}
 		_, _ = fmt.Fprint(out, summary)
 		_, _ = fmt.Fprintf(out, "\n"+msg.DiagSaved+"\n", printable(f.report))
 	case f.full:
-		_, _ = fmt.Fprint(out, summary+"\n"+diagnostico.Full(rep, lang))
+		_, _ = fmt.Fprint(out, summary+"\n"+textsafe.Multiline(diagnostico.Full(rep, lang)))
 	default:
 		_, _ = fmt.Fprint(out, summary)
 		_, _ = fmt.Fprintln(out, "\n"+msg.DiagHint)
@@ -123,18 +129,39 @@ func runDiagnostico(ctx context.Context, out, errOut io.Writer, deps Deps, f dia
 	return nil
 }
 
+// jsonSafe escapa, dentro das strings do JSON, os caracteres que o encoding/json deixa passar mas que um terminal pode
+// tratar como controle (C1 U+0080 a U+009F, formatação/bidi e separadores de linha/parágrafo): vira \uXXXX, que continua
+// JSON válido e decodifica para o mesmo dado.
+func jsonSafe(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 0x80 && r <= 0x9f) || unicode.Is(unicode.Cf, r) || r == 0x2028 || r == 0x2029 {
+			fmt.Fprintf(&b, `\u%04x`, r)
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
 // writeReport grava o relatório com permissão 0600 e NUNCA sobrescreve um arquivo que já existe (O_EXCL): não esconde nada,
-// só evita apagar um arquivo seu.
+// só evita apagar um arquivo seu. Todo erro (Open, Write ou Close) sai limpo: o os.PathError repete o caminho, e o caminho
+// pode ter controle no nome.
 func writeReport(path, text string) (err error) {
 	fh, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
-		return fmt.Errorf(msg.ErrDiagReport, printable(path), err)
+		return cleanErr(fmt.Errorf(msg.ErrDiagReport, path, err))
 	}
 	defer func() {
-		if cerr := fh.Close(); err == nil {
-			err = cerr
+		if cerr := fh.Close(); err == nil && cerr != nil {
+			err = cleanErr(cerr)
 		}
 	}()
-	_, err = fh.WriteString(text)
-	return err
+	if _, werr := fh.WriteString(text); werr != nil {
+		return cleanErr(werr)
+	}
+	return nil
 }
+
+// cleanErr devolve um erro com a mensagem limpa para o terminal (controles escapados, quebras de linha preservadas).
+func cleanErr(err error) error { return errors.New(textsafe.Multiline(err.Error())) }
