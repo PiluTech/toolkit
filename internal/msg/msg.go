@@ -140,7 +140,6 @@ const (
 	TUISecaoExecucoes       = "Execuções"
 	TUISecaoExecucoesShort  = "Exec"
 	TUIDetalhesHistorico    = "área Histórico (5)"
-	TUIAnaliseText          = "A análise de rede ainda não existe nesta versão."
 	TUIInicioPergunta       = "O que você quer fazer?"
 )
 
@@ -163,7 +162,6 @@ const (
 	TUIInicioHistorico      = "Ver o que já rodou"
 	TUIInicioHistoricoDesc  = "O que já rodou e o que falhou, com o registro de cada execução."
 	TUIInicioTagSoWindows   = "! só Windows"
-	TUIInicioTagEmBreve     = "○ em breve"
 	TUIInicioTagAdmin       = "! pede administrador para alguns itens"
 )
 
@@ -180,6 +178,21 @@ const (
 	DiagSaved     = "Relatório completo salvo em %s"
 	DiagHint      = "Para ver todos os dados lidos: toolkit diagnostico --completo (ou --relatorio arquivo.txt)."
 	ErrDiagReport = "não deu para gravar o relatório em %s: %w"
+)
+
+// Textos do comando rede.
+const (
+	RedeShort = "Analisa a rede da máquina (só leitura): IPs, Wi-Fi, DNS, portas em escuta e firewall"
+	RedeLong  = "Lê a rede da máquina SEM alterar nada (funciona sem administrador): IPs por interface, perfil de rede (Windows), tipo de segurança do Wi-Fi conectado (aberto, WEP, WPA2, WPA3), DNS, portas em escuta, firewall e privacidade do IPv6. Mostra um resumo do que está exposto e do que fazer. NÃO faz varredura de outras máquinas nem de redes Wi-Fi vizinhas, NÃO acessa a internet (o IP público só será consultado sob pedido, numa versão futura) e nunca lê a senha do Wi-Fi. Rodando como administrador (sudo no Linux e macOS; terminal como administrador no Windows) ele lê mais: firewall no Linux, pf no macOS, nome dos processos de outros usuários. Sem administrador, o resumo diz o que você ganharia. O toolkit nunca pede senha nem eleva sozinho. As informações aparecem como o sistema as informa: nada é mascarado."
+
+	FlagRedeFull   = "mostra também o relatório completo (todos os dados lidos)"
+	FlagRedeJSON   = "saída em JSON (achados e dados lidos)"
+	FlagRedeReport = "grava o resumo e o relatório completo neste arquivo novo (permissão 0600; não sobrescreve)"
+
+	RedeReading = "Lendo a rede (só leitura; sem varredura e sem acessar a internet)…"
+	RedeSaved   = "Relatório completo salvo em %s"
+	RedeHint    = "Para ver todos os dados lidos: toolkit rede --completo (ou --relatorio arquivo.txt)."
+	RedePrivacy = "Aviso: esta saída contém dados da rede local (IPs, MACs, nomes de rede). Nada foi enviado a ninguém; guarde e compartilhe com cuidado."
 )
 
 // Textos do comando otimizacao (só Windows; leitura de gargalos).

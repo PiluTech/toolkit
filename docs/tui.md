@@ -21,8 +21,7 @@ saída. Em CI (`CI`, `GITHUB_ACTIONS`, `TF_BUILD` e semelhantes ligadas; vazio, 
 ## Áreas e seções (fase 3 do redesign, variante A)
 
 A raiz tem **áreas**, cada uma com **seções** (as abas): `0 Início` (objetivos que levam às outras áreas, abaixo), `1 Instalar` (Apps, Receitas), `2 Máquina`
-(Diagnóstico, Apps nativos, Otimização), `3 Segurança` (Privacidade), `4 Rede` (Análise: seção que ainda não existe e aparece com a
-explicação, em vez de sumir) e `5 Histórico` (Execuções, o Log). Tudo continua numa lista PLANA de seções (`Model.tabs`):
+(Diagnóstico, Apps nativos, Otimização), `3 Segurança` (Privacidade), `4 Rede` (Análise: a leitura da rede, só leitura; veja "Rede › Análise" abaixo) e `5 Histórico` (Execuções, o Log). Tudo continua numa lista PLANA de seções (`Model.tabs`):
 execução, seleção, `Reloader`, resultados e origens seguem por índice plano; `Model.areas` só agrupa os índices.
 `NewWithAreas(o, []AreaDef)` monta o modo áreas (é o que `toolkit` abre, via `tui.RunAreas`); `New(o, tabs...)` é o modo
 legado (uma área por aba, números 1 a N, Tab percorre todas, sem a linha 2) e segue valendo para os testes.
@@ -40,7 +39,7 @@ título, uma frase didática (quebra na largura, nunca leva reticências) e, qua
 (símbolo + palavra, nunca só cor). Os oito objetivos: Instalar programas (1 Apps), Preparar a máquina com uma receita (1
 Receitas), Ver a saúde da máquina (2 Diagnóstico), Remover apps nativos do Windows (2 Apps nativos; `! só Windows` fora do
 Windows), Deixar o Windows mais leve (2 Otimização; `! só Windows` fora do Windows; a descrição promete a leitura de gargalos e as animações experimentais, com backup e desfazer; sem ganho), Proteger a privacidade do Windows (3 Privacidade; `! só Windows` fora do Windows, `! pede administrador para alguns
-itens` no Windows sem administrador), Analisar a rede (4 Análise; `○ em breve`) e Ver o que já rodou (5 Execuções). As etiquetas
+itens` no Windows sem administrador), Analisar a rede (4 Análise) e Ver o que já rodou (5 Execuções). As etiquetas
 usam só o que o cli já sabe (GOOS e `Options.IsAdmin`): nada é lido do sistema. A etiqueta vai à direita do título quando cabe,
 senão numa linha própria. Com folga há uma linha em branco entre os itens (120x40); em 80x24 a lista compacta e cabe inteira.
 Abaixo disso rola, mantendo o item do cursor inteiro na tela, e a régua mostra `↓ mais N linhas`.
@@ -202,10 +201,26 @@ Toda tela que não é a lista normal tem UMA forma, de cima para baixo: **títul
 | `StateNeedsAdmin(th, w, h, what, steps...)` | `! Precisa de administrador` | `<What>: precisa de administrador e este terminal não é. O toolkit nunca eleva sozinho.` | passos por sistema em `AdminSteps(goos, cmd)`: Windows `Botão direito no Terminal > Executar como administrador`, Linux/macOS `sudo toolkit <cmd>`. Nenhuma aba substitui o corpo por ele hoje (o administrador só barra a ação, que mostra a faixa de resultado com as mesmas linhas: `adminResultLines`) |
 | `StateUnsupported(th, w, h, what, reason, osName)` | `i Não disponível neste sistema` | `<What>: só existe no Windows (este sistema é <SO>).` + o motivo por sistema | Privacidade, Apps nativos e Otimização fora do Windows |
 | `StateEmpty(th, w, h, what, steps...)` | `i Nada por aqui` | a frase inteira (ex.: `Nenhuma receita para este sistema.`) + o que fazer | Apps sem instalador, Receitas e Diagnóstico vazios, Máquina e Otimização ainda não lidas, Otimização cancelada (`Leitura cancelada. Nada foi alterado.`), Histórico/Execuções (`Nada rodou nesta sessão.`) |
-| `StateSoon(th, w, h, what, steps...)` | `i Ainda não existe nesta versão` | a explicação | Rede/Análise (`InfoTab`) |
+| `StateSoon(th, w, h, what, steps...)` | `i Ainda não existe nesta versão` | a explicação | uma seção que ainda não exista (`InfoTab`; hoje nenhuma) |
 | `StateTooSmall(th, w, h, needW, needH)` | `i Terminal pequeno` | `A interface precisa de 60×16 e este tem LxA.` | raiz, abaixo do mínimo; `q` e Ctrl+C continuam saindo |
 
 O vazio de uma BUSCA (`Nada com "xyz". Esc limpa a busca.`) e os estados por item (`✗ não deu para verificar`, spinner por linha) continuam inline na lista: a lista já é navegável. A faixa de resultado (fase 2) e a confirmação (fase 1) não mudaram.
+
+## Rede › Análise (`internal/tui/rede_tab.go`)
+
+Seção `RedeTab` da área 4: o mesmo relatório do `toolkit rede` (`docs/rede.md`), só leitura. **Nada roda ao abrir o
+toolkit**: a seção começa em `i Nada por aqui` / "A rede ainda não foi lida." / `1. Tecle c para ler a rede (só leitura: sem
+varredura e sem internet).`; a leitura é pedida (`c`). `Carregando` com spinner e `Esc cancela` (o contexto da
+leitura é cancelado e a resposta tardia é descartada; depois fica "A leitura da rede foi cancelada."); `✗ Erro` com o
+motivo, `1. Tente de novo (c).` e `Nada foi alterado.`. Com resultado: o RESUMO e os ACHADOS no topo (símbolo e palavra da
+gravidade: `✗ alta`, `! média`, `- baixa`, `- info`, `✓ ok`, com "O que fazer:") e, rolando, os dados completos (interfaces
+com IP e MAC, rotas, perfil, Wi-Fi, DNS, portas com processo, firewall, IPv6 e "Não lido"), quebrados na largura (nunca
+reticências). Teclas (legenda única em `keys.go`): `↑↓`/`jk`/`PgUp`/`PgDn`/`g`/`G` rolam, `c` lê de novo (mesmo sentido de
+"ler de novo" das outras seções), `Esc` cancela a leitura. Não há tecla de detalhe (`d` é desfazer em toda parte), nem
+`Detailer` (não há cursor por item), nem faixa de resultado (a seção não executa ação). Todo texto do sistema (SSID, nome de
+processo, nome de interface) passa por `textsafe.Multiline` (ESC, OSC, bidi e CR viram escapes visíveis e inertes). O
+backend real (`internal/cli/tui_rede.go`) usa o mesmo coletor do CLI, com o Runner de leitura e o prazo de 3 minutos.
+Goldens: `rede_analise_{80x24,120x40,60x16}` e `rede_analise_vazio_80x24`.
 
 ## Estados por aba
 
@@ -215,6 +230,7 @@ O vazio de uma BUSCA (`Nada com "xyz". Esc limpa a busca.`) e os estados por ite
 | Versões | `\| Consultando o <gerenciador>…`, `latest` já selecionável | só `latest`: "O gerenciador não informou outras versões." | "Não deu para listar as versões (motivo). latest continua valendo." |
 | Receitas | `\| Lendo receitas e estado…` | "Nenhuma receita para este sistema." | "Não deu para ler o estado em <caminho>. Rode: toolkit recipe status". Receita falha: etapa, saída e "toolkit recipe reset <id> libera nova tentativa" |
 | Diagnóstico | spinner no item; relatório etapa a etapa | "Nenhum diagnóstico para este sistema." Nunca rodou: "Enter roda." | etapa com `✗`, código de saída e saída como veio. Ferramenta ausente: `- pulado: smartctl não está instalado` |
+| Rede › Análise | `\| Lendo a rede…` (Esc cancela) | "A rede ainda não foi lida. Tecle c ..." (nada roda ao abrir); cancelada: "A leitura da rede foi cancelada." | "Não deu para ler a rede." com o motivo, "Tente de novo (c)." e "Nada foi alterado." |
 | Otimização (`internal/tui/otimizacao_tab.go`) | `\| Lendo os gargalos do Windows…` com `Esc cancela.`; NÃO lê ao abrir, só com `c` ou Enter | `i Nada por aqui`: "Os gargalos desta máquina ainda não foram lidos." + `1. Tecle c para ler`; cancelada: "Leitura cancelada. Nada foi alterado." | `✗ Erro`, `Tente de novo (c)`, `Nada foi alterado.`. Fora do Windows: `só existe no Windows (este sistema é <SO>)` sem chamar o backend |
 | Otimização › Animações (`internal/tui/otimizacao_anim.go`, EXPERIMENTAL; `m` abre) | `\| Lendo o estado das animações…`; preparando o plano: `Esc cancela` | sem backup: "Sem backup: nada foi aplicado por aqui."; tudo aplicado: "Nada a fazer" | `✗ Erro`, `Tente de novo (c)`; releitura com erro depois de mudar usa o estado `StateErrorAfterChange` (não diz "Nada foi alterado"). Fora do Windows: a seção inteira só avisa |
 | Log | itens e log ao vivo | "Nada rodou nesta sessão. Marque apps ou receitas e tecle Enter. Logs anteriores: <pasta>" | "! Não deu para gravar o log em arquivo; a execução continua e o log fica só na tela." |

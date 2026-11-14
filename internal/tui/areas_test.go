@@ -395,7 +395,7 @@ func TestLegacyModeKeepsFlatTabs(t *testing.T) {
 func TestAreaGoldens(t *testing.T) {
 	d := func() []AreaDef {
 		ds := areaDefs()
-		ds[4].Tabs[0] = NewInfoTab(Theme{Mono: true}, "Análise", "Anál", "A análise de rede ainda não existe nesta versão.")
+		ds[4].Tabs[0] = newNet(&fakeNet{rep: netReport()})
 		return ds
 	}
 	for _, sz := range [][2]int{{80, 24}, {120, 40}, {60, 17}} {

@@ -186,7 +186,7 @@ func openTUI(cmd *cobra.Command, deps Deps, rd RecipeDeps, notifier *updateNotif
 }
 
 // tuiAreas monta as áreas da TUI (modo cli; admin vem de Options.IsAdmin): Início, Instalar, Máquina, Segurança, Rede e Histórico, cada uma com as suas
-// seções. A seção de uma área que ainda não existe (Rede) aparece com a explicação em vez de sumir.
+// seções.
 func tuiAreas(ctx context.Context, deps Deps, rd RecipeDeps, th tui.Theme, admin bool) []tui.AreaDef {
 	execs := tui.NewLogTab(th, "")
 	execs.SetNames(msg.TUISecaoExecucoes, msg.TUISecaoExecucoesShort, msg.TUIDetalhesHistorico)
@@ -204,7 +204,7 @@ func tuiAreas(ctx context.Context, deps Deps, rd RecipeDeps, th tui.Theme, admin
 			newPrivacyTab(ctx, deps, th),
 		}},
 		{Key: "rede", Title: msg.TUIAreaRede, Short: msg.TUIAreaRedeShort, Tabs: []tui.Tab{
-			tui.NewInfoTab(th, msg.TUISecaoAnalise, msg.TUISecaoAnaliseShort, msg.TUIAnaliseText),
+			newRedeTab(ctx, deps, th),
 		}},
 		{Key: "historico", Title: msg.TUIAreaHistorico, Short: msg.TUIAreaHistoricoShort, Tabs: []tui.Tab{
 			execs,

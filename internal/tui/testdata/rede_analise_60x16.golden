@@ -1,0 +1,16 @@
+ toolkit  [1 Anál]                                   v0.1.0
+────────────────────────────────────────────────────────────
+ Análise de rede (Linux)
+
+ Resultado: 3 alta(s), 0 média(s), 1 baixa(s).
+
+ ✗ alta: Rede Wi-Fi aberta (sem senha) (REDE-FAKE) —
+   qualquer pessoa por perto lê o que não estiver
+   criptografado
+     O que fazer: Evite dados sensíveis, use uma VPN ou
+   prefira outra rede.
+ ✗ alta: Firewall desligado — nenhum firewall lido está
+   ativo
+────────────────────────────────────────── ↓ mais 59 linhas
+ Rede — dados como o sistema informou; c lê de novo
+ ↑↓ rolar  c ler de novo  ? ajuda  q sair

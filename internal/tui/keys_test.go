@@ -26,7 +26,7 @@ func helpAreas(t *testing.T) []AreaDef {
 	otim := newOtim(&fakeOtim{rep: otimReport()}, "windows")
 	otim.SetAnimations(&fakeAnim{info: animSample(), plan: AnimPlan{Text: animPlanText, Pending: 1}})
 	inicio := NewInicioTab(th, "Início", "Iníc", "O que você quer fazer?", []InicioItem{{Title: "Instalar apps", Desc: "d", Tag: "✓", Area: 1, Section: 0, Dest: "Apps"}})
-	rede := NewInfoTab(th, "Análise", "Anál", "A análise de rede ainda não existe.")
+	rede := newNet(&fakeNet{rep: netReport()})
 	execs := NewLogTab(th, "")
 	execs.SetNames("Execuções", "Exec", "detalhes")
 	return []AreaDef{
@@ -157,6 +157,9 @@ func realKeyStates(t *testing.T) map[string][]KeyHint {
 
 	add("inicio", get(0, 0))
 	add("rede", get(4, 0))
+	rede := get(4, 0).(*RedeTab)
+	rede.Update(rede.loadedMsgForTest(netReport()))
+	add("rede/resultado", rede)
 	add("execucoes", get(5, 0))
 	return snap
 }
@@ -346,7 +349,7 @@ func helpPages(t *testing.T, m *Model) (pages [][]string, more []string) {
 
 func TestAjudaGeradaCabeEmTodosOsTamanhos(t *testing.T) {
 	for _, sz := range [][2]int{{60, 16}, {80, 24}, {120, 40}, {60, 40}, {120, 16}, {70, 20}} {
-		for _, area := range []int{'1', '2', '3', '5'} {
+		for _, area := range []int{'1', '2', '3', '4', '5'} {
 			m := helpModel(t, sz[0], sz[1])
 			goArea(m, area-'0')
 			rootKey(m, "?")
