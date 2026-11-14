@@ -37,6 +37,10 @@ type natPrepared struct {
 	sel     tui.NatSelection
 	text    string
 	pending int
+	// items é a CÓPIA ESTRUTURADA dos itens do plano mostrado (nome, FullName, família, publicador, versão, tipo, escopo e as
+	// marcas): o texto do plano não traz todos os campos, e Apply compara a identidade executada, não só o texto.
+	items []appsnativos.Item
+	scope appsnativos.Scope
 }
 
 // maxNatPrepared limita os planos guardados (preparações abandonadas); passando disso, os antigos são descartados.
@@ -123,7 +127,7 @@ func (b *appsNativosBackend) Plan(ctx context.Context, sel tui.NatSelection) (tu
 		return tui.NatPlan{}, err
 	}
 	text := plan.Format(e.lang)
-	id := b.prepare(&natPrepared{sel: sel, text: text, pending: plan.Pending()})
+	id := b.prepare(&natPrepared{sel: sel, text: text, pending: plan.Pending(), items: append([]appsnativos.Item(nil), plan.Items...), scope: plan.Scope})
 	return tui.NatPlan{ID: id, Text: textsafe.Multiline(text), Pending: plan.Pending(), NeedsAdmin: plan.NeedsAdmin(), IsAdmin: e.sys.IsAdmin(ctx)}, nil
 }
 
@@ -136,7 +140,7 @@ func (b *appsNativosBackend) Apply(ctx context.Context, sel tui.NatSelection, pl
 	if err != nil {
 		return tui.NatResult{}, err
 	}
-	if plan.Format(e.lang) != prep.text || plan.Pending() != prep.pending {
+	if plan.Format(e.lang) != prep.text || plan.Pending() != prep.pending || plan.Scope != prep.scope || !reflect.DeepEqual(plan.Items, prep.items) {
 		return tui.NatResult{}, tui.ErrNatStalePlan // o sistema mudou desde o plano mostrado
 	}
 	if plan.Pending() == 0 {

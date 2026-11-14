@@ -343,3 +343,31 @@ func TestNewAppsNativosTabSemAdminAvisaETodosUsuarios(t *testing.T) {
 		t.Errorf("sem admin só remove para o usuário: %v", sys.removes)
 	}
 }
+
+// Lupa #65 (3): o plano guarda os itens ESTRUTURADOS; mudar só o PackageFullName (ex.: outra arquitetura) entre o plano e a
+// aplicação não passa (o texto do plano pode não mostrar o FullName).
+func TestAppsNativosBackendMudarSoOPackageFullNameRecusa(t *testing.T) {
+	for _, field := range []string{"FullName", "FamilyName", "Publisher"} {
+		sys, st := newNatSys(true, "Microsoft.BingWeather"), &natStore{}
+		b := natBackend(t, sys, st, "windows")
+		ctx := context.Background()
+		plan, err := b.Plan(ctx, oneWeather)
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch field {
+		case "FullName":
+			sys.installed[0].PackageFullName = "Microsoft.BingWeather_1.2.3.0_arm64__8wekyb3d8bbwe"
+		case "FamilyName":
+			sys.installed[0].PackageFamilyName = "Microsoft.BingWeather_zzzzzzzzzzzzz"
+		case "Publisher":
+			sys.installed[0].Publisher = "CN=Outro Publicador"
+		}
+		if _, err := b.Apply(ctx, oneWeather, plan.ID); !errors.Is(err, tui.ErrNatStalePlan) {
+			t.Fatalf("%s: mudar só esse campo deve recusar: %v", field, err)
+		}
+		if len(sys.removes) != 0 || st.b != nil {
+			t.Fatalf("%s: zero remoções e sem backup: removes=%v backup=%v", field, sys.removes, st.b)
+		}
+	}
+}

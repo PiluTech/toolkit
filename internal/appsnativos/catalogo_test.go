@@ -60,7 +60,7 @@ func TestDenylistProtegeOCritico(t *testing.T) {
 			t.Errorf("%s deveria ser protegido", n)
 		}
 	}
-	for _, n := range []string{"Microsoft.BingWeather", "Microsoft.WindowsMaps", "Microsoft.WindowsFeedbackHub", "Clipchamp.Clipchamp"} {
+	for _, n := range []string{"Microsoft.BingWeather", "Microsoft.WindowsFeedbackHub", "Clipchamp.Clipchamp"} {
 		if Protected(n) {
 			t.Errorf("%s não deveria ser protegido (é do catálogo)", n)
 		}
@@ -90,15 +90,15 @@ func TestPerfis(t *testing.T) {
 	for _, a := range ParaPerfil(PerfilBasico) {
 		basico[a.Name] = true
 	}
-	for _, n := range []string{"Microsoft.BingWeather", "Microsoft.BingNews", "Microsoft.GetHelp", "Microsoft.Getstarted",
+	for _, n := range []string{"Microsoft.BingWeather", "Microsoft.BingNews", "Microsoft.Getstarted",
 		"Microsoft.MicrosoftSolitaireCollection", "Microsoft.MicrosoftOfficeHub", "Microsoft.WindowsFeedbackHub", "Microsoft.SkypeApp",
-		"Microsoft.MixedReality.Portal", "Microsoft.Microsoft3DViewer"} {
+		"Microsoft.MixedReality.Portal"} {
 		if !basico[n] {
 			t.Errorf("%s deveria estar no básico", n)
 		}
 	}
-	if len(basico) != 10 {
-		t.Errorf("básico com %d apps, esperava 10", len(basico))
+	if len(basico) != 8 {
+		t.Errorf("básico com %d apps, esperava 8", len(basico))
 	}
 	if len(ParaPerfil(PerfilCompleto)) != len(Apps()) {
 		t.Error("o completo deve ter todo o catálogo")
@@ -115,12 +115,12 @@ func TestPerfis(t *testing.T) {
 }
 
 func TestSelecionar(t *testing.T) {
-	got, err := Selecionar(PerfilBasico, []string{"maps", "bing-weather"})
+	got, err := Selecionar(PerfilBasico, []string{"people", "bing-weather"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 11 {
-		t.Errorf("básico + maps (bing-weather repetido) = 11, veio %d", len(got))
+	if len(got) != 9 {
+		t.Errorf("básico + people (bing-weather repetido) = 9, veio %d", len(got))
 	}
 	got, err = Selecionar("", []string{"todo", "clipchamp"})
 	if err != nil || len(got) != 2 || got[0].ID != "clipchamp" {

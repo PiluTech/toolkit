@@ -1,6 +1,6 @@
 # `toolkit apps-nativos` (só Windows)
 
-Remove apps nativos opcionais do Windows (pacotes AppX/MSIX como Clima, Notícias, Paciência, Obter Ajuda) de uma lista FECHADA que não quebra o sistema. Mostra o plano antes, pede confirmação, guarda backup e documenta como reinstalar. Nunca eleva sozinho.
+Remove apps nativos opcionais do Windows (pacotes AppX/MSIX como Clima, Notícias, Paciência) de uma lista FECHADA que não quebra o sistema. Mostra o plano antes, pede confirmação, guarda backup e documenta como reinstalar. Nunca eleva sozinho.
 
 ## Comandos
 
@@ -16,9 +16,14 @@ O catálogo é uma lista fechada de nomes EXATOS de pacote (o campo `Name` do `G
 
 Uma lista de negação no código, validada por teste contra o catálogo, protege: Microsoft Store e compra, App Installer (winget), WebView2 e Edge, shell, Iniciar, Configurações, Pesquisa/Cortana, Segurança do Windows (Defender), .NET, VCLibs, UI.Xaml, Windows Terminal, Fotos, Calculadora, Notepad, identidade e serviços de jogos do Xbox e codecs (HEIF, HEVC, VP9, WebP). Na hora de remover, cada item da listagem real é revalidado contra o catálogo E a lista de negação, e nunca se remove pacote `NonRemovable`, de framework ou com assinatura de sistema, mesmo que o nome case.
 
+Dois casos ficam FORA do catálogo de propósito (revisão da Lupa):
+
+- **Obter Ajuda** (`Microsoft.GetHelp`) hospeda os solucionadores de problemas do Windows (Update, rede, áudio, BITS): está na lista de negação e nunca é removido.
+- **Mapas** (`Microsoft.WindowsMaps`) e **Visualizador 3D** (`Microsoft.Microsoft3DViewer`) foram retirados da Microsoft Store (julho de 2025 e 1º de julho de 2026): com `--todos-usuarios` o provisionamento sumiria e a reinstalação prometida não existiria. Regra: o toolkit só oferece remover um app quando a reinstalação é real (a Store ainda o tem ou o provisionamento é mantido).
+
 ## Perfis
 
-- **basico** (conservador): Bing (Clima e Notícias), Obter Ajuda, Dicas, Paciência, Office Hub, Hub de Comentários, Skype, Realidade Mista e Visualizador 3D.
+- **basico** (conservador): Bing (Clima e Notícias), Dicas, Paciência, Office Hub, Hub de Comentários, Skype e Realidade Mista.
 - **completo**: o básico mais o restante do catálogo.
 - `--app id` (pode repetir) escolhe apps avulsos pelo id do catálogo; vale sozinho ou junto de `--perfil`.
 
@@ -63,3 +68,8 @@ Garantias do backend da TUI: o plano é de USO ÚNICO com ID opaco (a confirmaç
 - Só remove o que está no catálogo; não há remoção livre por nome.
 - Fora do Windows o comando termina com erro e não toca em nada: no macOS os apps do sistema ficam em volume protegido e não são removidos; no Linux esta versão não remove pacotes da distribuição.
 - Texto vindo do sistema passa por `textsafe` antes de ir ao terminal; a interface sai em pt-BR, inglês e espanhol (`TOOLKIT_LANG`).
+
+
+## Plano de uso único (TUI)
+
+O plano que a TUI mostra guarda uma cópia ESTRUTURADA dos itens (nome, `PackageFullName`, família, publicador, versão, tipo, escopo e marcas). Na confirmação o backend recalcula e só aplica se tudo for idêntico (não só o texto): mudar até o `PackageFullName` (outra arquitetura) entre o plano e o `s` recusa com "o plano mudou", sem remover nada nem gravar backup.

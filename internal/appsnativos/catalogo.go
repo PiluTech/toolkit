@@ -72,17 +72,14 @@ var (
 var catalogo = []App{
 	{ID: "bing-weather", Name: "Microsoft.BingWeather", Categoria: CatInformacao, Basico: true, Title: tr("MSN Clima", "MSN Weather", "MSN El Tiempo")},
 	{ID: "bing-news", Name: "Microsoft.BingNews", Categoria: CatInformacao, Basico: true, Title: tr("MSN Notícias", "MSN News", "MSN Noticias")},
-	{ID: "get-help", Name: "Microsoft.GetHelp", Categoria: CatSuporte, Basico: true, Title: tr("Obter Ajuda", "Get Help", "Obtener ayuda")},
 	{ID: "tips", Name: "Microsoft.Getstarted", Categoria: CatSuporte, Basico: true, Title: tr("Dicas", "Tips", "Consejos")},
 	{ID: "solitaire", Name: "Microsoft.MicrosoftSolitaireCollection", Categoria: CatJogos, Basico: true, Title: tr("Microsoft Solitaire Collection", "Microsoft Solitaire Collection", "Microsoft Solitaire Collection")},
 	{ID: "office-hub", Name: "Microsoft.MicrosoftOfficeHub", Categoria: CatProdutividade, Basico: true, Title: tr("Microsoft 365 (Office)", "Microsoft 365 (Office)", "Microsoft 365 (Office)")},
 	{ID: "feedback-hub", Name: "Microsoft.WindowsFeedbackHub", Categoria: CatSuporte, Basico: true, Title: tr("Central de Comentários", "Feedback Hub", "Centro de opiniones")},
 	{ID: "skype", Name: "Microsoft.SkypeApp", Categoria: CatComunicacao, Basico: true, Title: tr("Skype", "Skype", "Skype")},
 	{ID: "mixed-reality", Name: "Microsoft.MixedReality.Portal", Categoria: CatRealidade, Basico: true, Title: tr("Portal de Realidade Misturada", "Mixed Reality Portal", "Portal de realidad mixta")},
-	{ID: "3d-viewer", Name: "Microsoft.Microsoft3DViewer", Categoria: CatRealidade, Basico: true, Title: tr("Visualizador 3D", "3D Viewer", "Visor 3D")},
 	{ID: "phone-link", Name: "Microsoft.YourPhone", Categoria: CatComunicacao, Title: tr("Vínculo com o Celular", "Phone Link", "Vincular con el móvil")},
 	{ID: "people", Name: "Microsoft.People", Categoria: CatComunicacao, Title: tr("Pessoas", "People", "Contactos")},
-	{ID: "maps", Name: "Microsoft.WindowsMaps", Categoria: CatInformacao, Title: tr("Mapas", "Maps", "Mapas")},
 	{ID: "clipchamp", Name: "Clipchamp.Clipchamp", Categoria: CatMidia, Title: tr("Clipchamp", "Clipchamp", "Clipchamp")},
 	{ID: "todo", Name: "Microsoft.Todos", Categoria: CatProdutividade, Title: tr("Microsoft To Do", "Microsoft To Do", "Microsoft To Do")},
 	{ID: "teams-pessoal", Name: "MicrosoftTeams", Categoria: CatComunicacao, Title: tr("Microsoft Teams (pessoal)", "Microsoft Teams (personal)", "Microsoft Teams (personal)")},
@@ -148,6 +145,7 @@ func ValidName(s string) bool { return reName.MatchString(s) }
 // runtimes, terminal, Fotos/Calculadora/Bloco de Notas, Xbox/serviços de jogos e codecs.
 var protegidosExatos = map[string]bool{
 	"microsoft.windowsstore":            true,
+	"microsoft.gethelp":                 true, // hospeda os solucionadores de problemas do Windows (Update, rede, áudio, BITS)
 	"microsoft.storepurchaseapp":        true,
 	"microsoft.desktopappinstaller":     true,
 	"microsoft.sechealthui":             true,

@@ -48,10 +48,10 @@ func TestApplyGravaBackupAntesDeRemover(t *testing.T) {
 
 func TestApplyErroNoMeioParaEBackupCobreOQueMudou(t *testing.T) {
 	f := newFake(false)
-	f.installed = []Package{pkg("Microsoft.BingWeather"), pkg("Microsoft.BingNews"), pkg("Microsoft.GetHelp")}
+	f.installed = []Package{pkg("Microsoft.BingWeather"), pkg("Microsoft.BingNews"), pkg("Microsoft.Getstarted")}
 	f.failOn = "remove-user:Microsoft.BingNews"
 	st := &memStore{}
-	res, err := Apply(context.Background(), f, st, userPlan(t, f, "bing-weather", "bing-news", "get-help"), t0, Options{})
+	res, err := Apply(context.Background(), f, st, userPlan(t, f, "bing-weather", "bing-news", "tips"), t0, Options{})
 	if err == nil || !strings.Contains(err.Error(), "BingNews") {
 		t.Fatalf("erro = %v", err)
 	}
@@ -62,7 +62,7 @@ func TestApplyErroNoMeioParaEBackupCobreOQueMudou(t *testing.T) {
 		st.b.Entries["package:Microsoft.BingNews_1.2.3.0_x64__8wekyb3d8bbwe"].Name == "" {
 		t.Errorf("o backup tem de cobrir o removido e o que falhou (pode ter mudado pela metade): %+v", st.b)
 	}
-	if _, ok := st.b.Entries["package:Microsoft.GetHelp_1.2.3.0_x64__8wekyb3d8bbwe"]; ok {
+	if _, ok := st.b.Entries["package:Microsoft.Getstarted_1.2.3.0_x64__8wekyb3d8bbwe"]; ok {
 		t.Error("o que nem foi tentado não fica no backup")
 	}
 }

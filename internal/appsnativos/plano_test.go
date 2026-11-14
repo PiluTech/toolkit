@@ -30,7 +30,7 @@ func TestBuildUsuarioListaSoOQueEstaInstaladoESelecionado(t *testing.T) {
 	if plan.Scope != ScopeUser || plan.NeedsAdmin() {
 		t.Errorf("escopo usuário não exige administrador: %v %v", plan.Scope, plan.NeedsAdmin())
 	}
-	if len(plan.Absent) != 8 { // 10 do básico, 2 instalados
+	if len(plan.Absent) != 6 { // 8 do básico, 2 instalados
 		t.Errorf("ausentes = %d (%v)", len(plan.Absent), plan.Absent)
 	}
 	if strings.Join(f.lists, ",") != "installed:all=false" {
@@ -46,7 +46,7 @@ func TestBuildUsuarioListaSoOQueEstaInstaladoESelecionado(t *testing.T) {
 
 func TestBuildNaoRemoveFrameworkNemNaoRemovivelNemSistema(t *testing.T) {
 	f := newFake(false)
-	a, b, c, ok := pkg("Microsoft.BingWeather"), pkg("Microsoft.BingNews"), pkg("Microsoft.GetHelp"), pkg("Microsoft.Getstarted")
+	a, b, c, ok := pkg("Microsoft.BingWeather"), pkg("Microsoft.BingNews"), pkg("Microsoft.MicrosoftOfficeHub"), pkg("Microsoft.Getstarted")
 	a.IsFramework = true
 	b.NonRemovable = true
 	c.SignatureKind = "System"
@@ -191,5 +191,54 @@ func TestMensagemDePlataforma(t *testing.T) {
 	}
 	if UnsupportedMessage("plan9", 0) == "" {
 		t.Error("SO desconhecido também não é suportado")
+	}
+}
+
+// Lupa #65: Microsoft.GetHelp hospeda os solucionadores de problemas do Windows (Update, rede, áudio, BITS): nunca removível.
+func TestGetHelpNuncaEntraNoPlanoNemNoApply(t *testing.T) {
+	f := newFake(true)
+	f.installed = []Package{pkg("Microsoft.GetHelp"), pkg("Microsoft.BingWeather")}
+	if !Protected("Microsoft.GetHelp") {
+		t.Error("Microsoft.GetHelp deve estar na lista de negação")
+	}
+	if _, ok := FindByName("Microsoft.GetHelp"); ok {
+		t.Error("Microsoft.GetHelp não pode estar no catálogo removível")
+	}
+	for _, sel := range []Selection{{Perfil: PerfilBasico}, {Perfil: PerfilCompleto}, {Perfil: PerfilCompleto, TodosUsuarios: true}} {
+		plan, err := Build(context.Background(), f, sel, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, it := range plan.Items {
+			if strings.Contains(it.Name, "GetHelp") {
+				t.Errorf("GetHelp no plano: %+v", it)
+			}
+		}
+		if _, err := Apply(context.Background(), f, &memStore{}, plan, t0, Options{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, l := range f.log {
+		if strings.Contains(l, "GetHelp") {
+			t.Fatalf("GetHelp removido: %v", f.log)
+		}
+	}
+	if _, err := Build(context.Background(), f, Selection{Apps: []string{"get-help"}}, 0); err == nil {
+		t.Error("--app get-help deve falhar (fora do catálogo)")
+	}
+}
+
+// Lupa #65: Mapas (retirado da Store em jul/2025) e o Visualizador 3D (retirado em 01/07/2026) não podem ser oferecidos:
+// com todos os usuários o provisionamento sumiria e a reinstalação prometida não existe.
+func TestAppsSemReinstalacaoNaoSaoRemoviveis(t *testing.T) {
+	for _, n := range []string{"Microsoft.WindowsMaps", "Microsoft.Microsoft3DViewer"} {
+		if _, ok := FindByName(n); ok {
+			t.Errorf("%s não pode estar no catálogo removível (sem reinstalação possível na Store)", n)
+		}
+	}
+	for _, id := range []string{"maps", "3d-viewer"} {
+		if _, err := Selecionar("", []string{id}); err == nil {
+			t.Errorf("--app %s deve falhar", id)
+		}
 	}
 }
