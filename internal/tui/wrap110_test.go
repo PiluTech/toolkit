@@ -113,3 +113,33 @@ func TestDiagnosticoAvisoNuncaRodouQuebra(t *testing.T) {
 		}
 	}
 }
+
+// Lupa #75: app INSTALADO com versão longa e marcado para uma versão FIXA: a versão escolhida aparece inteira (a medida
+// e o desenho usam a mesma composição: a marcada vale no lugar da instalada).
+func TestAppInstaladoComVersaoLongaEMarcadoMostraAVersaoEscolhidaInteira(t *testing.T) {
+	const longa = "1:2.43.0-1ubuntu7.3+esm2~24.04.1"
+	for _, w := range []int{110, 115, 120, 130} {
+		tabs := worstTabs(t)
+		apps := tabs[idxApps].(*AppsTab)
+		for i := range apps.apps {
+			_ = i
+		}
+		apps.be.(*fakeBackend).status["code"] = AppStatus{Installed: true, Version: longa}
+		apps.status["code"] = AppStatus{Installed: true, Version: longa}
+		apps.marks["code"] = "3.12"
+		m := detailGoldenModel(w, 36, idxApps, tabs)
+		out := plain(m.render())
+		var row string
+		for _, l := range strings.Split(out, "\n") {
+			if left, _, ok := strings.Cut(l, "│"); ok && strings.Contains(left, "Visual Code") {
+				row = left
+			}
+		}
+		if !strings.Contains(row, "→ 3.12") {
+			t.Errorf("w=%d: a versão escolhida (→ 3.12) tem de aparecer inteira na linha: %q", w, row)
+		}
+		if strings.Contains(row, "…") {
+			t.Errorf("w=%d: a linha corta com reticências: %q", w, row)
+		}
+	}
+}

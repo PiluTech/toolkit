@@ -833,17 +833,10 @@ func (t *AppsTab) rowLine(i int, c cols) string {
 	if c.pick > 0 {
 		sw = c.pick
 	}
-	state, ver := t.stateText(a, sw)
-	if c.ver == 0 && ver != "" { // 60 a 69 colunas: a versão junto do estado
-		state += " " + ver
+	state, ver := t.rowStateVer(a, sw) // a MESMA composição que fitColumns mede: a versão marcada vale no lugar da instalada
+	if c.ver == 0 && ver != "" {       // versão junto do estado (60 a 69 colunas, ou quando a coluna não cabe)
+		state = strings.TrimSuffix(state, " ") + " " + ver
 		ver = ""
-	}
-	if v, ok := t.marks[a.ID]; ok && v != "" {
-		ver = "→ " + v
-		if c.ver == 0 {
-			state = strings.TrimSuffix(state, " ") + " " + ver
-			ver = ""
-		}
 	}
 	line := " " + cursor + " " + mark + " " + name + "  " + t.styleState(a, cell(state, c.state))
 	if c.ver > 0 {
