@@ -18,36 +18,91 @@ import (
 
 const (
 	winNetsh = `C:\Windows\System32\netsh.exe`
-	winPrefs = "$ErrorActionPreference='SilentlyContinue';$ProgressPreference='SilentlyContinue'\n"
+	// winPrefs define Q: roda uma consulta num try/catch com -ErrorAction Stop e devolve o STATUS EXPLÍCITO da subconsulta,
+	// {ok:true,data:[...]} ou {ok:false,err:"<tipo do erro>"}. Sem isto o PowerShell engole o erro do cmdlet e sai com
+	// código 0, e a falha viraria uma lista vazia "lida" (sem gateway, nenhuma porta). Só o TIPO do erro sai, nunca a mensagem.
+	winPrefs = "$ProgressPreference='SilentlyContinue'\n" +
+		`function Q($b){try{$ErrorActionPreference='Stop';@{ok=$true;data=@(& $b)}}catch{@{ok=$false;err=$_.Exception.GetType().Name}}}` + "\n" +
+		"$r=@{}\n"
+	winOut = `$r|ConvertTo-Json -Compress -Depth 6`
 
 	winScriptIPs = winPrefs +
-		`$ad=@(Get-NetAdapter|ForEach-Object{@{Name=[string]$_.Name;Mac=[string]$_.MacAddress;Status=[string]$_.Status;Media=[string]$_.PhysicalMediaType}})` + "\n" +
-		`$ip=@(Get-NetIPAddress|Where-Object{$_.AddressState -ne 'Tentative'}|ForEach-Object{@{Alias=[string]$_.InterfaceAlias;Addr=[string]$_.IPAddress;Fam=[string]$_.AddressFamily;Len=$_.PrefixLength;Sfx=[string]$_.SuffixOrigin}})` + "\n" +
-		`$gw=@(Get-NetRoute -DestinationPrefix '0.0.0.0/0','::/0'|ForEach-Object{@{Alias=[string]$_.InterfaceAlias;Next=[string]$_.NextHop}})` + "\n" +
-		`@{ad=$ad;ip=$ip;gw=$gw}|ConvertTo-Json -Compress -Depth 4`
+		`$r.ad=Q{Get-NetAdapter -ErrorAction Stop|ForEach-Object{@{Name=[string]$_.Name;Mac=[string]$_.MacAddress;Status=[string]$_.Status;Media=[string]$_.PhysicalMediaType}}}` + "\n" +
+		`$r.ip=Q{Get-NetIPAddress -ErrorAction Stop|Where-Object{$_.AddressState -ne 'Tentative'}|ForEach-Object{@{Alias=[string]$_.InterfaceAlias;Addr=[string]$_.IPAddress;Fam=[string]$_.AddressFamily;Len=$_.PrefixLength;Sfx=[string]$_.SuffixOrigin}}}` + "\n" +
+		`$r.gw=Q{Get-NetRoute -ErrorAction Stop|Where-Object{$_.DestinationPrefix -eq '0.0.0.0/0' -or $_.DestinationPrefix -eq '::/0'}|ForEach-Object{@{Alias=[string]$_.InterfaceAlias;Next=[string]$_.NextHop}}}` + "\n" +
+		winOut
 
 	winScriptProfile = winPrefs +
-		`$p=@(Get-NetConnectionProfile|ForEach-Object{@{Name=[string]$_.Name;Alias=[string]$_.InterfaceAlias;Cat=[string]$_.NetworkCategory}})` + "\n" +
-		`ConvertTo-Json -Compress -Depth 4 -InputObject $p`
+		`$r.p=Q{Get-NetConnectionProfile -ErrorAction Stop|ForEach-Object{@{Name=[string]$_.Name;Alias=[string]$_.InterfaceAlias;Cat=[string]$_.NetworkCategory}}}` + "\n" +
+		winOut
 
+	// doh: o cmdlet só existe no Windows 11/Server 2022+; sem ele {ok:true,na:true} (não é falha). Fb = AllowFallbackToUdp.
 	winScriptDNS = winPrefs +
-		`$s=@(Get-DnsClientServerAddress|ForEach-Object{@{Alias=[string]$_.InterfaceAlias;Srv=@($_.ServerAddresses|ForEach-Object{[string]$_})}})` + "\n" +
-		`$doh=$null;if(Get-Command Get-DnsClientDohServerAddress){$doh=@(Get-DnsClientDohServerAddress|ForEach-Object{@{Addr=[string]$_.ServerAddress;Auto=[string]$_.AutoUpgrade}})}` + "\n" +
-		`@{srv=$s;doh=$doh}|ConvertTo-Json -Compress -Depth 5`
+		`$r.srv=Q{Get-DnsClientServerAddress -ErrorAction Stop|ForEach-Object{@{Alias=[string]$_.InterfaceAlias;Srv=@($_.ServerAddresses|ForEach-Object{[string]$_})}}}` + "\n" +
+		`if(Get-Command Get-DnsClientDohServerAddress -ErrorAction SilentlyContinue){$r.doh=Q{Get-DnsClientDohServerAddress -ErrorAction Stop|ForEach-Object{@{Addr=[string]$_.ServerAddress;Auto=[string]$_.AutoUpgrade;Fb=[string]$_.AllowFallbackToUdp}}}}else{$r.doh=@{ok=$true;na=$true;data=@()}}` + "\n" +
+		winOut
 
+	// o nome do processo é opcional (Process "" = não informado): se o Get-Process falhar, as portas seguem sem nome.
 	winScriptPorts = winPrefs +
-		`$p=@{};Get-Process|ForEach-Object{$p[[int]$_.Id]=[string]$_.ProcessName}` + "\n" +
-		`$t=@(Get-NetTCPConnection -State Listen|ForEach-Object{@{A=[string]$_.LocalAddress;P=$_.LocalPort;I=$_.OwningProcess;N=[string]$p[[int]$_.OwningProcess]}})` + "\n" +
-		`$u=@(Get-NetUDPEndpoint|ForEach-Object{@{A=[string]$_.LocalAddress;P=$_.LocalPort;I=$_.OwningProcess;N=[string]$p[[int]$_.OwningProcess]}})` + "\n" +
-		`@{t=$t;u=$u}|ConvertTo-Json -Compress -Depth 4`
+		`$p=@{};try{Get-Process -ErrorAction Stop|ForEach-Object{$p[[int]$_.Id]=[string]$_.ProcessName}}catch{}` + "\n" +
+		`$r.t=Q{Get-NetTCPConnection -ErrorAction Stop|Where-Object{$_.State -eq 'Listen'}|ForEach-Object{@{A=[string]$_.LocalAddress;P=$_.LocalPort;I=$_.OwningProcess;N=[string]$p[[int]$_.OwningProcess]}}}` + "\n" +
+		`$r.u=Q{Get-NetUDPEndpoint -ErrorAction Stop|ForEach-Object{@{A=[string]$_.LocalAddress;P=$_.LocalPort;I=$_.OwningProcess;N=[string]$p[[int]$_.OwningProcess]}}}` + "\n" +
+		winOut
 
 	winScriptFirewall = winPrefs +
-		`$f=@(Get-NetFirewallProfile|ForEach-Object{@{Name=[string]$_.Name;En=[string]$_.Enabled;In=[string]$_.DefaultInboundAction}})` + "\n" +
-		`ConvertTo-Json -Compress -Depth 4 -InputObject $f`
+		`$r.f=Q{Get-NetFirewallProfile -ErrorAction Stop|ForEach-Object{@{Name=[string]$_.Name;En=[string]$_.Enabled;In=[string]$_.DefaultInboundAction}}}` + "\n" +
+		winOut
 
 	winScriptIPv6 = winPrefs +
-		`@{t=[string](Get-NetIPv6Protocol).UseTemporaryAddresses}|ConvertTo-Json -Compress`
+		`$r.t=Q{[string](Get-NetIPv6Protocol -ErrorAction Stop).UseTemporaryAddresses}` + "\n" +
+		winOut
 )
+
+// winSub é o status de UMA subconsulta do script: ok só com "ok":true (booleano) E "data" presente. Qualquer outra forma
+// (sem "ok", "ok" como texto, subconsulta ausente, sem "data") é FALHA, nunca leitura.
+type winSub struct {
+	ok   bool
+	data any
+	na   bool   // "na":true: o cmdlet não existe nesta versão do Windows (não é falha)
+	err  string // tipo curto do erro, só [A-Za-z0-9._]
+}
+
+func winSubq(m map[string]any, key string) winSub {
+	e := winMap(m[key])
+	if e == nil {
+		return winSub{err: "sem-status"}
+	}
+	if ok, isBool := e["ok"].(bool); isBool && ok {
+		d, has := e["data"]
+		if has {
+			na, _ := e["na"].(bool)
+			return winSub{ok: true, data: d, na: na}
+		}
+		return winSub{err: "sem-data"}
+	}
+	return winSub{err: winErrType(e["err"])}
+}
+
+// winErrType deixa só um tipo curto e seguro (letras, números, ponto e sublinhado) para ir ao relatório.
+func winErrType(v any) string {
+	s, _ := v.(string)
+	var b strings.Builder
+	for _, c := range s {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '_' {
+			b.WriteRune(c)
+		}
+		if b.Len() >= 60 {
+			break
+		}
+	}
+	if b.Len() == 0 {
+		return "desconhecido"
+	}
+	return b.String()
+}
+
+// winFailure é uma subconsulta que falhou: vira um Skipped da área, nunca um achado.
+type winFailure struct{ area, cmdlet, err string }
 
 // collectWindows preenche r com a rede da máquina Windows. Cada área é independente (um pânico vira Skipped).
 func collectWindows(ctx context.Context, d Deps, r *Report) {
@@ -55,8 +110,11 @@ func collectWindows(ctx context.Context, d Deps, r *Report) {
 		r.Skipped = append(r.Skipped, Skipped{Area: area, Reason: diagfmt.T(d.Lang, pt, en, es)})
 	}
 	wifiAdapter := false
-	area := func(name, script string, read func(v any), onFail func()) {
+	// area roda o script e entrega o objeto de subconsultas a read, que devolve as que falharam (viram Skipped da área).
+	// Falha do script inteiro (erro do powershell, saída vazia ou que não é um objeto JSON) chama onFail.
+	area := func(script string, read func(m map[string]any) []winFailure, onFail func()) {
 		ok := false
+		var fails []winFailure
 		func() {
 			defer func() {
 				if recover() != nil {
@@ -71,44 +129,61 @@ func collectWindows(ctx context.Context, d Deps, r *Report) {
 			if json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(out, "\ufeff"))), &v) != nil {
 				return
 			}
-			read(v)
+			m := winMap(v)
+			if m == nil {
+				return
+			}
+			fails = read(m)
 			ok = true
 		}()
 		if !ok {
 			onFail()
+			return
 		}
-		_ = name
+		for _, f := range fails {
+			skip(f.area, "não deu para ler esta parte ("+f.cmdlet+" falhou: "+f.err+"); nada foi concluído a partir dela", "could not read this part ("+f.cmdlet+" failed: "+f.err+"); nothing was concluded from it", "no se pudo leer esta parte ("+f.cmdlet+" falló: "+f.err+"); no se concluyó nada a partir de ella")
+		}
 	}
-	area("interfaces", winScriptIPs, func(v any) {
-		winReadIPs(v, r)
+	area(winScriptIPs, func(m map[string]any) []winFailure {
+		fails := winReadIPs(m, r)
 		for _, i := range r.Interfaces {
 			wifiAdapter = wifiAdapter || i.Kind == "wifi"
 		}
+		return fails
 	}, func() {
 		skip("interfaces", "não deu para ler as interfaces, os IPs e a rota padrão (Get-NetAdapter, Get-NetIPAddress, Get-NetRoute); rode em um PowerShell normal", "could not read the interfaces, IPs and default route (Get-NetAdapter, Get-NetIPAddress, Get-NetRoute); run from a regular PowerShell", "no se pudieron leer las interfaces, las IPs y la ruta predeterminada (Get-NetAdapter, Get-NetIPAddress, Get-NetRoute); ejecute en un PowerShell normal")
 	})
-	area("perfil", winScriptProfile, func(v any) { winReadProfiles(v, r) }, func() {
+	area(winScriptProfile, func(m map[string]any) []winFailure { return winReadProfiles(m, r) }, func() {
 		skip("perfil", "não deu para ler o perfil de rede (Get-NetConnectionProfile)", "could not read the network profile (Get-NetConnectionProfile)", "no se pudo leer el perfil de red (Get-NetConnectionProfile)")
 	})
 	if wifiAdapter {
 		winWiFi(ctx, d, r, skip)
 	}
-	area("dns", winScriptDNS, func(v any) { winReadDNS(v, r) }, func() {
+	area(winScriptDNS, func(m map[string]any) []winFailure { return winReadDNS(m, r) }, func() {
 		skip("dns", "não deu para ler o DNS (Get-DnsClientServerAddress)", "could not read the DNS (Get-DnsClientServerAddress)", "no se pudo leer el DNS (Get-DnsClientServerAddress)")
 	})
-	area("portas", winScriptPorts, func(v any) { winReadPorts(v, r) }, func() {
+	area(winScriptPorts, func(m map[string]any) []winFailure { return winReadPorts(m, r) }, func() {
 		skip("portas", "não deu para ler as portas em escuta (Get-NetTCPConnection, Get-NetUDPEndpoint)", "could not read the listening ports (Get-NetTCPConnection, Get-NetUDPEndpoint)", "no se pudieron leer los puertos en escucha (Get-NetTCPConnection, Get-NetUDPEndpoint)")
 	})
-	area("firewall", winScriptFirewall, func(v any) { winReadFirewall(v, r) }, func() {
+	area(winScriptFirewall, func(m map[string]any) []winFailure { return winReadFirewall(m, r) }, func() {
 		skip("firewall", "não deu para ler o firewall (Get-NetFirewallProfile)", "could not read the firewall (Get-NetFirewallProfile)", "no se pudo leer el firewall (Get-NetFirewallProfile)")
 	})
-	area("ipv6", winScriptIPv6, func(v any) {
-		switch strings.ToLower(winStr(winMap(v)["t"])) {
+	area(winScriptIPv6, func(m map[string]any) []winFailure {
+		t := winSubq(m, "t")
+		if !t.ok {
+			return []winFailure{{"ipv6", "Get-NetIPv6Protocol", t.err}}
+		}
+		l := winStrings(t.data)
+		if len(l) == 0 {
+			return nil
+		}
+		switch strings.ToLower(l[0]) {
 		case "enabled":
 			r.IPv6Privacy = Yes
 		case "disabled":
 			r.IPv6Privacy = No
 		}
+		return nil
 	}, func() {
 		skip("ipv6", "não deu para ler os endereços temporários do IPv6 (Get-NetIPv6Protocol)", "could not read the IPv6 temporary addresses (Get-NetIPv6Protocol)", "no se pudieron leer las direcciones temporales de IPv6 (Get-NetIPv6Protocol)")
 	})
@@ -179,8 +254,47 @@ func winInt(v any) (int, bool) {
 	return 0, false
 }
 
-func winReadIPs(v any, r *Report) {
-	m := winMap(v)
+// winStrings devolve os textos de uma lista (ou o texto único).
+func winStrings(v any) []string {
+	var out []string
+	switch x := v.(type) {
+	case []any:
+		for _, e := range x {
+			out = append(out, winStr(e))
+		}
+	case string:
+		out = append(out, winStr(x))
+	}
+	return out
+}
+
+func winReadIPs(m map[string]any, r *Report) []winFailure {
+	var fails []winFailure
+	ad, ip, gw := winSubq(m, "ad"), winSubq(m, "ip"), winSubq(m, "gw")
+	if !ad.ok {
+		fails = append(fails, winFailure{"interfaces", "Get-NetAdapter", ad.err})
+	}
+	if !ip.ok {
+		fails = append(fails, winFailure{"interfaces", "Get-NetIPAddress", ip.err})
+	}
+	if ad.ok && ip.ok { // interface "lida pela metade" não entra: sem IP lido ela pareceria sem endereço
+		winBuildInterfaces(winList(ad.data), winList(ip.data), r)
+	}
+	if !gw.ok {
+		return append(fails, winFailure{"rotas", "Get-NetRoute", gw.err})
+	}
+	r.GatewaysRead = true
+	for _, g := range winList(gw.data) {
+		next := winStr(g["Next"])
+		if next == "" || next == "0.0.0.0" || next == "::" {
+			next = "dev " + winStr(g["Alias"])
+		}
+		r.Gateways = append(r.Gateways, next)
+	}
+	return fails
+}
+
+func winBuildInterfaces(adapters, addrs []map[string]any, r *Report) {
 	byName := map[string]*Interface{}
 	var order []string
 	get := func(name string) *Interface {
@@ -191,7 +305,7 @@ func winReadIPs(v any, r *Report) {
 		order = append(order, name)
 		return byName[name]
 	}
-	for _, a := range winList(m["ad"]) {
+	for _, a := range adapters {
 		name := winStr(a["Name"])
 		if name == "" {
 			continue
@@ -211,7 +325,7 @@ func winReadIPs(v any, r *Report) {
 			i.Kind = "ethernet"
 		}
 	}
-	for _, a := range winList(m["ip"]) {
+	for _, a := range addrs {
 		name, ip := winStr(a["Alias"]), winStr(a["Addr"])
 		if name == "" || ip == "" || isLoopback(ip) {
 			continue
@@ -232,20 +346,16 @@ func winReadIPs(v any, r *Report) {
 		}
 		r.Interfaces = append(r.Interfaces, *i)
 	}
-	r.GatewaysRead = true
-	for _, g := range winList(m["gw"]) {
-		next := winStr(g["Next"])
-		if next == "" || next == "0.0.0.0" || next == "::" {
-			next = "dev " + winStr(g["Alias"])
-		}
-		r.Gateways = append(r.Gateways, next)
-	}
 }
 
-func winReadProfiles(v any, r *Report) {
-	for _, p := range winList(v) {
+func winReadProfiles(m map[string]any, r *Report) []winFailure {
+	p := winSubq(m, "p")
+	if !p.ok {
+		return []winFailure{{"perfil", "Get-NetConnectionProfile", p.err}}
+	}
+	for _, e := range winList(p.data) {
 		cat := ""
-		switch winStr(p["Cat"]) {
+		switch winStr(e["Cat"]) {
 		case "Public":
 			cat = "public"
 		case "Private":
@@ -253,14 +363,29 @@ func winReadProfiles(v any, r *Report) {
 		case "DomainAuthenticated":
 			cat = "domain"
 		}
-		r.Profiles = append(r.Profiles, Profile{Name: winStr(p["Name"]), Interface: winStr(p["Alias"]), Category: cat})
+		r.Profiles = append(r.Profiles, Profile{Name: winStr(e["Name"]), Interface: winStr(e["Alias"]), Category: cat})
 	}
+	return nil
 }
 
-func winReadDNS(v any, r *Report) {
-	m := winMap(v)
+// winTri lê "True"/"False" (ou booleano) como Tri; qualquer outra coisa (inclusive ausente) é Unknown.
+func winTri(v any) Tri {
+	switch strings.ToLower(winStr(v)) {
+	case "true":
+		return Yes
+	case "false":
+		return No
+	}
+	return Unknown
+}
+
+func winReadDNS(m map[string]any, r *Report) []winFailure {
+	srv, doh := winSubq(m, "srv"), winSubq(m, "doh")
+	if !srv.ok {
+		return []winFailure{{"dns", "Get-DnsClientServerAddress", srv.err}}
+	}
 	var servers []DNSServer
-	for _, s := range winList(m["srv"]) {
+	for _, s := range winList(srv.data) {
 		alias := winStr(s["Alias"])
 		if strings.HasPrefix(alias, "Loopback") { // o Windows põe um DNS site-local (fec0::) na interface de loopback
 			continue
@@ -279,37 +404,61 @@ func winReadDNS(v any, r *Report) {
 		}
 	}
 	r.DNS.Servers = dedupeDNS(servers)
-	r.DNS.Encrypted = Unknown // sem o cmdlet de DoH (Windows antigo) não dá para saber
-	dohRaw, present := m["doh"]
-	if !present || dohRaw == nil {
-		return
+	r.DNS.Encrypted, r.DNS.Mode, r.DNS.AllowFallback = Unknown, DNSModeUnknown, Unknown // padrão: o SO não informou
+	if !doh.ok {
+		return []winFailure{{"dns", "Get-DnsClientDohServerAddress", doh.err}}
 	}
-	auto := map[string]bool{}
-	for _, e := range winList(dohRaw) {
-		if strings.EqualFold(winStr(e["Auto"]), "true") {
-			auto[winStr(e["Addr"])] = true
-		}
+	if doh.na { // Windows sem o cmdlet de DoH: nem "sim" nem "não"
+		return nil
+	}
+	type dohEntry struct{ auto, fb Tri }
+	entries := map[string]dohEntry{}
+	for _, e := range winList(doh.data) {
+		entries[winStr(e["Addr"])] = dohEntry{auto: winTri(e["Auto"]), fb: winTri(e["Fb"])}
 	}
 	r.DNS.Note = "Get-DnsClientDohServerAddress"
-	enc, seen := Yes, false
+	seen, off, fbYes, fbUnknown := false, false, false, false
 	for _, s := range r.DNS.Servers {
 		if isLoopback(s.Addr) {
 			continue
 		}
 		seen = true
-		if !auto[s.Addr] {
-			enc = No
+		e := entries[s.Addr]
+		switch {
+		case e.auto != Yes: // sem modelo DoH, ou sem AutoUpgrade: este servidor é consultado em claro
+			off = true
+		case e.fb == Yes:
+			fbYes = true
+		case e.fb == Unknown:
+			fbUnknown = true
 		}
 	}
-	if !seen {
-		r.DNS.Encrypted = Unknown
-		return
+	switch {
+	case !seen:
+	case off:
+		r.DNS.Encrypted, r.DNS.Mode = No, DNSModeOff
+	case fbYes:
+		r.DNS.Mode, r.DNS.AllowFallback = DNSModeOpportunistic, Yes
+	case fbUnknown:
+		r.DNS.Mode, r.DNS.AllowFallback = DNSModeOpportunistic, Unknown
+	default: // AutoUpgrade em todos E AllowFallbackToUdp=false em todos: a única combinação que prova DoH
+		r.DNS.Encrypted, r.DNS.Mode, r.DNS.AllowFallback = Yes, DNSModeStrict, No
 	}
-	r.DNS.Encrypted = enc
+	return nil
 }
 
-func winReadPorts(v any, r *Report) {
-	m := winMap(v)
+func winReadPorts(m map[string]any, r *Report) []winFailure {
+	tcp, udp := winSubq(m, "t"), winSubq(m, "u")
+	var fails []winFailure
+	if !tcp.ok {
+		fails = append(fails, winFailure{"portas", "Get-NetTCPConnection", tcp.err})
+	}
+	if !udp.ok {
+		fails = append(fails, winFailure{"portas", "Get-NetUDPEndpoint", udp.err})
+	}
+	if len(fails) > 0 { // lista parcial não é "as portas": nenhuma é anotada
+		return fails
+	}
 	add := func(proto string, list any) {
 		for _, e := range winList(list) {
 			port, ok := winInt(e["P"])
@@ -320,13 +469,18 @@ func winReadPorts(v any, r *Report) {
 			r.Listeners = append(r.Listeners, Listener{Proto: proto, Addr: winStr(e["A"]), Port: port, Process: winStr(e["N"]), PID: pid})
 		}
 	}
-	add("tcp", m["t"])
-	add("udp", m["u"])
+	add("tcp", tcp.data)
+	add("udp", udp.data)
 	r.ListenersRead = true
+	return nil
 }
 
-func winReadFirewall(v any, r *Report) {
-	for _, p := range winList(v) {
+func winReadFirewall(m map[string]any, r *Report) []winFailure {
+	f := winSubq(m, "f")
+	if !f.ok {
+		return []winFailure{{"firewall", "Get-NetFirewallProfile", f.err}}
+	}
+	for _, p := range winList(f.data) {
 		fw := Firewall{Name: winStr(p["Name"]), Detail: "inbound " + winStr(p["In"])}
 		switch strings.ToLower(winStr(p["En"])) {
 		case "true":
@@ -338,6 +492,7 @@ func winReadFirewall(v any, r *Report) {
 			r.Firewalls = append(r.Firewalls, fw)
 		}
 	}
+	return nil
 }
 
 // ---- Wi-Fi: netsh wlan show interfaces (texto localizado; classificado pelos VALORES, não pelos nomes dos campos) ----

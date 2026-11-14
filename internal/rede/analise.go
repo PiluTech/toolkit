@@ -426,10 +426,30 @@ func analyseDNS(r *Report, l Lang, add addFn) {
 			list+" — "+t("as consultas de nomes viajam sem criptografia", "name lookups travel unencrypted", "las consultas de nombres viajan sin cifrar"),
 			t("Sem ação obrigatória; considere um DNS com criptografia (DoH ou DoT).", "No action required; consider an encrypted DNS (DoH or DoT).", "Sin acción obligatoria; considere un DNS cifrado (DoH o DoT)."))
 	case Unknown:
-		add("dns-publico-nao-verificado", "dns", SevInfo,
-			t("DNS em endereço público; DoH/DoT não verificado", "DNS on a public address; DoH/DoT not verified", "DNS en una dirección pública; DoH/DoT no verificado"),
-			list+" — "+t("o sistema não informou se há criptografia", "the system did not report whether it is encrypted", "el sistema no informó si hay cifrado"), "")
+		detail := t("o sistema não informou se há criptografia", "the system did not report whether it is encrypted", "el sistema no informó si hay cifrado")
+		title := t("DNS em endereço público; DoH/DoT não verificado", "DNS on a public address; DoH/DoT not verified", "DNS en una dirección pública; DoH/DoT no verificado")
+		if r.DNS.Mode == DNSModeOpportunistic {
+			title = t("DNS em endereço público; DoH/DoT oportunista (pode usar DNS em claro)", "DNS on a public address; opportunistic DoH/DoT (may use plain DNS)", "DNS en una dirección pública; DoH/DoT oportunista (puede usar DNS en claro)")
+			detail = DNSModeText(r.DNS, l) + "; " + t("a criptografia efetiva não foi verificada (o toolkit não faz consultas para testar)", "the effective encryption was not verified (the toolkit does not send queries to test it)", "el cifrado efectivo no se verificó (el toolkit no envía consultas para probarlo)")
+		}
+		add("dns-publico-nao-verificado", "dns", SevInfo, title, list+" — "+detail, "")
 	}
+}
+
+// DNSModeText descreve o modo configurado do DNS e o que isso prova (ou não) sobre a criptografia efetiva. Vazio quando o
+// modo não é conhecido ou não traz nada além do campo Encrypted.
+func DNSModeText(d DNS, l Lang) string {
+	t := func(pt, en, es string) string { return diagfmt.T(l, pt, en, es) }
+	switch d.Mode {
+	case DNSModeOpportunistic:
+		if d.AllowFallback == Unknown {
+			return t("configurado para tentar DoH/DoT; pode cair para DNS em claro (fallback não lido)", "configured to try DoH/DoT; may fall back to plain DNS (fallback not read)", "configurado para intentar DoH/DoT; puede caer a DNS en claro (fallback no leído)")
+		}
+		return t("configurado para tentar DoH/DoT, mas admite cair para DNS em claro (oportunista)", "configured to try DoH/DoT, but allows falling back to plain DNS (opportunistic)", "configurado para intentar DoH/DoT, pero admite caer a DNS en claro (oportunista)")
+	case DNSModeStrict:
+		return t("estrito: sem cair para DNS em claro", "strict: no fallback to plain DNS", "estricto: sin caer a DNS en claro")
+	}
+	return ""
 }
 
 // ---- resumo ----

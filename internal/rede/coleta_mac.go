@@ -225,7 +225,7 @@ var ipcfgKeyRe = regexp.MustCompile(`^ {2}(SSID|Security)\s*:\s*(.*?)\s*$`)
 func macSecurity(s string) Security {
 	has := tokenSet(s)
 	switch {
-	case len(has) == 0 || has["NONE"] || has["OPEN"]:
+	case has["NONE"] || has["OPEN"]: // aberto SÓ com token explícito; vazio/pontuação cai em SecUnknown
 		return SecOpen
 	case (has["ENT"] || has["EAP"] || has["8021X"]) && (has["WPA"] || has["WPA2"] || has["WPA3"]):
 		return SecEnterprise
@@ -363,7 +363,7 @@ func macDNS(ctx context.Context, d Deps, r *Report, skip skipFn) {
 		skip("dns", "o scutil não listou nenhum servidor DNS", "scutil listed no DNS server", "scutil no listó ningún servidor DNS", false)
 		return
 	}
-	r.DNS = DNS{Servers: servers, Encrypted: Unknown, Note: diagfmt.T(d.Lang, "scutil --dns: DoH/DoT não informado", "scutil --dns: DoH/DoT not reported", "scutil --dns: DoH/DoT no informado")}
+	r.DNS = DNS{Servers: servers, Encrypted: Unknown, Mode: DNSModeUnknown, AllowFallback: Unknown, Note: diagfmt.T(d.Lang, "scutil --dns: DoH/DoT não informado", "scutil --dns: DoH/DoT not reported", "scutil --dns: DoH/DoT no informado")}
 }
 
 // parseNetstatListen lê `netstat -an -p tcp`: as linhas LISTEN, com o endereço local no formato "host.porta" do macOS.

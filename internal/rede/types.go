@@ -119,12 +119,36 @@ type DNSServer struct {
 	Interface string // "" = global ou desconhecida
 }
 
+// DNSMode é o modo de criptografia CONFIGURADO do DNS (não a criptografia efetiva de cada consulta).
+type DNSMode string
+
+// Modos do DNS.
+const (
+	DNSModeUnknown       DNSMode = "unknown"       // o SO não informou
+	DNSModeOff           DNSMode = "off"           // sem DoH/DoT configurado
+	DNSModeOpportunistic DNSMode = "opportunistic" // tenta DoH/DoT, mas pode cair para DNS em claro (ou o fallback não foi lido)
+	DNSModeStrict        DNSMode = "strict"        // DoH/DoT sem cair para DNS em claro
+)
+
+// MarshalText faz o JSON mostrar sempre um nome ("" vira "unknown").
+func (m DNSMode) MarshalText() ([]byte, error) {
+	if m == "" {
+		m = DNSModeUnknown
+	}
+	return []byte(m), nil
+}
+
 // DNS é a configuração de resolução de nomes.
 type DNS struct {
 	Servers []DNSServer
-	// Encrypted: há DoH/DoT para o resolvedor em uso. Unknown quando o SO não informa (nunca vira "não").
+	// Encrypted: a criptografia EFETIVA só é Yes quando provada pela configuração (modo estrito, sem fallback para DNS em
+	// claro). Modo oportunista, ou o fallback não lido, é Unknown; sem DoH/DoT configurado é No. Unknown quando o SO não
+	// informa. Nunca há sondagem externa para confirmar.
 	Encrypted Tri
-	Note      string // de onde veio a informação de criptografia
+	// Mode é o modo configurado e AllowFallback diz se o sistema admite voltar ao DNS em claro (Unknown = não lido).
+	Mode          DNSMode
+	AllowFallback Tri
+	Note          string // de onde veio a informação de criptografia
 }
 
 // Listener é uma porta em escuta.
