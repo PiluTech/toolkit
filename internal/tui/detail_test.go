@@ -610,3 +610,27 @@ func TestDetalheContrato(_ *testing.T) {
 	var _ Detailer = (*PrivacyTab)(nil)
 	var _ Detailer = (*InicioTab)(nil)
 }
+
+// PR13: o aviso do catálogo (note) aparece no painel de detalhe do app, em seção própria, e só nele.
+func TestDetalheAppsMostraAvisoDoCatalogo(t *testing.T) {
+	be := &fakeBackend{apps: []AppInfo{
+		{ID: "rustdesk", Name: "RustDesk", Category: "utilitarios", Managers: []string{"flatpak"}, Note: "Só instale se entender que isto dá controle da máquina. Versão mínima 1.5.0."},
+		{ID: "git", Name: "Git", Category: "dev", Managers: []string{"apt"}},
+	}, status: map[string]AppStatus{}}
+	tab := loaded(t, be)
+	moveTo(t, tab, "git")
+	mustNotContain(t, tab.Detail(44, 40), "AVISO")
+	moveTo(t, tab, "rustdesk")
+	out := tab.Detail(44, 40)
+	detailLines(t, out, 44)
+	mustContain(t, out, "AVISO", "controle da máquina", "1.5.0")
+}
+
+func TestDetalheAppsAvisoLimpaControles(t *testing.T) {
+	be := &fakeBackend{apps: []AppInfo{{ID: "x", Name: "X", Category: "dev", Managers: []string{"apt"}, Note: "ok\x1b[2Jfim"}}, status: map[string]AppStatus{}}
+	tab := loaded(t, be)
+	out := tab.Detail(44, 40)
+	if strings.Contains(out, "\x1b") {
+		t.Fatalf("ESC chegou ao painel: %q", out)
+	}
+}

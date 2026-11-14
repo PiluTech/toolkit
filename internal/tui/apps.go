@@ -20,6 +20,7 @@ type AppInfo struct {
 	Managers           []string // gerenciadores disponíveis neste SO ("apt", "flatpak"...)
 	Versions           bool     // aceita app@versão (lista de versões)
 	NoInstaller        bool
+	Note               string // aviso do catálogo (note:), mostrado no detalhe
 }
 
 // AppStatus é o estado de um app no sistema, lido do gerenciador (somente leitura).
@@ -980,6 +981,12 @@ func (t *AppsTab) Detail(w, h int) string {
 		meta += " · " + a.Category
 	}
 	d.para(meta)
+
+	// O aviso do catálogo vem logo no começo: com a altura curta o fim é que é cortado, nunca o aviso.
+	if a.Note != "" {
+		d.section("Aviso")
+		d.para(a.Note)
+	}
 
 	d.section("Estado")
 	state, ver := t.stateText(a, w-2)
