@@ -39,6 +39,38 @@ conferir.
 Depois de publicar, confira de uma máquina limpa: `unix.sh`/`win.ps1` da release, `toolkit version`, e
 `codesign --verify --strict` + `spctl -a -vv -t exec` no binário macOS baixado.
 
+## Pre-release (rc): instalar uma versão específica
+
+Tag com sufixo (`vX.Y.Z-rc.N`) segue o mesmo fluxo da release normal, mas o job **draft** a cria como
+**prerelease** (`gh release create --prerelease` quando a tag tem `-`). Prerelease **não vira Latest**: o
+`releases/latest/download/...` (e por isso o `pilutech.com.br/win` e o `/sh`, que entregam a Latest) continua
+na versão estável. O rascunho segue sendo publicado pelo Paulo; ao publicar, marque "Set as a pre-release" se
+o GitHub não vier marcado e deixe "Set as the latest release" desmarcado. Conferir:
+`gh release view vX.Y.Z-rc.N --json isPrerelease,isDraft`.
+
+Instalar a versão específica (os bootstraps validam a versão e conferem o SHA-256 do `checksums.txt` da própria
+release):
+
+```
+# Windows (PowerShell), por variável de ambiente
+$env:TOOLKIT_VERSION='v0.4.0-rc.1'; irm https://pilutech.com.br/win | iex
+
+# Windows (PowerShell), por parâmetro (vence TOOLKIT_VERSION)
+& ([scriptblock]::Create((irm https://pilutech.com.br/win))) -Versao v0.4.0-rc.1
+
+# Linux e macOS
+curl -fsSL https://pilutech.com.br/sh | TOOLKIT_VERSION=v0.4.0-rc.1 sh
+curl -fsSL https://pilutech.com.br/sh | sh -s -- --versao v0.4.0-rc.1
+```
+
+Precedência: `-Versao` (`--versao`, `-v`) > `TOOLKIT_VERSION` > última release. `-Versao` sem valor é erro claro
+(sem fechar o terminal). Com `-DryRun` / `--dry-run` o bootstrap mostra a versão e as URLs sem instalar.
+Em `curl ... | TOOLKIT_VERSION=... sh` a variável vale para o `sh` (o lado que lê o script), que é onde o
+`unix.sh` a lê.
+
+
+**Formato do backup do `toolkit privacidade` (nota para a v0.4.0-rc.1).** O formato de backup da privacidade nasce nesta versão: nenhuma versão publicada o criou, então não há migração nem compatibilidade com formato anterior. O `desfazer` só conhece o catálogo ATUAL, sem exceções: um backup que cite um ajuste fora do catálogo (por exemplo o serviço `dmwappushservice`, que saiu do catálogo antes da publicação) é recusado, sem alterar nada.
+
 ## Segredos e environment `release`
 
 Nada de segredo no código, no workflow ou no log. Os cinco segredos vivem no **environment `release`** (Settings,

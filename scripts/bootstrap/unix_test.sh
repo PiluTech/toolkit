@@ -74,11 +74,32 @@ grep -q "dry-run" "$tmp/out" || fail "dry-run sem saída"
 run "file://$rel" --nao-existe && fail "argumento desconhecido foi aceito"
 rm -rf "${tmp:?}/home"; mkdir -p "$tmp/home"
 if HOME="$tmp/home" TOOLKIT_VERSION='v1/../x' sh "$script" --dry-run >"$tmp/out" 2>&1; then fail "versão inválida aceita"; fi
+# 7a. formato real da tag (mesma regra do release.yml): v opcional + X.Y.Z + sufixo opcional -rc.N; "." e ".." não passam
+for bad in . .. ... v.. v. v1 v1.2 v1.2.3. v1.2.3- v1.2.3-rc..1 v1.2.3-.rc v1.2.3+x v1.2.3/x x1.2.3 ..1.2.3 v1.2.3-rc.1/..; do
+  if HOME="$tmp/home" TOOLKIT_VERSION="$bad" sh "$script" --dry-run >"$tmp/out" 2>&1; then fail "versão inválida aceita: $bad"; fi
+done
+for good in v1.2.3 1.2.3 v0.4.0-rc.1 v1.0.0-beta.2 v1.0.0-alpha; do
+  HOME="$tmp/home" TOOLKIT_VERSION="$good" sh "$script" --dry-run >"$tmp/out" 2>&1 || fail "versão válida recusada: $good: $(cat "$tmp/out")"
+done
 HOME="$tmp/home" TOOLKIT_VERSION='0.1.0' sh "$script" --dry-run >"$tmp/out" 2>&1 || fail "versão 0.1.0 recusada"
 grep -q "releases/download/v0.1.0" "$tmp/out" || fail "versão sem v não foi normalizada: $(cat "$tmp/out")"
 HOME="$tmp/home" sh "$script" --dry-run >"$tmp/out" 2>&1 || fail "dry-run padrão falhou"
 grep -q "releases/latest/download" "$tmp/out" || fail "URL padrão não é latest"
 grep -q "github.com/PiluTech/toolkit" "$tmp/out" || fail "repositório errado"
+
+# 7b. --versao / -v: vence TOOLKIT_VERSION; sem valor é erro; mostra a versão no dry-run
+rm -rf "${tmp:?}/home"; mkdir -p "$tmp/home"
+HOME="$tmp/home" TOOLKIT_VERSION='v0.1.0' sh "$script" --dry-run --versao v0.4.0-rc.1 >"$tmp/out" 2>&1 || fail "--versao recusada: $(cat "$tmp/out")"
+grep -q "releases/download/v0.4.0-rc.1" "$tmp/out" || fail "--versao não venceu TOOLKIT_VERSION: $(cat "$tmp/out")"
+grep -q "versão v0.4.0-rc.1" "$tmp/out" || fail "dry-run não mostra a versão: $(cat "$tmp/out")"
+HOME="$tmp/home" sh "$script" --dry-run -v 0.4.0-rc.2 >"$tmp/out" 2>&1 || fail "-v recusado"
+grep -q "releases/download/v0.4.0-rc.2" "$tmp/out" || fail "-v sem v não foi normalizado"
+HOME="$tmp/home" sh "$script" --dry-run --versao=v0.4.0-rc.3 >"$tmp/out" 2>&1 || fail "--versao= recusado"
+grep -q "releases/download/v0.4.0-rc.3" "$tmp/out" || fail "--versao= não aplicada"
+if HOME="$tmp/home" sh "$script" --dry-run --versao >"$tmp/out" 2>&1; then fail "--versao sem valor aceito"; fi
+grep -q "exige um valor" "$tmp/out" || fail "--versao sem valor sem mensagem clara"
+if HOME="$tmp/home" sh "$script" --versao --dry-run >"$tmp/out" 2>&1; then fail "--versao seguida de flag aceita"; fi
+if HOME="$tmp/home" sh "$script" --dry-run --versao 'v1/../x' >"$tmp/out" 2>&1; then fail "--versao inválida aceita"; fi
 
 # 8. SO não suportado (uname falso no PATH)
 mkdir "$tmp/fakebin"

@@ -10,7 +10,7 @@ function Fail($m) { throw "FALHOU: $m" }
 
 # Carrega so as funcoes puras do win.ps1 (sem rodar a instalacao), pela AST.
 $ast = [Management.Automation.Language.Parser]::ParseFile($script, [ref]$null, [ref]$null)
-foreach ($fn in $ast.FindAll({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in 'Test-EnvOn', 'Test-ShouldLaunch', 'Start-ToolkitTui' }, $true)) {
+foreach ($fn in $ast.FindAll({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in 'Test-EnvOn', 'Test-ShouldLaunch', 'Start-ToolkitTui', 'Get-VersionArg', 'Test-VersionTag' }, $true)) {
     . ([scriptblock]::Create($fn.Extent.Text))
 }
 
@@ -44,6 +44,24 @@ Should $false 'remoting' @{ Remote = $true }
 Should $false 'sessao nao interativa' @{ UserInteractive = $false }
 Should $false 'stdin redirecionado' @{ InputRedirected = $true }
 Should $false 'stdout redirecionado' @{ OutputRedirected = $true }
+
+# Versao pedida: -Versao > TOOLKIT_VERSION > padrao.
+function Ver($want, $what, $argv, $envv) {
+    $got = Get-VersionArg -ArgList $argv -EnvVersion $envv
+    if ($got -ne $want) { Fail "Get-VersionArg ($what): esperado '$want', veio '$got'" }
+}
+Ver '' 'nada' @() ''
+Ver '' 'so outras flags' @('-DryRun') $null
+Ver 'v0.1.0' 'so env' @() 'v0.1.0'
+Ver 'v0.4.0-rc.1' 'so -Versao' @('-Versao', 'v0.4.0-rc.1') ''
+Ver 'v0.4.0-rc.1' '-Versao vence o env' @('-Versao', 'v0.4.0-rc.1') 'v0.1.0'
+Ver 'v0.4.0-rc.1' '-versao minusculo' @('-DryRun', '-versao', 'v0.4.0-rc.1') ''
+Ver 'v0.4.0-rc.1' '-Versao:valor' @('-Versao:v0.4.0-rc.1') ''
+foreach ($bad in @(@('-Versao'), @('-Versao', ''), @('-Versao', '-DryRun'), @('-Versao:'))) {
+    $threw = $false
+    try { Get-VersionArg -ArgList $bad -EnvVersion 'v0.1.0' | Out-Null } catch { $threw = $true; if ($_.Exception.Message -notmatch '-Versao exige um valor') { Fail "mensagem de -Versao sem valor: $($_.Exception.Message)" } }
+    if (-not $threw) { Fail "-Versao sem valor foi aceito: $($bad -join ' ')" }
+}
 
 # TUI que nao abre: nao lanca excecao e imprime a dica em pt-BR.
 $msg = (Start-ToolkitTui -Exe (Join-Path ([IO.Path]::GetTempPath()) 'toolkit-inexistente.exe') 6>&1 | Out-String)
@@ -125,6 +143,24 @@ try {
     $d4 = "$root\dry"
     if (-not (Invoke-Bootstrap $d4 @('-DryRun'))) { Fail 'dry-run falhou' }
     if (Test-Path "$d4\toolkit.exe") { Fail 'dry-run instalou' }
+
+    # 4b. dry-run mostra a versao pedida por -Versao (que vence TOOLKIT_VERSION)
+    $env:TOOLKIT_VERSION = 'v0.1.0'; Remove-Item Env:\TOOLKIT_RELEASE_BASE -ErrorAction SilentlyContinue
+    $exe = (Get-Process -Id $PID).Path
+    $outV = (& $exe -NoProfile -File $script -DryRun -Versao v0.4.0-rc.1 *>&1 | Out-String)
+    Remove-Item Env:\TOOLKIT_VERSION
+    if ($outV -notmatch 'releases/download/v0\.4\.0-rc\.1') { Fail "dry-run sem a versao do -Versao: $outV" }
+    if ($outV -notmatch 'versao v0\.4\.0-rc\.1') { Fail "dry-run nao mostra a versao: $outV" }
+    & $exe -NoProfile -File $script -DryRun -Versao *> "$root\out2.txt"
+    if ($LASTEXITCODE -eq 0) { Fail '-Versao sem valor foi aceito' }
+
+    # 4c. formato da tag (mesma regra do release.yml): v opcional + X.Y.Z + sufixo opcional; '.' e '..' nao passam
+    foreach ($bad in @('.', '..', '...', 'v..', 'v1', 'v1.2', 'v1.2.3.', 'v1.2.3-', 'v1.2.3-rc..1', 'v1.2.3-.rc', 'v1.2.3+x', 'v1.2.3/x', 'x1.2.3', 'v1.2.3-rc.1/..')) {
+        if (Test-VersionTag $bad) { Fail "tag invalida aceita: $bad" }
+    }
+    foreach ($good in @('v1.2.3', '1.2.3', 'v0.4.0-rc.1', 'v1.0.0-beta.2', 'v1.0.0-alpha')) {
+        if (-not (Test-VersionTag $good)) { Fail "tag valida recusada: $good" }
+    }
 
     # 5. versao invalida
     $env:TOOLKIT_VERSION = 'v1/../x'; Remove-Item Env:\TOOLKIT_RELEASE_BASE -ErrorAction SilentlyContinue

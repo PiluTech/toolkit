@@ -131,3 +131,46 @@ const (
 	DiagHint      = "Para ver todos os dados lidos: toolkit diagnostico --completo (ou --relatorio arquivo.txt)."
 	ErrDiagReport = "não deu para gravar o relatório em %s: %w"
 )
+
+// Textos do comando privacidade (só Windows).
+const (
+	PrivShort = "Reduz a coleta de dados do Windows (mostra o plano antes, guarda backup e desfaz)"
+	PrivLong  = "Mostra o estado de privacidade do Windows e os dois perfis (basico e recomendado) SEM alterar nada. Para aplicar use `toolkit privacidade aplicar --perfil basico|recomendado`: o plano (valor atual -> novo) é mostrado antes, o valor original de cada item é guardado em backup e `toolkit privacidade desfazer` restaura tudo. O perfil recomendado mexe em política, serviços e tarefas e exige um terminal aberto como administrador; o toolkit nunca eleva sozinho. Só existe no Windows."
+
+	PrivApplyShort = "Aplica um perfil de privacidade (mostra o plano e pede confirmação)"
+	PrivApplyLong  = "Calcula o plano do perfil, mostra o que muda (valor atual -> novo) e o que exige administrador, e pede confirmação [s/N] (sem terminal exige --yes). Antes de mudar qualquer coisa grava o backup. Use --dry-run para só ver o plano. Sem administrador, o que exige administrador NÃO é aplicado: o comando recusa antes de mudar qualquer coisa (ou use --somente-usuario)."
+	PrivUndoShort  = "Desfaz a privacidade aplicada (restaura do backup)"
+	PrivUndoLong   = "Mostra o que será restaurado a partir do backup e restaura. Sem backup, não há o que desfazer."
+
+	FlagPrivPerfil = "perfil a aplicar: basico (só o que é do usuário) ou recomendado (inclui política, serviços e tarefas; exige administrador)"
+	FlagPrivDryRun = "só mostra o plano, sem mudar nada"
+	FlagPrivYes    = "não pergunta: aplica direto depois de mostrar o plano"
+	FlagPrivUser   = "aplica só os itens do usuário (sem administrador) e ignora os que exigem administrador"
+
+	PrivOnlyWindows   = "o comando privacidade só existe no Windows (este sistema é %s); nada foi alterado"
+	PrivStateHeader   = "Estado de privacidade do Windows (só leitura, nada foi alterado)"
+	PrivProfileSep    = "=== perfil %s ==="
+	PrivStateHint     = "Para aplicar: toolkit privacidade aplicar --perfil basico|recomendado (use --dry-run para só ver o plano). Para desfazer: toolkit privacidade desfazer."
+	PrivNeedPerfil    = "informe o perfil: --perfil basico ou --perfil recomendado"
+	PrivBadPerfil     = "perfil %q desconhecido: use basico ou recomendado"
+	PrivNothingToDo   = "Nada a fazer: tudo já está como o perfil manda."
+	PrivDryRunDone    = "--dry-run: nada foi alterado."
+	PrivUserOnlyNote  = "--somente-usuario: os itens que exigem administrador foram ignorados (ficam para uma execução num terminal como administrador)."
+	PrivNeedsAdmin    = "este plano tem itens que exigem administrador e este terminal não é administrador: nada foi alterado. Abra o terminal como administrador (botão direito, \"Executar como administrador\") e rode o mesmo comando de novo, ou use --somente-usuario para aplicar só o que é do usuário. O toolkit nunca eleva sozinho"
+	PrivUndoNeedsAdm  = "o backup tem itens que exigem administrador e este terminal não é administrador: nada foi alterado. Abra o terminal como administrador e rode `toolkit privacidade desfazer` de novo"
+	PrivNeedsYes      = "sem terminal para confirmar: nada foi alterado; rode de novo com --yes (depois de conferir o plano com --dry-run)"
+	PrivConfirmApply  = "Aplicar estas mudanças? O valor original de cada item será guardado em backup."
+	PrivConfirmUndo   = "Restaurar estes itens do backup?"
+	PrivCancelled     = "Cancelado: nada foi alterado."
+	PrivApplied       = "Aplicado: %d mudança(s). Backup em %s. Para desfazer: toolkit privacidade desfazer."
+	PrivAppliedPart   = "Aplicadas antes da falha: %d mudança(s). O backup em %s guarda os valores originais; `toolkit privacidade desfazer` restaura."
+	PrivRestored      = "Restaurado: %d item(ns). O backup foi removido."
+	PrivNoBackup      = "Não há backup de privacidade: nada a desfazer."
+	PrivUndoNothing   = "O backup existe, mas tudo já está como antes: nada a restaurar (o backup foi removido)."
+	PrivUndoHeader    = "O que será restaurado (valor atual -> original):"
+	PrivRestoredPart  = "Restaurados antes da falha: %d item(ns); o que sobrou continua no backup."
+	PrivPendingFormat = "  ! %s: %s -> %s"
+	PrivUndoLine      = "      desfazer: %s"
+	PrivAdminTag      = " [exige administrador]"
+	PrivMissing       = "Não existe nesta versão do Windows (ignorado): %s"
+)

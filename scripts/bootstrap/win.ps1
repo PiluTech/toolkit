@@ -6,6 +6,9 @@
 #   irm https://github.com/PiluTech/toolkit/releases/latest/download/win.ps1 | iex
 #   $env:TOOLKIT_DRYRUN = '1'; irm .../win.ps1 | iex     # so mostra o que faria
 #   $env:TOOLKIT_VERSION = 'v0.1.0'                      # fixa a versao (padrao: a ultima release)
+#   & ([scriptblock]::Create((irm https://pilutech.com.br/win))) -Versao v0.4.0-rc.1   # fixa a versao por parametro
+#   .\win.ps1 -Versao v0.4.0-rc.1                        # equivalente, rodando o arquivo salvo
+#   (precedencia: -Versao > TOOLKIT_VERSION > ultima release)
 #   .\win.ps1 -DryRun                                    # equivalente, rodando o arquivo salvo
 #   $env:TOOLKIT_NO_LAUNCH = '1'                         # nao abre a TUI depois de instalar
 #   .\win.ps1 -NoLaunch                                  # equivalente, rodando o arquivo salvo
@@ -20,6 +23,42 @@ function Test-EnvOn {
     if ($null -eq $Value) { return $false }
     $v = $Value.Trim().ToLowerInvariant()
     return -not ($v -eq '' -or $v -eq '0' -or $v -eq 'false' -or $v -eq 'no' -or $v -eq 'off')
+}
+
+# Formato real da tag (mesma regra do release.yml): v opcional + X.Y.Z + sufixo opcional '-rc.1' (letras, numeros e
+# pontos, sem ponto no comeco, no fim nem repetido). '.' e '..' nao passam. Pura (testavel sem Windows).
+function Test-VersionTag {
+    param([string]$Tag)
+    return ($Tag -cmatch '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?\z')
+}
+
+# Versao pedida: '-Versao <tag>' nos argumentos do script vence TOOLKIT_VERSION, que vence o padrao
+# (vazio = ultima release). Pura (testavel sem Windows). '-Versao' sem valor lanca erro claro (o 'throw'
+# nao fecha o terminal de quem usou 'irm | iex'). Aceita tambem '-Versao:v1'.
+function Get-VersionArg {
+    param([object[]]$ArgList = @(), [string]$EnvVersion)
+    $found = $false
+    $val = $null
+    for ($i = 0; $i -lt $ArgList.Count; $i++) {
+        $a = [string]$ArgList[$i]
+        if ($a -ieq '-Versao') {
+            $found = $true
+            if ($i + 1 -lt $ArgList.Count) { $val = [string]$ArgList[$i + 1] } else { $val = $null }
+            if ($null -ne $val -and $val.StartsWith('-')) { $val = $null }
+            break
+        }
+        if ($a -imatch '^-Versao:(.*)$') {
+            $found = $true
+            $val = $Matches[1]
+            break
+        }
+    }
+    if ($found) {
+        if (-not $val -or -not $val.Trim()) { throw 'toolkit: -Versao exige um valor, por exemplo: -Versao v0.4.0-rc.1' }
+        return $val.Trim()
+    }
+    if ($EnvVersion) { return $EnvVersion }
+    return ''
 }
 
 # Decisao pura (fatos injetados, testavel sem Windows): $true se deve abrir a TUI.
@@ -61,7 +100,7 @@ function Start-ToolkitTui {
 }
 
 function Install-Toolkit {
-    param([switch]$DryRun, [switch]$NoLaunch)
+    param([switch]$DryRun, [switch]$NoLaunch, [string]$Version)
     Set-StrictMode -Version Latest
     $ErrorActionPreference = 'Stop'
     $ProgressPreference = 'SilentlyContinue'   # o 5.1 fica muito lento com a barra de progresso
@@ -80,14 +119,14 @@ function Install-Toolkit {
     $asset = "toolkit_windows_$arch.exe"
 
     # TOOLKIT_RELEASE_BASE existe so para testes locais.
-    $version = $env:TOOLKIT_VERSION
+    $version = $Version
     if ($env:TOOLKIT_RELEASE_BASE) {
         $base = $env:TOOLKIT_RELEASE_BASE.TrimEnd('/')
         Write-Warning "toolkit: usando TOOLKIT_RELEASE_BASE=$base (so para testes)"
     } elseif (-not $version -or $version -eq 'latest') {
         $base = 'https://github.com/PiluTech/toolkit/releases/latest/download'
     } else {
-        if ($version -notmatch '^[A-Za-z0-9._+-]+$') { throw 'toolkit: TOOLKIT_VERSION invalida: use algo como v0.1.0' }
+        if (-not (Test-VersionTag $version)) { throw 'toolkit: versao invalida (-Versao ou TOOLKIT_VERSION): use algo como v0.1.0 ou v0.4.0-rc.1' }
         if ($version -match '^[0-9]') { $version = "v$version" }
         $base = "https://github.com/PiluTech/toolkit/releases/download/$version"
     }
@@ -95,6 +134,8 @@ function Install-Toolkit {
     if ($env:TOOLKIT_INSTALL_DIR) { $dest = $env:TOOLKIT_INSTALL_DIR } else { $dest = Join-Path $env:LOCALAPPDATA 'toolkit\bin' }
 
     if ($DryRun) {
+        if (-not $version -or $version -eq 'latest') { $shown = 'latest (ultima release)' } else { $shown = $version }
+        Write-Host "toolkit (dry-run): versao $shown"
         Write-Host "toolkit (dry-run): baixaria $base/$asset e $base/checksums.txt"
         Write-Host "toolkit (dry-run): conferiria o SHA-256 e instalaria em $dest\toolkit.exe (e no PATH do usuario)"
         return
@@ -165,4 +206,4 @@ function Install-Toolkit {
     }
 }
 
-Install-Toolkit -DryRun:($env:TOOLKIT_DRYRUN -eq '1' -or ($args -contains '-DryRun')) -NoLaunch:($args -contains '-NoLaunch')
+Install-Toolkit -Version (Get-VersionArg -ArgList $args -EnvVersion $env:TOOLKIT_VERSION) -DryRun:($env:TOOLKIT_DRYRUN -eq '1' -or ($args -contains '-DryRun')) -NoLaunch:($args -contains '-NoLaunch')
