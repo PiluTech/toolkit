@@ -858,3 +858,118 @@ func (c *countingPlanner) Plan(context.Context, Selection) (Plan, error) {
 	c.calls.Add(1)
 	return okPlan(), nil
 }
+
+// startBlockedRun inicia uma execução que só termina quando o contexto é cancelado (cancelled fecha ao cancelar).
+func startBlockedRun(t *testing.T, script func(ctx context.Context, ch chan<- Event)) (*Model, chan struct{}) {
+	t.Helper()
+	cancelled := make(chan struct{})
+	r := &fakeRunner{script: func(ctx context.Context, _ Selection, ch chan<- Event) {
+		ch <- Event{Kind: EventItems, Items: []string{"Git"}}
+		if script != nil {
+			script(ctx, ch)
+		}
+		<-ctx.Done()
+		close(cancelled)
+	}}
+	m, _, _ := rootWithExec(t, &fakePlanner{plan: okPlan()}, r)
+	mkey(m, "space")
+	cmd := mkey(m, "enter")
+	m.Update(cmd().(tea.BatchMsg)[0]())
+	mkey(m, "s")
+	m.Update(waitEvent(m.events)())
+	if m.mode != modeRun {
+		t.Fatalf("a execução devia estar ativa (mode=%v)", m.mode)
+	}
+	return m, cancelled
+}
+
+func notCancelled(t *testing.T, c chan struct{}, why string) {
+	t.Helper()
+	select {
+	case <-c:
+		t.Fatalf("a execução foi cancelada: %s", why)
+	case <-time.After(150 * time.Millisecond):
+	}
+}
+
+// Lupa #72 (1): com a ajuda aberta e uma execução ativa, q fecha SÓ a ajuda (sem abrir "Interromper?"), e as teclas de
+// ação não respondem pergunta nenhuma nem mexem na execução.
+func TestAjudaComExecucaoAtivaQFechaSoAAjuda(t *testing.T) {
+	m, cancelled := startBlockedRun(t, nil)
+	mkey(m, "?")
+	if m.modal == modalNone {
+		t.Fatal("? devia abrir a ajuda")
+	}
+	mkey(m, "q")
+	if m.modal != modalNone || m.asking != askNone {
+		t.Fatalf("q fecha só a ajuda: modal=%v asking=%v", m.modal, m.asking)
+	}
+	mkey(m, "s") // sem pergunta aberta, s não pode cancelar nada por baixo
+	notCancelled(t, cancelled, "q fechou a ajuda e o s seguinte cancelou")
+	if m.mode != modeRun {
+		t.Fatalf("a execução segue: mode=%v", m.mode)
+	}
+}
+
+func TestAjudaAbertaTeclasDeAcaoNaoMexemNaExecucao(t *testing.T) {
+	m, cancelled := startBlockedRun(t, nil)
+	mkey(m, "?")
+	for _, k := range []string{"s", "S", "n", "y", "space", "v", "/", "u"} {
+		mkey(m, k)
+		if m.asking != askNone {
+			t.Fatalf("tecla %q com a ajuda aberta abriu pergunta", k)
+		}
+	}
+	notCancelled(t, cancelled, "teclas de ação com a ajuda aberta")
+	if m.modal == modalNone {
+		t.Error("as teclas de ação não fecham a ajuda (só ?, Esc, q e Enter)")
+	}
+}
+
+// Ctrl+C com a ajuda aberta durante a execução: a ajuda fecha e a pergunta "Interromper?" aparece VISÍVEL.
+func TestCtrlCComAjudaAbertaMostraAPerguntaVisivel(t *testing.T) {
+	m, cancelled := startBlockedRun(t, nil)
+	mkey(m, "?")
+	press(m, 'c', tea.ModCtrl, "")
+	if m.modal != modalNone || m.asking != askInterrupt {
+		t.Fatalf("a pergunta tem de estar visível: modal=%v asking=%v", m.modal, m.asking)
+	}
+	if !strings.Contains(m.render(), "Interromper?") {
+		t.Fatalf("a pergunta não está na tela:\n%s", m.render())
+	}
+	notCancelled(t, cancelled, "só abriu a pergunta")
+}
+
+// Pedido de reinício que chega com a ajuda aberta: a ajuda fecha e a pergunta aparece (nunca é respondida às cegas).
+func TestReinicioComAjudaAbertaFechaAAjudaEMostraAPergunta(t *testing.T) {
+	reply := make(chan bool, 1)
+	m, _ := startBlockedRun(t, func(_ context.Context, ch chan<- Event) {
+		ch <- Event{Kind: EventRebootPrompt, Prompt: "Reiniciar agora?", Reply: reply}
+	})
+	mkey(m, "?") // a ajuda abre ANTES de o pedido de reinício ser entregue
+	m.Update(waitEvent(m.events)())
+	if m.modal != modalNone || m.asking != askReboot {
+		t.Fatalf("o pedido de reinício fecha a ajuda e fica visível: modal=%v asking=%v", m.modal, m.asking)
+	}
+	if !strings.Contains(m.render(), "Reiniciar agora?") {
+		t.Fatalf("a pergunta não está na tela:\n%s", m.render())
+	}
+	select {
+	case v := <-reply:
+		t.Fatalf("respondeu sozinho: %v", v)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+// Lupa #72 (2): Enter SEM marcados não abre Revisão (a ajuda dizia o contrário).
+func TestEnterSemMarcadosNaoAbreRevisao(t *testing.T) {
+	r := &fakeRunner{script: scriptOK}
+	m, _, _ := rootWithExec(t, &fakePlanner{plan: okPlan()}, r)
+	cmd := mkey(m, "enter")
+	if m.mode != modeNav || m.review != nil || cmd != nil {
+		t.Fatalf("sem marcados, nada de Revisão: mode=%v review=%v", m.mode, m.review)
+	}
+	if !strings.Contains(m.notice, "marque ao menos um item") {
+		t.Errorf("aviso: %q", m.notice)
+	}
+}

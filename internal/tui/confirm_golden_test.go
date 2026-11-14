@@ -39,7 +39,7 @@ func TestGoldenConfirmAppsNativos(t *testing.T) {
 	for _, sz := range goldenSizes() {
 		be := &fakeNat{info: natSample(true), plan: NatPlan{ID: "p", Text: text, Pending: 3, IsAdmin: true}}
 		tab := natTab(t, be)
-		nkey(tab, "c", "r")
+		nkey(tab, "t", "r")
 		m := sized(Options{Version: "v0.1.0", Mono: true, NoMotion: true}, sz[0], sz[1], tab)
 		golden(t, fmt.Sprintf("confirm_nat_%dx%d", sz[0], sz[1]), m.render())
 	}
@@ -56,7 +56,7 @@ func TestConfirmNaAbaMantemATelaDaJanela(t *testing.T) {
 	if len(rows) != 24 {
 		t.Fatalf("%d linhas", len(rows))
 	}
-	if st := rows[len(rows)-2]; !strings.Contains(st, "Tab muda o botão · Enter ativa · s confirma · Esc cancela") || strings.Contains(st, "[s/N]") {
+	if st := rows[len(rows)-2]; !strings.Contains(st, "Confirmação aberta: nada muda até você confirmar.") || strings.Contains(st, "[s/N]") {
 		t.Errorf("status: %q", st)
 	}
 	if !strings.Contains(m.render(), SymMore+" mais") {

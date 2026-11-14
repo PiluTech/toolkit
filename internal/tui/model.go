@@ -73,6 +73,8 @@ type Model struct {
 	updFocus   int  // botão do modal de versão nova: 0 Fechar (padrão), 1 Atualizar
 	wantUpdate bool // o usuário escolheu Atualizar: o Run devolve ErrUpdateRequested
 	updScroll  int
+	helpScroll int // rolagem da ajuda "?"
+	helpMore   int // linhas da ajuda abaixo da dobra (régua)
 
 	// resultados de execuções por índice de aba (a faixa da aba de origem); origins são as abas que tinham marcados
 	results map[int]*Result
@@ -181,6 +183,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+		// Modal aberto (ajuda, versão nova): ele tem PRIORIDADE no despacho das teclas, antes da execução e das perguntas, e as
+		// consome sozinho (q só fecha a ajuda). Única exceção: Ctrl+C durante a execução fecha o modal e deixa a pergunta
+		// "Interromper?" aparecer VISÍVEL (uma pergunta nunca fica escondida atrás de um modal nem é respondida às cegas).
+		if m.modal != modalNone {
+			if msg.String() == "ctrl+c" && m.mode == modeRun {
+				m.modal = modalNone
+			} else {
+				next, cmd, _ := m.global(msg.String())
+				return next, cmd
+			}
+		}
 		// a seção que usa Enter e os números para si (Início) os recebe antes da Revisão e da troca de área, mas só na
 		// navegação normal: com Revisão, execução, modal ou pergunta aberta valem as regras da raiz.
 		if m.modal == modalNone && m.mode == modeNav && m.asking == askNone {
@@ -231,6 +244,18 @@ func (m *Model) global(k string) (tea.Model, tea.Cmd, bool) {
 		switch k {
 		case "esc", "?", "enter", "q":
 			m.modal = modalNone
+		case "up", "k":
+			m.helpScroll = max(m.helpScroll-1, 0)
+		case "down", "j":
+			m.helpScroll++
+		case "pgup":
+			m.helpScroll = max(m.helpScroll-max(m.h-8, 1), 0)
+		case "pgdown", "space", " ":
+			m.helpScroll += max(m.h-8, 1)
+		case "g", "home":
+			m.helpScroll = 0
+		case "G", "end":
+			m.helpScroll = 1 << 20 // helpBody limita ao fim
 		case "ctrl+c":
 			m.quit = true
 			return m, tea.Quit, true
@@ -242,7 +267,7 @@ func (m *Model) global(k string) (tea.Model, tea.Cmd, bool) {
 		m.quit = true
 		return m, tea.Quit, true
 	case "?":
-		m.modal = modalHelp
+		m.modal, m.helpScroll = modalHelp, 0
 		return m, nil, true
 	case "u":
 		if m.opts.Latest == "" {

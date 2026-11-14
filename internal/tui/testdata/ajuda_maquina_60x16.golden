@@ -1,0 +1,16 @@
+  0 Iníc  1 Inst [2 Máq › Diag] 3 Seg  4 Rede  5 Hist v0.1.0
+────────────────────────────────────────────────────────────
+ NESTA SEÇÃO: DIAGNÓSTICO
+ ↑↓        mover — move o cursor pela lista.
+ espaço    marcar — marca ou desmarca para a Revisão.
+ →         etapas — foco nas etapas da receita; ← ou Esc
+           volta à lista.
+ e         detalhes — liga e desliga os detalhes: o
+           relatório traz também a saída original de cada
+           etapa.
+ Enter     revisar — abre a Revisão dos itens marcados
+           (marque com espaço; sem marcados, só avisa); nada
+           roda antes do plano e do s.
+────────────────────────────────────────── ↓ mais 32 linhas
+ Ajuda
+ ↑↓ rolar  ?/Esc/q fechar

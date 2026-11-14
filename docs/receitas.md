@@ -192,8 +192,8 @@ steps:
 Uma etapa de diagnóstico pode ter `render: <nome>`: a saída crua do comando (JSON do PowerShell, `/proc/meminfo`,
 `system_profiler`...) passa por um renderizador de `internal/diagfmt` e o relatório mostra um **resumo** em pt-BR, ou em
 `en`/`es` por `TOOLKIT_LANG`, `LC_ALL`, `LC_MESSAGES` ou `LANG` (o primeiro valor não vazio decide; outro idioma cai em
-pt-BR). A saída original só aparece no **modo detalhes**: tecla `d` na aba Diagnóstico da TUI (a dica mostra
-`d detalhes ✓` quando ligado; vale para os diagnósticos marcados na próxima execução) ou `toolkit recipe run <id>
+pt-BR). A saída original só aparece no **modo detalhes**: tecla `e` na aba Diagnóstico da TUI (o `d` é "desfazer" em toda a TUI; a dica mostra
+`e detalhes ✓` quando ligado; vale para os diagnósticos marcados na próxima execução) ou `toolkit recipe run <id>
 --detalhes`; ela vem depois do resumo, sob `-- Detalhes (saída original) --`. **Nada é mascarado:** o resumo, os detalhes e a saída de uma
 falha do comando mostram o que o sistema informou, como veio (o toolkit é uma ferramenta de análise). Se o renderizador não entender a saída (formato novo do sistema), a etapa NÃO falha, mas a
 saída crua NÃO aparece por padrão: só o aviso "não deu para resumir esta saída; use --detalhes, ou a tecla d na TUI, para ver a original". O `render`

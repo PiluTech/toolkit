@@ -119,6 +119,15 @@ func (t *InicioTab) Keys() []KeyHint {
 	return []KeyHint{{"↑↓", "mover"}, {"Enter", "abrir"}, {"1-" + itoa(t.digitLimit()), "ir direto"}}
 }
 
+// HelpKeys implementa SectionHelper. Aqui os números escolhem o objetivo (não a área): o Início os usa para si.
+func (t *InicioTab) HelpKeys() []KeyDef {
+	return []KeyDef{
+		navDef("↑↓", "mover", "escolhe o objetivo."),
+		navDef("Enter", "abrir", "abre a área e a seção do objetivo."),
+		navDef("1-"+itoa(t.digitLimit()), "ir direto", "abre o objetivo do número (aqui os números escolhem o objetivo, não a área)."),
+	}
+}
+
 // Status diz para onde o Enter leva.
 func (t *InicioTab) Status() string {
 	if len(t.items) == 0 {

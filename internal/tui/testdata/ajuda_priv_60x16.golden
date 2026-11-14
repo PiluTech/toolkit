@@ -1,0 +1,16 @@
+  0 Iníc  1 Inst  2 Máq [3 Seg › Priv] 4 Rede  5 Hist v0.1.0
+────────────────────────────────────────────────────────────
+ NESTA SEÇÃO: PRIVACIDADE
+ ↑↓        perfil — escolhe o perfil de privacidade (do mais
+           leve ao mais forte).
+ p         ver plano — mostra o plano do perfil: o que muda,
+           sem alterar nada.
+ a         aplicar… — aplica o perfil depois da confirmação;
+           o backup e como desfazer aparecem antes.
+ d         desfazer… — desfaz o que o toolkit aplicou, a
+           partir do backup, depois da confirmação.
+ m         só usuário — liga e desliga "só usuário": aplica
+           só ao usuário atual, sem tocar na máquina.
+────────────────────────────────────────── ↓ mais 32 linhas
+ Ajuda
+ ↑↓ rolar  ?/Esc/q fechar

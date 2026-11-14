@@ -241,7 +241,7 @@ func TestPrivacyTabAplicarPedeConfirmacao(t *testing.T) {
 	be := &fakePriv{info: privSample(true), plan: PrivPlan{Text: planText, Pending: 1, IsAdmin: true}, applyRes: PrivResult{Applied: 1, BackupPath: `C:\b.json`}}
 	tab := privTab(t, be)
 	pkey(tab, "down", "a")
-	if v := tab.View(100, 24); !tab.Capturing() || !strings.Contains(tab.Status(), "s confirma") || !strings.Contains(strings.ToLower(v), "recomendado") || !strings.Contains(v, ">[ Cancelar ]<") {
+	if v := tab.View(100, 24); !tab.Capturing() || !strings.Contains(tab.Status(), "Confirmação aberta") || !strings.Contains(strings.ToLower(v), "recomendado") || !strings.Contains(v, ">[ Cancelar ]<") {
 		t.Fatalf("confirmação: capturing=%v status=%q\n%s", tab.Capturing(), tab.Status(), tab.View(100, 24))
 	}
 	if len(be.applies) != 0 {

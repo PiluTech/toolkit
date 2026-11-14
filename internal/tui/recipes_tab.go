@@ -55,7 +55,7 @@ type RecipesBackend interface {
 type RecipeMark struct {
 	ID, Name   string
 	Diagnostic bool
-	// Details: no Diagnóstico, mostra também a saída original (crua) de cada etapa (tecla d).
+	// Details: no Diagnóstico, mostra também a saída original (crua) de cada etapa (tecla e).
 	Details bool
 }
 
@@ -280,7 +280,7 @@ func (t *RecipesTab) key(msg tea.KeyPressMsg) tea.Cmd {
 			t.filter = ""
 			t.clamp()
 		}
-	case "d":
+	case "e":
 		if t.diagnostic { // detalhes: o relatório também traz a saída original (crua) de cada etapa
 			t.details = !t.details
 		}
@@ -349,15 +349,26 @@ func (t *RecipesTab) Keys() []KeyHint {
 	if t.diagnostic {
 		// a lista de diagnósticos é curta: a dica de busca ("/" continua valendo) cede o lugar à de detalhes, para
 		// "Enter revisar" caber em 80 colunas
-		label := "detalhes"
-		if t.details {
-			label = "detalhes ✓"
-		}
-		keys = append(keys, KeyHint{"d", label})
+		keys = append(keys, act("e").on(t.details).Hint())
 	} else {
 		keys = append(keys, KeyHint{"/", "buscar"})
 	}
 	return append(keys, KeyHint{"Enter", "revisar"})
+}
+
+// HelpKeys implementa SectionHelper: as teclas da seção, uma frase por tecla (legenda única em keys.go).
+func (t *RecipesTab) HelpKeys() []KeyDef {
+	out := []KeyDef{
+		navDef("↑↓", "mover", "move o cursor pela lista."),
+		act("espaço").says("marca ou desmarca para a Revisão."),
+		navDef("→", "etapas", "foco nas etapas da receita; ← ou Esc volta à lista."),
+	}
+	if t.diagnostic {
+		out = append(out, act("e").says("liga e desliga os detalhes: o relatório traz também a saída original de cada etapa."))
+	} else {
+		out = append(out, navDef("/", "buscar", "filtra a lista; Enter fixa, Esc limpa."))
+	}
+	return append(out, navDef("Enter", "revisar", "abre a Revisão dos itens marcados (marque com espaço; sem marcados, só avisa); nada roda antes do plano e do s."))
 }
 
 // Status implementa Tab.

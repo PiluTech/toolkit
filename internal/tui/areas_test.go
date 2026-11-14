@@ -287,8 +287,8 @@ func TestAreaSingleSectionAreaShowsTheAreaNameOnLine2(t *testing.T) {
 func TestAreaHelpListsAreas(t *testing.T) {
 	m := sizedAreas(Options{Mono: true}, 80, 30)
 	press(m, '?', 0, "?")
-	out := ansi.Strip(m.render())
-	for _, want := range []string{"0 a 5", "Início, Instalar, Máquina, Segurança, Rede, Histórico", "Tab Shift+Tab", "seções"} {
+	out := strings.Join(strings.Fields(ansi.Strip(m.render())), " ")
+	for _, want := range []string{"0-5", "Início, Instalar, Máquina, Segurança, Rede, Histórico", "Shift+Tab", "seção"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("ajuda sem %q:\n%s", want, out)
 		}

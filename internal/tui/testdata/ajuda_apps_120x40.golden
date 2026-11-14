@@ -1,0 +1,40 @@
+ toolkit  0 Início [1 Instalar] 2 Máquina  3 Segurança  4 Rede  5 Histórico                                      v0.1.0
+ Instalar › [Apps]  Receitas                                                                                 admin: não
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ NESTA SEÇÃO: APPS
+ ↑↓        mover — move o cursor pela lista.
+ espaço    marcar — marca ou desmarca o app para a Revisão.
+ /         buscar — filtra por nome, id ou categoria; Enter fixa, Esc limpa.
+ Enter     revisar — abre a Revisão dos apps marcados (marque com espaço; sem marcados, só avisa); nada roda antes do
+           plano e do s.
+ v         versões — abre a lista de versões (apps marcados com ▾).
+
+ EM QUALQUER LUGAR
+ 0-5       área: Início, Instalar, Máquina, Segurança, Rede, Histórico.
+ Tab       próxima seção da área; Shift+Tab, a anterior.
+ ↑↓ j k    move o cursor ou rola.
+ g G       início ou fim; PgUp e PgDn, uma página.
+ ← → h l   foco nas etapas ou volta à lista.
+ /         busca onde há lista; Esc limpa.
+ Enter     abre, revisa ou aciona o botão em foco.
+ Esc       volta um nível ou cancela.
+ x         fecha a faixa de resultado.
+ ?         esta ajuda.
+ q         sai (Ctrl+C também); na execução pergunta antes.
+
+ COMO LER A TELA
+ ✓ feito ou instalado.  ! atenção ou parcial.  ✗ falhou.  i informação.  ○ pendente.  - pulado. Todo estado tem símbolo
+  e palavra: a cor nunca é a única pista.
+ Faixa de resultado: aparece logo abaixo do cabeçalho com o que foi feito e como desfazer; fica até você fechá-la com x.
+ ↓ mais N linhas: há mais texto abaixo; role com ↓ ou PgDn.
+ admin: sim ou não, na linha das seções: se este terminal é administrador. Ação que exige administrador fica
+  indisponível sem ele; o toolkit nunca pede senha nem eleva sozinho.
+ Confirmação: o botão em foco aparece como >[ ]<, o foco começa em Cancelar, só Enter no botão ou s confirmam e Esc
+  cancela.
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Ajuda
+ ↑↓ rolar  ?/Esc/q fechar

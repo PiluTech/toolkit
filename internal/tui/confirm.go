@@ -74,18 +74,19 @@ func (c *Confirm) canAccept() bool {
 	return false
 }
 
-// Hint é a dica curta de teclas da linha de status durante a confirmação.
+// Hint é o texto da linha de estado durante a confirmação. As teclas ficam SÓ na barra de teclas (keyHints): a linha
+// de estado diz o estado, sem repetir a mesma dica.
 func (c *Confirm) Hint() string {
 	if c.canAccept() {
-		return "Tab muda o botão · Enter ativa · s confirma · Esc cancela"
+		return "Confirmação aberta: nada muda até você confirmar."
 	}
-	return "Enter ou Esc cancelam · ↑↓ rolam o plano"
+	return "Confirmação aberta: não dá para confirmar agora, só cancelar."
 }
 
 // keyHints são os atalhos da barra de teclas durante a confirmação ("s" só aparece quando confirmar é possível).
 func (c *Confirm) keyHints() []KeyHint {
 	if c.canAccept() {
-		return []KeyHint{{"Tab", "botão"}, {"Enter", "ativa"}, {"s", "confirma"}, {"Esc", "cancela"}, {"↑↓", "rolar"}}
+		return []KeyHint{{"Tab", "botão"}, {"Enter", "ativa"}, act("s").as("confirma").Hint(), {"Esc", "cancela"}, {"↑↓", "rolar"}}
 	}
 	return []KeyHint{{"Enter", "cancela"}, {"Esc", "cancela"}, {"↑↓", "rolar"}}
 }

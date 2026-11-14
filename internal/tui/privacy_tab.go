@@ -502,11 +502,18 @@ func (t *PrivacyTab) Keys() []KeyHint {
 	case t.view:
 		return []KeyHint{{"↑↓", "rolar"}, {"Esc", "voltar"}}
 	}
-	only := "só usuário"
-	if t.onlyUser {
-		only += " ✓"
+	return []KeyHint{{"↑↓", "perfil"}, act("p").Hint(), act("a").Hint(), act("d").Hint(), act("m").as("só usuário").on(t.onlyUser).Hint()}
+}
+
+// HelpKeys implementa SectionHelper: as teclas da seção, uma frase por tecla (legenda única em keys.go).
+func (t *PrivacyTab) HelpKeys() []KeyDef {
+	return []KeyDef{
+		navDef("↑↓", "perfil", "escolhe o perfil de privacidade (do mais leve ao mais forte)."),
+		act("p").says("mostra o plano do perfil: o que muda, sem alterar nada."),
+		act("a").says("aplica o perfil depois da confirmação; o backup e como desfazer aparecem antes."),
+		act("d").says("desfaz o que o toolkit aplicou, a partir do backup, depois da confirmação."),
+		act("m").as("só usuário").says("liga e desliga \"só usuário\": aplica só ao usuário atual, sem tocar na máquina."),
 	}
-	return []KeyHint{{"↑↓", "perfil"}, {"p", "ver plano"}, {"a", "aplicar"}, {"d", "desfazer"}, {"m", only}}
 }
 
 // Status implementa Tab: a dica de teclas da confirmação, o aviso ou o resultado.

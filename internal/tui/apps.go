@@ -606,7 +606,18 @@ func (t *AppsTab) Keys() []KeyHint {
 	case modeVersions:
 		return []KeyHint{{"↑↓", "mover"}, {"Enter", "escolher"}, {"Esc", "cancelar"}}
 	}
-	return []KeyHint{{"↑↓", "mover"}, {"espaço", "marcar"}, {"/", "buscar"}, {"Enter", "revisar"}, {"v", "versões"}}
+	return []KeyHint{{"↑↓", "mover"}, {"espaço", "marcar"}, {"/", "buscar"}, {"Enter", "revisar"}, act("v").Hint()}
+}
+
+// HelpKeys implementa SectionHelper: as teclas da seção, uma frase por tecla (legenda única em keys.go).
+func (t *AppsTab) HelpKeys() []KeyDef {
+	return []KeyDef{
+		navDef("↑↓", "mover", "move o cursor pela lista."),
+		act("espaço").says("marca ou desmarca o app para a Revisão."),
+		navDef("/", "buscar", "filtra por nome, id ou categoria; Enter fixa, Esc limpa."),
+		navDef("Enter", "revisar", "abre a Revisão dos apps marcados (marque com espaço; sem marcados, só avisa); nada roda antes do plano e do s."),
+		act("v").says("abre a lista de versões (apps marcados com ▾)."),
+	}
 }
 
 // Status implementa Tab: o item sob o cursor (id, nome completo, gerenciadores) ou o aviso do momento.

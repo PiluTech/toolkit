@@ -277,7 +277,16 @@ func (t *LogTab) focusLog() bool { return false }
 
 // Keys implementa Tab.
 func (t *LogTab) Keys() []KeyHint {
-	return []KeyHint{{"↑↓", "itens"}, {"PgUp/PgDn", "rolar o log"}, {"f", "seguir o fim"}}
+	return []KeyHint{{"↑↓", "itens"}, {"PgUp/PgDn", "rolar o log"}, act("f").Hint()}
+}
+
+// HelpKeys implementa SectionHelper: as teclas da seção, uma frase por tecla (legenda única em keys.go).
+func (t *LogTab) HelpKeys() []KeyDef {
+	return []KeyDef{
+		navDef("↑↓", "itens", "escolhe o item cujo log aparece."),
+		navDef("PgUp/PgDn", "rolar o log", "rola o log do item (rolar para cima desliga o seguir o fim)."),
+		act("f").says("segue o fim do log ao vivo; tecle de novo para parar."),
+	}
 }
 
 // Status implementa Tab: a pergunta pendente, o aviso de log, o resumo ou o caminho do log.

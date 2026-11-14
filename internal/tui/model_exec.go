@@ -186,6 +186,9 @@ func (m *Model) onRunEvent(ev Event) tea.Cmd {
 	if l != nil {
 		switch ev.Kind {
 		case EventRebootPrompt:
+			if m.modal != modalNone { // a ajuda (ou outro modal) fecha: a pergunta nunca fica escondida atrás dele
+				m.modal = modalNone
+			}
 			if m.asking != askNone { // outro diálogo aberto: este espera a vez
 				m.pending = &rebootAsk{prompt: ev.Prompt, reply: ev.Reply}
 			} else {
