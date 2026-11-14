@@ -1,0 +1,24 @@
+ toolkit  [1 Análise]                                                    v0.1.0
+────────────────────────────────────────────────────────────────────────────────
+ ✓ feito  IP público: 203.0.113.7 (consultado em ip.example.org)     [x] fechar
+   É o endereço que os sites veem. O toolkit não o guardou.
+   O resumo abaixo já cruza o resultado com as portas e o firewall.
+────────────────────────────────────────────────────────────────────────────────
+ Análise de rede (Linux)
+
+ Resultado: 3 alta(s), 1 média(s), 1 baixa(s).
+
+ ✗ alta: Rede Wi-Fi aberta (sem senha) (REDE-FAKE) — qualquer pessoa por perto
+   lê o que não estiver criptografado
+     O que fazer: Evite dados sensíveis, use uma VPN ou prefira outra rede.
+ ✗ alta: Firewall desligado — nenhum firewall lido está ativo
+     O que fazer: Ligue o firewall nas configurações de segurança do sistema (o
+   toolkit não o liga).
+ ✗ alta: Porta 23 (Telnet) aceita conexões de fora desta máquina — 0.0.0.0:23
+   (telnetd) — o firewall está desligado; se a internet alcança isto depende do
+   roteador, que o toolkit não vê
+     O que fazer: Feche o serviço ou restrinja-o ao 127.0.0.1 (o toolkit não
+   fecha portas).
+────────────────────────────────────────────────────────────── ↓ mais 53 linhas
+ Rede — dados como o sistema informou; o e w consultam só sob pedido
+ ↑↓ rolar  c ler de novo  o IP público…  w portal cativo…  ? ajuda  q sair

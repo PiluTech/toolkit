@@ -23,6 +23,9 @@ type RedeDeps struct {
 	Now     func() time.Time
 	// IsAdmin diz se o processo roda como administrador (Windows) ou root (Unix). Nil = a mesma detecção do diagnóstico.
 	IsAdmin func(ctx context.Context, goos string, r exec.Runner) bool
+	// Fetcher é o cliente HTTP das consultas de IP público e de portal cativo (nil = o cliente real). Só é usado depois da
+	// confirmação da pessoa e com a URL que ela informou; os testes injetam um falso.
+	Fetcher rede.Fetcher
 }
 
 // redeTimeout é o prazo da leitura da rede (CLI e TUI).
@@ -68,6 +71,7 @@ func newRedeCmd(deps Deps) *cobra.Command {
 	c.Flags().BoolVar(&f.full, "completo", false, msg.FlagRedeFull)
 	c.Flags().BoolVar(&f.json, "json", false, msg.FlagRedeJSON)
 	c.Flags().StringVar(&f.report, "relatorio", "", msg.FlagRedeReport)
+	c.AddCommand(newRedeQueryCmd(deps, rede.KindIP), newRedeQueryCmd(deps, rede.KindPortal))
 	return c
 }
 

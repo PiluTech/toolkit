@@ -186,7 +186,11 @@ type Report struct {
 	Firewalls     []Firewall
 	// IPv6Privacy: o IPv6 usa endereços temporários (privacy extensions). Unknown = não lido.
 	IPv6Privacy Tri
-	Skipped     []Skipped
+	// PublicIP e Portal só são preenchidos pelas funções de publico.go, DEPOIS da confirmação da pessoa (Collect nunca
+	// acessa a internet). Nil = não consultado.
+	PublicIP *PublicIPResult
+	Portal   *PortalResult
+	Skipped  []Skipped
 }
 
 // Severity é a gravidade de um achado (as 5 do plano; a faixa ok/atenção/problema é só de exibição).
