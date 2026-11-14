@@ -63,6 +63,6 @@ func TestDiagMemoriaRealOutputIsUnderstoodByTheRenderers(t *testing.T) {
 			t.Errorf("%s: o renderizador %s não entendeu a saída real: %v\n--- saída crua, sem identificadores (até 2000 bytes) ---\n%.2000s", st.ID, st.Render, rerr, diagfmt.Redact(string(out)))
 			continue
 		}
-		t.Logf("%s:\n%s", st.ID, summary)
+		t.Logf("%s:\n%s", st.ID, diagfmt.Redact(summary))
 	}
 }

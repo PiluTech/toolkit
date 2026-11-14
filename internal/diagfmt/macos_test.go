@@ -219,3 +219,41 @@ func TestMacDisksIdentidadePeloNomeBSD(t *testing.T) {
 }
 
 func macDisksFor(raw string) (string, error) { return Render("macos-disks", raw, PT) }
+
+// Lupa #56 (rodada 3): a identidade de um disco só do Storage é o disco PAI do volume (bsd_name), nunca modelo+protocolo.
+func TestMacDisksStorageSoIdentidadePeloDiscoPai(t *testing.T) {
+	vol := func(bsd string) string {
+		return `{"_name":"V","bsd_name":"` + bsd + `","physical_drive":{"device_name":"Elements 2TB","medium_type":"hdd","protocol":"USB","smart_status":"Not Supported"}}`
+	}
+	one := func(vols ...string) string {
+		got, err := macDisksFor(`{"SPStorageDataType":[` + strings.Join(vols, ",") + `]}`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	// dois externos IGUAIS (disk6 e disk7): dois discos
+	if got := one(vol("disk6s2"), vol("disk7s2")); strings.Count(got, "Disco: Elements 2TB") != 2 {
+		t.Errorf("dois externos iguais são dois discos:\n%s", got)
+	}
+	// controle: dois volumes do MESMO disco (disk6s1 e disk6s2, e o próprio disk6): um disco
+	if got := one(vol("disk6s1"), vol("disk6s2"), vol("disk6")); strings.Count(got, "Disco: Elements 2TB") != 1 {
+		t.Errorf("volumes do mesmo disco viram um:\n%s", got)
+	}
+	// misturado: disk6 (dois volumes) + disk7: dois
+	if got := one(vol("disk6s1"), vol("disk7s1"), vol("disk6s2")); strings.Count(got, "Disco: Elements 2TB") != 2 {
+		t.Errorf("disk6 (2 volumes) + disk7 = dois:\n%s", got)
+	}
+	// sem identidade (bsd_name ausente ou fora do formato) nunca funde por modelo/protocolo
+	if got := one(vol(""), vol("")); strings.Count(got, "Disco: Elements 2TB") != 2 {
+		t.Errorf("sem bsd_name não há fusão:\n%s", got)
+	}
+	if got := one(vol("xyz"), vol("xyz")); strings.Count(got, "Disco: Elements 2TB") != 2 {
+		t.Errorf("bsd_name fora do formato não funde:\n%s", got)
+	}
+	for in, want := range map[string]string{"disk6s2": "disk6", "disk3s1s1": "disk3", "disk0": "disk0", "disk10s4": "disk10", "": "", "xyz": "", "disk": "", "disk6x": ""} {
+		if got := macParentBSD(in); got != want {
+			t.Errorf("macParentBSD(%q) = %q, quer %q", in, got, want)
+		}
+	}
+}

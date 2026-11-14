@@ -197,7 +197,12 @@ pt-BR). A saída original só aparece no **modo detalhes**: tecla `d` na aba Dia
 --detalhes`; ela vem depois do resumo, sob `-- Detalhes (saída original, sem os identificadores da máquina) --`. **Identificadores nunca
 saem:** antes de qualquer saída da etapa (detalhes, falha do comando e o log do smoke de teste) o toolkit remove número
 de série, UUID/GUID, UDID, ECID, WWN, IMEI, endereço MAC e afins (`diagfmt.Redact`: o valor vira `[***]`, a chave fica),
-inclusive em JSON truncado. Se o renderizador não entender a saída (formato novo do sistema), a etapa NÃO falha, mas a
+inclusive em JSON truncado. JSON válido é lido de verdade e redigido por chave (aspas escapadas, unicode, valores de qualquer
+tipo); o resto (truncado, tabela do `Format-Table` ou de colunas alinhadas, linhas `Chave: valor`) passa por um fallback
+conservador por padrões, e UUIDs e MACs soltos somem sempre. O RESUMO também é redigido no último ponto antes da saída (um
+nome de disco com UUID ou MAC não reaparece), com e sem detalhes e no smoke de teste. As consultas do Windows nem pedem
+`SerialNumber` nem UUID (os campos são escolhidos um a um no `Select-Object`); o `system_profiler` do macOS traz os
+seus de qualquer jeito, e por isso a redação. Se o renderizador não entender a saída (formato novo do sistema), a etapa NÃO falha, mas a
 saída crua NÃO aparece por padrão: só o aviso "não deu para resumir esta saída; use --detalhes ... para ver a original
 sem os identificadores da máquina". O `render`
 só vale em etapa `run` de receita `kind: diagnostic`; um nome desconhecido é erro de carga. Renderizadores:
@@ -219,7 +224,9 @@ provado de 16 dígitos, código de 4 mais 12 zeros, é descartado; `8010` nunca 
 (DSP0134, Type 17: 20 é DDR2 FB-DIMM, 21 a 23 são reservados) e, só quando ele vem 0, do `MemoryType` legado do WMI (20 é DDR):
 são tabelas diferentes e não se misturam. No macOS o disco é identificado pelo nome BSD (`disk0`): a mesma identidade em
 duas seções do `system_profiler` vira um disco (vale o pior status SMART) e dois discos do mesmo modelo continuam dois;
-a visão de volumes (Storage) só completa o disco quando o modelo é único. As receitas continuam só de leitura e sem
+a visão de volumes (Storage) só completa o disco quando o modelo é único. Disco que só o Storage conhece (externo) é
+identificado pelo disco PAI do volume (`disk6s1` e `disk6s2` são do `disk6`; `disk6` e `disk7` são dois): modelo e
+protocolo nunca fundem discos, e sem `bsd_name` o volume fica sozinho. As receitas continuam só de leitura e sem
 administrador. Cada etapa do Log da TUI sai como `✓ Memória` (no lugar de `etapa modulos: done`).
 
 Testes: `internal/diagfmt/*_test.go` (saídas falsas: código JEDEC desconhecido, slot vazio, 2+ módulos, formatos truncados,

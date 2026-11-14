@@ -310,7 +310,8 @@ func (e *Engine) render(st Step, raw string) string {
 		}
 		return clean(notice + "\n" + diagfmt.Redact(raw))
 	}
-	summary = clean(summary)
+	// o resumo sai da entrada original: um nome de disco com UUID ou MAC não pode reaparecer nele
+	summary = diagfmt.Redact(clean(summary))
 	if !e.Details {
 		return summary
 	}

@@ -37,3 +37,53 @@ func TestRedactKeepsEverythingElse(t *testing.T) {
 		t.Error("vazio")
 	}
 }
+
+// Lupa #56 (rodada 3): a tabela REAL do Format-Table (cabeçalho, traços, dados), tabela de colunas do lsblk, JSON com
+// aspas escapadas e valores não alfanuméricos.
+func TestRedactRealTablesAndEscapedJSON(t *testing.T) {
+	secrets := []string{"6B8A-1234-ABCD", "WD-WXB1A2345678", `SN"12\34`, "SN/é☃-9", "0123 4567"}
+	cases := map[string]string{
+		"format-table":             "FriendlyName                SerialNumber   MediaType HealthStatus\n------------                ------------   --------- ------------\nVirtual_Disk NVME Premium   6B8A-1234-ABCD SSD       Healthy\nWDC WD10EZEX                WD-WXB1A2345678 HDD      Healthy\n",
+		"lsblk colunas":            "NAME SIZE SERIAL         MODEL\nsda  1T   WD-WXB1A2345678 WDC\nnvme0n1 500G 6B8A-1234-ABCD APPLE\n",
+		"json com escapes":         `{"disks":[{"_name":"X","device_serial":"SN\"12\\34","note":"ok"},{"serial_number":"SN/é☃-9"},{"wwn":"0123 4567"}]}`,
+		"json truncado com escape": `{"disks":[{"device_serial":"SN\"12\\34`,
+	}
+	for name, in := range cases {
+		out := Redact(in)
+		for _, s := range secrets {
+			if strings.Contains(out, s) {
+				t.Errorf("%s: %q sobrou:\n%s", name, s, out)
+			}
+		}
+	}
+	// o que não é identificador sobrevive, e as colunas seguintes continuam no lugar
+	out := Redact(cases["format-table"])
+	for _, want := range []string{"FriendlyName", "SerialNumber", "Virtual_Disk NVME Premium", "WDC WD10EZEX", "SSD", "HDD", "Healthy", "[***]"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("tabela: faltou %q:\n%s", want, out)
+		}
+	}
+	out = Redact(cases["json com escapes"])
+	if !strings.Contains(out, `"_name":"X"`) || !strings.Contains(out, `"note":"ok"`) {
+		t.Errorf("json válido: o resto fica:\n%s", out)
+	}
+	out = Redact(cases["lsblk colunas"])
+	if !strings.Contains(out, "sda") || !strings.Contains(out, "WDC") || !strings.Contains(out, "APPLE") {
+		t.Errorf("lsblk: nome e modelo ficam:\n%s", out)
+	}
+}
+
+func TestRedactValidJSONIsRedactedByKeyAtAnyDepth(t *testing.T) {
+	in := `{"a":{"b":[{"c":{"hardware_uuid":"X-1","list":["a","b"],"n":42}}]},"serial":12345,"flag":true,"nome":"Disco 4C4C4544-0042-5710-8039-B2C04F485932"}`
+	out := Redact(in)
+	for _, bad := range []string{"X-1", "12345", "4C4C4544"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("%q sobrou: %s", bad, out)
+		}
+	}
+	for _, ok := range []string{`"n":42`, `"flag":true`, `"list":["a","b"]`} {
+		if !strings.Contains(out, ok) {
+			t.Errorf("faltou %s: %s", ok, out)
+		}
+	}
+}

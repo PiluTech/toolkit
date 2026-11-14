@@ -195,6 +195,17 @@ func macSmartRank(s string) int {
 	return 1
 }
 
+var macBSDRe = regexp.MustCompile(`^(disk\d+)(?:s\d+)*$`)
+
+// macParentBSD devolve o disco inteiro de um nome BSD de volume ("disk6s2" -> "disk6"); vazio se o nome não tem a
+// forma diskN[sM...].
+func macParentBSD(bsd string) string {
+	if m := macBSDRe.FindStringSubmatch(bsd); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
 // macMerge completa dst com o que src sabe do mesmo disco.
 func macMerge(dst *macDisk, src macDisk) {
 	if dst.name == "" {
@@ -313,14 +324,21 @@ func macDisks(raw string, l Lang) (string, error) {
 		case len(cands) > 1:
 			// ambíguo: ignora
 		default:
-			k := d.name + "|" + macStr(pd["protocol"])
-			if ex := storageKey[k]; ex != nil {
-				macMerge(ex, d)
-			} else {
-				p := d
-				storageKey[k] = &p
-				storageOnly = append(storageOnly, &p)
+			// Identidade = disco PAI do volume (disk6s2 e disk6s1 são do disk6). Modelo e protocolo NUNCA fundem: dois
+			// discos externos iguais (disk6 e disk7) são dois. Sem bsd_name não há identidade e o volume fica sozinho.
+			parent := macParentBSD(macStr(vo["bsd_name"]))
+			d.bsd = parent
+			if parent != "" {
+				if ex := storageKey[parent]; ex != nil {
+					macMerge(ex, d)
+					break
+				}
 			}
+			p := d
+			if parent != "" {
+				storageKey[parent] = &p
+			}
+			storageOnly = append(storageOnly, &p)
 		}
 	}
 	disks := make([]macDisk, 0, len(prim)+len(storageOnly))

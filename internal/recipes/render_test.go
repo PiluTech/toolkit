@@ -153,3 +153,24 @@ func TestEngineRenderNaoRodaQuandoAEtapaFalha(t *testing.T) {
 		t.Fatalf("etapa que falha não é resumida: %v %+v", err, rep.Steps[0])
 	}
 }
+
+// Lupa #56 (rodada 3): o RESUMO também sai redigido (ele nasce da entrada original): um FriendlyName com UUID ou MAC
+// não reaparece, com e sem detalhes.
+func TestEngineResumoTambemSaiSemIdentificadores(t *testing.T) {
+	const uuid, mac = "4C4C4544-0042-5710-8039-B2C04F485932", "aa:bb:cc:dd:ee:ff"
+	raw := `[{"FriendlyName":"Disco ` + uuid + ` ` + mac + `","MediaType":"SSD","HealthStatus":"Healthy","OperationalStatus":"OK","Size":256060514304,"BusType":"NVMe"}]`
+	src := strings.Replace(diagRender, "t-resumo", "windows-disks", 1)
+	for _, details := range []bool{false, true} {
+		e := newEnv(t, linuxInfo())
+		e.eng.Getenv, e.eng.Details = envMap(nil), details
+		e.run.On(sh("le-memoria"), exectest.Exit(0, raw))
+		rep, err := e.eng.Run(context.Background(), e.recipe(src), RunOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := rep.Steps[0].Output
+		if strings.Contains(out, uuid) || strings.Contains(out, mac) || !strings.Contains(out, "Disco: Disco [***] [***]") || !strings.Contains(out, "256 GB") {
+			t.Errorf("detalhes=%v: o resumo e os detalhes saem sem UUID/MAC:\n%s", details, out)
+		}
+	}
+}
