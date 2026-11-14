@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -513,5 +515,41 @@ func TestAjudaGoldens(t *testing.T) {
 			rootKey(m, "?")
 			golden(t, fmt.Sprintf("ajuda_%s_%dx%d", c.name, sz[0], sz[1]), m.render())
 		}
+	}
+}
+
+// Fora do Windows (e carregando ou com erro) a barra não oferece teclas de ação: a ajuda "?" não pode listá-las.
+func TestAjudaSemAcoesQuandoASecaoNaoAgeFora_NativosEPrivacidade(t *testing.T) {
+	th := Theme{Mono: true, NoMotion: true}
+	cases := []struct {
+		name string
+		tab  func() Tab
+	}{
+		{"nativos fora do Windows", func() Tab { return natTab(t, &fakeNat{info: NatInfo{Supported: false, OS: "darwin"}}) }},
+		{"privacidade fora do Windows", func() Tab { return privTab(t, &fakePriv{info: PrivInfo{Supported: false, OS: "darwin"}}) }},
+		{"nativos com erro", func() Tab { return natTab(t, &fakeNat{loadErr: errors.New("falhou")}) }},
+		{"privacidade com erro", func() Tab { return privTab(t, &fakePriv{loadErr: errors.New("falhou")}) }},
+		{"nativos carregando", func() Tab { return NewNativeAppsTab(context.Background(), &fakeNat{info: natSample(true)}, th) }},
+		{"privacidade carregando", func() Tab { return NewPrivacyTab(context.Background(), &fakePriv{info: privSample(true)}, th) }},
+	}
+	for _, c := range cases {
+		tab := c.tab()
+		if len(tab.Keys()) != 0 {
+			t.Fatalf("%s: a barra devia estar sem teclas de ação: %v", c.name, tab.Keys())
+		}
+		m := NewWithAreas(Options{Mono: true, NoMotion: true}, []AreaDef{{Key: "x", Title: "X", Short: "X", Tabs: []Tab{tab}}})
+		m.Update(tea.WindowSizeMsg{Width: 100, Height: 60})
+		help := strings.Join(m.helpLines(), "\n")
+		help, _, _ = strings.Cut(help, "EM QUALQUER LUGAR") // só o bloco "Nesta seção"
+		for _, bad := range []string{"remover", "aplicar", "desfazer", "ver plano", "como reinstalar", "marcar", "básico"} {
+			if strings.Contains(help, bad) {
+				t.Errorf("%s: a ajuda lista %q, que a barra não oferece:\n%s", c.name, bad, help)
+			}
+		}
+	}
+	// a explicação curta fora do Windows
+	tab := natTab(t, &fakeNat{info: NatInfo{Supported: false, OS: "darwin"}})
+	if h := helpKeysOf(tab); len(h) != 1 || !strings.Contains(h[0].Help, "só existe no Windows; aqui não há ações") {
+		t.Errorf("explicação curta ausente: %+v", h)
 	}
 }
