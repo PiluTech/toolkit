@@ -303,13 +303,19 @@ func (e *Engine) render(st Step, raw string) string {
 	l := diagfmt.LangFromEnv(get)
 	summary, err := diagfmt.Render(st.Render, raw, l)
 	if err != nil || strings.TrimSpace(summary) == "" {
-		return clean(diagfmt.T(l, "(não deu para resumir esta saída; mostrando a original)", "(could not summarize this output; showing the original)", "(no se pudo resumir esta salida; se muestra la original)") + "\n" + raw)
+		// Sem --detalhes a saída crua NUNCA aparece (nem no fallback): ela pode trazer número de série e UUIDs.
+		notice := diagfmt.T(l, "(não deu para resumir esta saída; use --detalhes, ou a tecla d na TUI, para ver a original sem os identificadores da máquina)", "(could not summarize this output; use --detalhes, or the d key in the TUI, to see the original without the machine identifiers)", "(no se pudo resumir esta salida; use --detalhes, o la tecla d en la TUI, para ver la original sin los identificadores del equipo)")
+		if !e.Details {
+			return notice
+		}
+		return clean(notice + "\n" + diagfmt.Redact(raw))
 	}
 	summary = clean(summary)
 	if !e.Details {
 		return summary
 	}
-	return summary + "\n" + diagfmt.T(l, "-- Detalhes (saída original) --", "-- Details (original output) --", "-- Detalles (salida original) --") + "\n" + raw
+	// os detalhes mostram a saída original SEM número de série, UUID, MAC e afins
+	return summary + "\n" + diagfmt.T(l, "-- Detalhes (saída original, sem os identificadores da máquina) --", "-- Details (original output, without the machine identifiers) --", "-- Detalles (salida original, sin los identificadores del equipo) --") + "\n" + diagfmt.Redact(raw)
 }
 
 // clean tira controles (ESC etc.), deixa \n e \t e limita o tamanho: a saída vai para o terminal e o log.
@@ -419,6 +425,10 @@ func (e *Engine) execStep(ctx context.Context, r *Recipe, st Step) (StepReport, 
 	case st.Run != nil:
 		code, out, err := e.runAction(ctx, r, st, st.Run, false, false)
 		sr.Output = out
+		if st.Render != "" {
+			// etapa com resumo: nem a saída de uma falha sai com identificadores da máquina
+			sr.Output = diagfmt.Redact(out)
+		}
 		if err != nil {
 			return fail(0, "não executou: %v", err)
 		}

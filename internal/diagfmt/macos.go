@@ -175,8 +175,40 @@ func macStr(v any) string {
 }
 
 type macDisk struct {
-	name, medium, smart string
-	size                uint64
+	name, medium, smart, bsd string
+	size                     uint64
+}
+
+// macSmartRank: ao juntar duas visões do MESMO disco com status diferentes vale o pior conhecido (um "Failing" nunca é
+// escondido por um "Verified" de outra seção); status vazio perde para qualquer um.
+func macSmartRank(s string) int {
+	switch strings.ToLower(s) {
+	case "failing":
+		return 4
+	case "verified":
+		return 3
+	case "not supported":
+		return 2
+	case "":
+		return 0
+	}
+	return 1
+}
+
+// macMerge completa dst com o que src sabe do mesmo disco.
+func macMerge(dst *macDisk, src macDisk) {
+	if dst.name == "" {
+		dst.name = src.name
+	}
+	if dst.medium == "" {
+		dst.medium = src.medium
+	}
+	if dst.size == 0 {
+		dst.size = src.size
+	}
+	if macSmartRank(src.smart) > macSmartRank(dst.smart) {
+		dst.smart = src.smart
+	}
 }
 
 func macMedium(s string) string {
@@ -206,16 +238,27 @@ func macDisks(raw string, l Lang) (string, error) {
 	if json.Unmarshal([]byte(raw), &doc) != nil || doc == nil {
 		return "", errMacDisks
 	}
-	var disks []macDisk
-	seen := map[string]bool{}
-	add := func(d macDisk) {
-		if d.name == "" || seen[d.name] {
+	// Identidade do disco = o nome BSD (disk0). NVMe e SATA trazem um item por disco físico, com o bsd_name: a mesma
+	// identidade em duas seções vira UM disco (visões juntadas); dois discos do mesmo MODELO têm nomes BSD diferentes e
+	// continuam dois. Sem bsd_name o item nunca é fundido com outro.
+	var prim []*macDisk
+	byBSD := map[string]*macDisk{}
+	addPrimary := func(d macDisk) {
+		if d.name == "" {
 			return
 		}
-		seen[d.name] = true
-		disks = append(disks, d)
+		if d.bsd != "" {
+			if ex := byBSD[d.bsd]; ex != nil {
+				macMerge(ex, d)
+				return
+			}
+		}
+		p := d
+		prim = append(prim, &p)
+		if d.bsd != "" {
+			byBSD[d.bsd] = &p
+		}
 	}
-	// NVMe e SATA: um item por disco físico, dentro de _items de cada controlador
 	for _, key := range []string{"SPNVMeDataType", "SPSerialATADataType"} {
 		ctrls, _ := doc[key].([]any)
 		for _, c := range ctrls {
@@ -230,18 +273,23 @@ func macDisks(raw string, l Lang) (string, error) {
 				if name == "" {
 					name = macStr(so["_name"])
 				}
-				d := macDisk{name: name, smart: macStr(so["smart_status"])}
+				d := macDisk{name: name, smart: macStr(so["smart_status"]), bsd: macStr(so["bsd_name"])}
 				d.size, _ = macNum(so["size_in_bytes"])
 				if key == "SPNVMeDataType" {
 					d.medium = "SSD"
 				} else {
 					d.medium = macMedium(macStr(so["spsata_medium_type"]))
 				}
-				add(d)
+				addPrimary(d)
 			}
 		}
 	}
-	// Storage: volumes com physical_drive; só completa o que NVMe/SATA não trouxeram (sem tamanho do disco)
+	// Storage: os volumes trazem o physical_drive, sem bsd_name do disco (o do volume é de um contêiner APFS, não do
+	// disco). Une-se ao disco NVMe/SATA quando o MODELO acha exatamente um; com mais de um do mesmo modelo não dá para
+	// saber de qual é o volume e a visão é ignorada (os discos já estão na lista, cada um com o seu status); sem
+	// nenhum (disco externo, por exemplo) entra como disco próprio, uma vez por modelo+protocolo.
+	var storageOnly []*macDisk
+	storageKey := map[string]*macDisk{}
 	vols, _ := doc["SPStorageDataType"].([]any)
 	for _, v := range vols {
 		vo, _ := v.(map[string]any)
@@ -249,7 +297,35 @@ func macDisks(raw string, l Lang) (string, error) {
 		if pd == nil || strings.EqualFold(macStr(pd["protocol"]), "Disk Image") {
 			continue
 		}
-		add(macDisk{name: macStr(pd["device_name"]), medium: macMedium(macStr(pd["medium_type"])), smart: macStr(pd["smart_status"])})
+		d := macDisk{name: macStr(pd["device_name"]), medium: macMedium(macStr(pd["medium_type"])), smart: macStr(pd["smart_status"])}
+		if d.name == "" {
+			continue
+		}
+		var cands []*macDisk
+		for _, p := range prim {
+			if p.name == d.name {
+				cands = append(cands, p)
+			}
+		}
+		switch {
+		case len(cands) == 1:
+			macMerge(cands[0], d)
+		case len(cands) > 1:
+			// ambíguo: ignora
+		default:
+			k := d.name + "|" + macStr(pd["protocol"])
+			if ex := storageKey[k]; ex != nil {
+				macMerge(ex, d)
+			} else {
+				p := d
+				storageKey[k] = &p
+				storageOnly = append(storageOnly, &p)
+			}
+		}
+	}
+	disks := make([]macDisk, 0, len(prim)+len(storageOnly))
+	for _, p := range append(prim, storageOnly...) {
+		disks = append(disks, *p)
 	}
 	if len(disks) == 0 {
 		return T(l, "Nenhum disco encontrado", "No disks found", "No se encontraron discos"), nil

@@ -135,11 +135,18 @@ func winNatKey(s string) string {
 
 // ---- memória ----
 
-// winSMBIOS: tipos da tabela SMBIOS (Type 17, Memory Device).
+// winSMBIOS: tipos da tabela SMBIOS (DSP0134, Type 17, "Memory Device", campo Memory Type), em decimal. 21 a 23 são
+// RESERVADOS (sem nome): o tipo SMBIOS 20 é DDR2 FB-DIMM, não DDR. É outra tabela que a do campo legado MemoryType do
+// WMI (winWMIType): os números coincidem só em parte e não podem ser misturados.
 var winSMBIOS = map[int]string{
-	18: "DDR", 19: "DDR2", 20: "DDR", 21: "DDR2", 22: "DDR2 FB-DIMM", 24: "DDR3", 26: "DDR4", 27: "LPDDR",
-	28: "LPDDR2", 29: "LPDDR3", 30: "LPDDR4", 34: "DDR5", 35: "LPDDR5",
+	18: "DDR", 19: "DDR2", 20: "DDR2 FB-DIMM", 24: "DDR3", 25: "FB-DIMM", 26: "DDR4", 27: "LPDDR", 28: "LPDDR2",
+	29: "LPDDR3", 30: "LPDDR4", 32: "HBM", 33: "HBM2", 34: "DDR5", 35: "LPDDR5", 36: "HBM3",
 }
+
+// winWMIType: Win32_PhysicalMemory.MemoryType (campo legado do WMI, usado só quando o SMBIOSMemoryType vem 0):
+// 20 = DDR, 21 = DDR2, 22 = DDR2 FB-DIMM, 24 = DDR3, 25 = FB-DIMM. Os demais valores (DRAM, SDRAM...) não dizem a
+// geração e ficam sem nome.
+var winWMIType = map[int]string{20: "DDR", 21: "DDR2", 22: "DDR2 FB-DIMM", 24: "DDR3", 25: "FB-DIMM"}
 
 // winJEDEC: códigos JEDEC (JEP106) comuns, byte de continuação + id com paridade, em hexadecimal maiúsculo.
 var winJEDEC = map[string]string{
@@ -185,23 +192,29 @@ func winMaker(raw string) string {
 	if !winIsHex(up) {
 		return s
 	}
-	trim := strings.TrimRight(up, "0")
-	if trim == "" {
+	if strings.Trim(up, "0") == "" {
 		return ""
 	}
-	cands := []string{up, trim}
-	if len(up) >= 4 {
-		cands = append(cands, up[len(up)-4:], up[:4])
+	// Um código JEDEC termina em zero legitimamente (8010 é um código, não 0801 com padding): o código desconhecido
+	// aparece como veio. Só o preenchimento PROVADO sai: o campo de 8 bytes (16 dígitos) com um código de 4 dígitos
+	// seguido de 12 zeros ("80AD000000000000").
+	code := up
+	if len(up) == 16 && up[4:] == strings.Repeat("0", 12) {
+		code = up[:4]
+	}
+	cands := []string{up, code}
+	if len(up) > 4 {
+		cands = append(cands, up[len(up)-4:]) // "079E000080AD": bytes de continuação + id
+		if strings.Trim(up[4:], "0") == "" {
+			cands = append(cands, up[:4]) // id seguido só de zeros
+		}
 	}
 	for _, c := range cands {
 		if n, ok := winJEDEC[c]; ok {
 			return n
 		}
 	}
-	if len(trim) < 4 {
-		trim = strings.Repeat("0", 4-len(trim)) + trim
-	}
-	return "JEDEC " + trim
+	return "JEDEC " + code
 }
 
 type winModule struct {
@@ -246,9 +259,13 @@ func winMemory(raw string, l Lang) (string, error) {
 		if size == 0 {
 			continue // slot vazio
 		}
-		typ := winSMBIOS[int(winNum(o["SMBIOSMemoryType"]))]
-		if typ == "" {
-			typ = winSMBIOS[int(winNum(o["MemoryType"]))]
+		// SMBIOSMemoryType (tabela DSP0134) manda; só se vier 0 ("não informado") vale o MemoryType legado do WMI, que
+		// é outra tabela. Um SMBIOS reservado ou desconhecido (21 a 23, 99) deixa o tipo sem nome em vez de cair no WMI.
+		var typ string
+		if smb := int(winNum(o["SMBIOSMemoryType"])); smb != 0 {
+			typ = winSMBIOS[smb]
+		} else {
+			typ = winWMIType[int(winNum(o["MemoryType"]))]
 		}
 		speed := winUint(o["ConfiguredClockSpeed"])
 		if speed == 0 {

@@ -94,6 +94,12 @@ func TestWinMemoryFabricante(t *testing.T) {
 		"Samsung":             "Samsung",
 		"Kingston Technology": "Kingston Technology",
 		"0F1A":                "JEDEC 0F1A",
+		"0f1a000000000000":    "JEDEC 0F1A", // preenchimento provado (16 dígitos): sai
+		"8010":                "JEDEC 8010", // termina em zero e NÃO é padding (nunca 0801)
+		"80100000":            "JEDEC 80100000",
+		"0F10":                "JEDEC 0F10",
+		"10":                  "JEDEC 10",
+		"80AD0000":            "SK hynix", // id conhecido + só zeros
 		"Unknown":             "",
 		"":                    "",
 		"0000":                "",
@@ -237,5 +243,33 @@ func TestWinDisksInvalido(t *testing.T) {
 	}
 	for _, raw := range []string{`[1,null,"x",[]]`, `{"a":{"b":1}}`, `[{"Size":-1,"HealthStatus":[1,2],"OperationalStatus":{"x":1}}]`} {
 		_, _ = Render("windows-disks", raw, PT)
+	}
+}
+
+// Lupa #56: SMBIOSMemoryType (DSP0134) e MemoryType (WMI) são tabelas diferentes: o 20 do SMBIOS é DDR2 FB-DIMM e o 20
+// do WMI é DDR; 21 a 23 do SMBIOS são reservados e não caem na tabela do WMI.
+func TestWinMemoryTabelasSMBIOSeWMISeparadas(t *testing.T) {
+	cases := []struct {
+		name, fields, want, notWant string
+	}{
+		{"SMBIOS 20 = DDR2 FB-DIMM", `"SMBIOSMemoryType":20,"MemoryType":0`, "DDR2 FB-DIMM", ""},
+		{"WMI 20 = DDR (SMBIOS 0)", `"SMBIOSMemoryType":0,"MemoryType":20`, "DDR ", "FB-DIMM"},
+		{"SMBIOS manda sobre o WMI", `"SMBIOSMemoryType":26,"MemoryType":20`, "DDR4", "DDR "},
+		{"SMBIOS 21 reservado", `"SMBIOSMemoryType":21,"MemoryType":0`, "", "DDR"},
+		{"SMBIOS 22 reservado, WMI 21 não vale", `"SMBIOSMemoryType":22,"MemoryType":21`, "", "DDR2"},
+		{"SMBIOS 23 reservado, WMI 20 não vale", `"SMBIOSMemoryType":23,"MemoryType":20`, "", "DDR"},
+		{"WMI 22 = DDR2 FB-DIMM", `"SMBIOSMemoryType":0,"MemoryType":22`, "DDR2 FB-DIMM", ""},
+		{"WMI 24 = DDR3", `"SMBIOSMemoryType":0,"MemoryType":24`, "DDR3", ""},
+		{"SMBIOS 34 = DDR5", `"SMBIOSMemoryType":34`, "DDR5", ""},
+	}
+	for _, c := range cases {
+		raw := `{"modules":[{"Capacity":8589934592,"Speed":2400,` + c.fields + `}]}`
+		got := winMust(t, "windows-memory", raw, PT)
+		if c.want != "" && !strings.Contains(got, c.want) {
+			t.Errorf("%s: faltou %q:\n%s", c.name, c.want, got)
+		}
+		if c.notWant != "" && strings.Contains(got, c.notWant) {
+			t.Errorf("%s: não deveria ter %q:\n%s", c.name, c.notWant, got)
+		}
 	}
 }

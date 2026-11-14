@@ -164,3 +164,58 @@ func TestMacDisks(t *testing.T) {
 		t.Errorf("duplicado: %q", got)
 	}
 }
+
+// Lupa #56: a identidade do disco é o nome BSD. Dois discos do MESMO modelo continuam dois (com SMART diferente);
+// o mesmo disco em duas seções vira um só, com o pior status conhecido; volumes do Storage completam o disco único do
+// modelo e são ignorados quando há mais de um disco desse modelo.
+func TestMacDisksIdentidadePeloNomeBSD(t *testing.T) {
+	nvme := func(items ...string) string {
+		return `"SPNVMeDataType":[{"_name":"ctrl","_items":[` + strings.Join(items, ",") + `]}]`
+	}
+	item := func(bsd, smart string) string {
+		return `{"_name":"SSD X1","device_model":"SSD X1","bsd_name":"` + bsd + `","size_in_bytes":500277792768,"smart_status":"` + smart + `","device_serial":"SN-` + bsd + `"}`
+	}
+	// 1. dois iguais, SMART diferente: duas linhas
+	raw := `{` + nvme(item("disk0", "Verified"), item("disk1", "Failing")) + `}`
+	got, err := macDisksFor(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(got, "Disco: SSD X1") != 2 || !strings.Contains(got, "verificado") || !strings.Contains(got, "com problema") || strings.Contains(got, "SN-") {
+		t.Errorf("dois discos do mesmo modelo continuam dois, cada um com o seu SMART:\n%s", got)
+	}
+	// 2. o mesmo disco (disk0) em NVMe e em SATA, status diferente: um só, com o pior
+	raw = `{` + nvme(item("disk0", "Verified")) + `,"SPSerialATADataType":[{"_name":"c","_items":[{"_name":"SSD X1","device_model":"SSD X1","bsd_name":"disk0","size_in_bytes":500277792768,"smart_status":"Failing","spsata_medium_type":"Solid State"}]}]}`
+	got, _ = macDisksFor(raw)
+	if strings.Count(got, "Disco: ") != 1 || !strings.Contains(got, "com problema") || strings.Contains(got, "verificado") {
+		t.Errorf("o mesmo disco em duas seções vira um e o pior status vence:\n%s", got)
+	}
+	// 3. Storage com um único disco do modelo: completa (sem duplicar); dois do modelo: ignora, sem trocar o SMART
+	vol := `{"_name":"Data","bsd_name":"disk3s5","physical_drive":{"device_name":"SSD X1","medium_type":"ssd","protocol":"Apple Fabric","smart_status":"Verified"}}`
+	raw = `{` + nvme(item("disk0", "")) + `,"SPStorageDataType":[` + vol + `,` + vol + `]}`
+	got, _ = macDisksFor(raw)
+	if strings.Count(got, "Disco: ") != 1 || !strings.Contains(got, "verificado") {
+		t.Errorf("Storage completa o único disco do modelo:\n%s", got)
+	}
+	raw = `{` + nvme(item("disk0", "Failing"), item("disk1", "Verified")) + `,"SPStorageDataType":[` + vol + `]}`
+	got, _ = macDisksFor(raw)
+	if strings.Count(got, "Disco: ") != 2 || !strings.Contains(got, "com problema") || !strings.Contains(got, "verificado") {
+		t.Errorf("com dois discos do modelo a visão do Storage é ambígua e não mexe em nenhum:\n%s", got)
+	}
+	// 4. disco que só o Storage conhece (externo): uma linha, mesmo com vários volumes; Disk Image não conta
+	ext := `{"_name":"Backup","bsd_name":"disk6s2","physical_drive":{"device_name":"Elements 2TB","medium_type":"hdd","protocol":"USB","smart_status":"Not Supported"}}`
+	img := `{"_name":"Sim","bsd_name":"disk5s1","physical_drive":{"device_name":"Disk Image","protocol":"Disk Image"}}`
+	raw = `{` + nvme(item("disk0", "Verified")) + `,"SPStorageDataType":[` + ext + `,` + ext + `,` + img + `]}`
+	got, _ = macDisksFor(raw)
+	if strings.Count(got, "Disco: ") != 2 || !strings.Contains(got, "Elements 2TB · HDD") || strings.Contains(got, "Disk Image") {
+		t.Errorf("disco externo uma vez, imagem de disco fora:\n%s", got)
+	}
+	// 5. sem bsd_name nunca funde: dois itens iguais ficam dois
+	noBSD := `{"_name":"SSD X1","device_model":"SSD X1","size_in_bytes":500277792768,"smart_status":"Verified"}`
+	got, _ = macDisksFor(`{` + nvme(noBSD, noBSD) + `}`)
+	if strings.Count(got, "Disco: ") != 2 {
+		t.Errorf("sem bsd_name não há fusão:\n%s", got)
+	}
+}
+
+func macDisksFor(raw string) (string, error) { return Render("macos-disks", raw, PT) }

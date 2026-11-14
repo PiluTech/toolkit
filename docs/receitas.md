@@ -194,8 +194,12 @@ Uma etapa de diagnóstico pode ter `render: <nome>`: a saída crua do comando (J
 `en`/`es` por `TOOLKIT_LANG`, `LC_ALL`, `LC_MESSAGES` ou `LANG` (o primeiro valor não vazio decide; outro idioma cai em
 pt-BR). A saída original só aparece no **modo detalhes**: tecla `d` na aba Diagnóstico da TUI (a dica mostra
 `d detalhes ✓` quando ligado; vale para os diagnósticos marcados na próxima execução) ou `toolkit recipe run <id>
---detalhes`; ela vem depois do resumo, sob `-- Detalhes (saída original) --`. Se o renderizador não entender a saída (formato
-novo do sistema), a etapa NÃO falha: mostra a saída original com o aviso "não deu para resumir esta saída". O `render`
+--detalhes`; ela vem depois do resumo, sob `-- Detalhes (saída original, sem os identificadores da máquina) --`. **Identificadores nunca
+saem:** antes de qualquer saída da etapa (detalhes, falha do comando e o log do smoke de teste) o toolkit remove número
+de série, UUID/GUID, UDID, ECID, WWN, IMEI, endereço MAC e afins (`diagfmt.Redact`: o valor vira `[***]`, a chave fica),
+inclusive em JSON truncado. Se o renderizador não entender a saída (formato novo do sistema), a etapa NÃO falha, mas a
+saída crua NÃO aparece por padrão: só o aviso "não deu para resumir esta saída; use --detalhes ... para ver a original
+sem os identificadores da máquina". O `render`
 só vale em etapa `run` de receita `kind: diagnostic`; um nome desconhecido é erro de carga. Renderizadores:
 
 | Nome | Entrada | Resumo |
@@ -210,7 +214,12 @@ só vale em etapa `run` de receita `kind: diagnostic`; um nome desconhecido é e
 Capacidade de memória usa GB binário (8589934592 bytes = 8 GB, como o Windows mostra) e a de disco, GB decimal (como o
 fabricante anuncia); decimais com vírgula em pt-BR e es e com ponto em en. Fabricante da RAM no Windows vem de uma tabela de
 códigos JEDEC comuns (80AD SK hynix, 80CE Samsung, 802C Micron, 859B Crucial, 0198 Kingston, 029E Corsair, 04CB A-DATA, 04EF Team Group,
-04CD G.Skill, 830B Nanya); um código fora da tabela aparece como `JEDEC <código>`. As receitas continuam só de leitura e sem
+04CD G.Skill, 830B Nanya); um código fora da tabela aparece como `JEDEC <código>` exatamente como veio (só o preenchimento
+provado de 16 dígitos, código de 4 mais 12 zeros, é descartado; `8010` nunca vira `0801`). O tipo da RAM vem do `SMBIOSMemoryType`
+(DSP0134, Type 17: 20 é DDR2 FB-DIMM, 21 a 23 são reservados) e, só quando ele vem 0, do `MemoryType` legado do WMI (20 é DDR):
+são tabelas diferentes e não se misturam. No macOS o disco é identificado pelo nome BSD (`disk0`): a mesma identidade em
+duas seções do `system_profiler` vira um disco (vale o pior status SMART) e dois discos do mesmo modelo continuam dois;
+a visão de volumes (Storage) só completa o disco quando o modelo é único. As receitas continuam só de leitura e sem
 administrador. Cada etapa do Log da TUI sai como `✓ Memória` (no lugar de `etapa modulos: done`).
 
 Testes: `internal/diagfmt/*_test.go` (saídas falsas: código JEDEC desconhecido, slot vazio, 2+ módulos, formatos truncados,
