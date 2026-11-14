@@ -286,8 +286,13 @@ func TestTUIReceivesLateResultThroughChannel(t *testing.T) {
 	e.deps.TUI = TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return "xterm" },
 		Run: func(_ context.Context, o tui.Options, _ ...tui.Tab) error {
 			updates = o.Updates
+			// A consulta pode terminar ANTES de a TUI abrir (então a versão já vem em Latest, sem passar pelo canal) ou
+			// DEPOIS (chega pelo canal). Os dois caminhos são corretos; o que não pode é perder o resultado.
 			if o.Latest != "" {
-				t.Errorf("sem cache a faixa começa vazia")
+				if o.Latest != "v0.2.0" || o.LatestNotes != "novidades da 0.2" {
+					t.Errorf("update que chegou antes da TUI: %+v", o)
+				}
+				return nil
 			}
 			select {
 			case u := <-updates:
