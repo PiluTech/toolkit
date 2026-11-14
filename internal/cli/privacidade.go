@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -198,6 +199,19 @@ func runPrivApply(ctx context.Context, out io.Writer, deps Deps, f privFlags) er
 	if ok, err := privConfirm(ctx, out, deps, f.yes, msg.PrivConfirmApply); !ok || err != nil {
 		return err
 	}
+	// o plano é recalculado DEPOIS da confirmação e antes de qualquer backup ou escrita: o que será gravado tem de ser
+	// idêntico ao que foi mostrado (outro processo pode ter mudado o sistema durante a pergunta; vale também com --yes).
+	fresh, err := privacidade.Build(ctx, e.sys, perfil, e.lang)
+	if err != nil {
+		return cleanErr(err)
+	}
+	if f.onlyUser {
+		onlyUserItems(fresh)
+	}
+	if fresh.Format(e.lang) != plan.Format(e.lang) || fresh.Pending() != plan.Pending() {
+		return errors.New(msg.PrivStale)
+	}
+	plan = fresh
 	res, err := privacidade.Apply(ctx, e.sys, e.store, plan, e.now())
 	if err != nil {
 		if res != nil && len(res.Applied) > 0 {
@@ -243,6 +257,15 @@ func runPrivUndo(ctx context.Context, out io.Writer, deps Deps, f privFlags) err
 	if ok, err := privConfirm(ctx, out, deps, f.yes, msg.PrivConfirmUndo); !ok || err != nil {
 		return err
 	}
+	// backup e sistema são relidos DEPOIS da confirmação e comparados ao que foi mostrado, antes de restaurar qualquer coisa.
+	fresh, freshBk, err := privacidade.BuildUndo(ctx, e.sys, e.store, e.lang)
+	if err != nil {
+		return cleanErr(err)
+	}
+	if formatUndo(fresh) != formatUndo(plan) || fresh.Pending() != plan.Pending() || !reflect.DeepEqual(freshBk, bk) {
+		return errors.New(msg.PrivStale)
+	}
+	plan, bk = fresh, freshBk
 	res, err := privacidade.ApplyUndo(ctx, e.sys, e.store, plan, bk)
 	if err != nil {
 		if res != nil && len(res.Applied) > 0 {

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -167,4 +168,36 @@ func TestConfirmacaoOcultaPorTerminalPequenoNuncaAplica_Nativos(t *testing.T) {
 	if len(be.applyIDs) != 1 || be.applyIDs[0] != "plano-exibido" {
 		t.Fatalf("depois de ampliar, confirmar mantém o ID exibido: %v", be.applyIDs)
 	}
+}
+
+// Lupa #82: a mesma classe de bug (Load falhou -> plano/confirmação invisíveis aplicados por s/y/Enter) nas outras abas
+// com confirmação. Ambas já recusam as teclas com a tela sem uso (usable); estes testes travam isso no Model real.
+func TestLoadFalhouNaoAplicaPlanoInvisivelPrivacidadeENativos(t *testing.T) {
+	keys := []string{"s", "y", "S", "Y", "tab", "enter"}
+	t.Run("privacidade", func(t *testing.T) {
+		be := &fakePriv{info: privSample(false), loadErr: errors.New("falha de leitura"), plan: PrivPlan{Text: planText, Pending: 2}, undoPlan: PrivPlan{Text: planText, Pending: 2}}
+		tab := NewPrivacyTab(context.Background(), be, Theme{Mono: true, NoMotion: true})
+		m := NewWithAreas(Options{Mono: true, NoMotion: true}, []AreaDef{{Key: "seguranca", Title: "Segurança", Short: "Seg", Tabs: []Tab{tab}}})
+		rresize(m, 100, 30)
+		rpump(m, tab.Init())
+		for _, k := range append([]string{"a", "d"}, keys...) {
+			rkey(m, k)
+		}
+		if len(be.applies) != 0 || be.undoCalls != 0 || tab.Capturing() {
+			t.Fatalf("aplicou com a tela de erro: %v %d", be.applies, be.undoCalls)
+		}
+	})
+	t.Run("nativos", func(t *testing.T) {
+		be := &fakeNat{info: natSample(true), loadErr: errors.New("falha de leitura"), plan: NatPlan{Text: planText, Pending: 2}}
+		tab := NewNativeAppsTab(context.Background(), be, Theme{Mono: true, NoMotion: true})
+		m := NewWithAreas(Options{Mono: true, NoMotion: true}, []AreaDef{{Key: "maquina", Title: "Máquina", Short: "Máq", Tabs: []Tab{tab}}})
+		rresize(m, 100, 30)
+		rpump(m, tab.Init())
+		for _, k := range append([]string{"space", "r", "u"}, keys...) {
+			rkey(m, k)
+		}
+		if len(be.applies) != 0 || tab.Capturing() {
+			t.Fatalf("aplicou com a tela de erro: %v", be.applies)
+		}
+	})
 }

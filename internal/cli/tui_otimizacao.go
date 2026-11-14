@@ -18,5 +18,7 @@ func (b *otimBackend) Load(ctx context.Context) (*otimizacao.Report, error) {
 
 // newOtimizacaoTab monta a seção Otimização (área Máquina). Fora do Windows (deps.GOOS) ela só avisa, sem chamar o backend.
 func newOtimizacaoTab(ctx context.Context, deps Deps, th tui.Theme) tui.Tab {
-	return tui.NewOptimizeTab(ctx, &otimBackend{deps: deps}, th, deps.diagLang(), deps.GOOS)
+	t := tui.NewOptimizeTab(ctx, &otimBackend{deps: deps}, th, deps.diagLang(), deps.GOOS)
+	t.SetAnimations(&animBackend{deps: deps}) // Animações (experimental): o mesmo núcleo do `toolkit otimizacao animacoes`
+	return t
 }

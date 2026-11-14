@@ -39,7 +39,7 @@ Sem perfil e sem `--app` o comando recusa.
 1. Lê os pacotes instalados (só leitura) e monta o plano: cada app instalado que será removido, com título, nome do pacote, versão e escopo. Os já ausentes ficam fora. O plano é SEMPRE impresso.
 2. `--dry-run` para aqui. Nada é alterado.
 3. `--todos-usuarios` sem administrador: recusa.
-4. Confirmação: com terminal pergunta `[s/N]`; sem terminal exige `--yes` (erro antes de qualquer mudança).
+4. Confirmação: com terminal pergunta `[s/N]`; sem terminal exige `--yes` (erro antes de qualquer mudança). Depois da confirmação (e também com `--yes`) o CLI RECALCULA o plano e só segue se texto, itens e escopo forem idênticos aos mostrados; senão recusa com "o estado mudou desde o plano mostrado; nada foi alterado", sem backup nem remoção.
 5. Grava o backup e só então remove, app a app. Se algo falha, para e informa quantos já foram removidos.
 
 ## Backup
