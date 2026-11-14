@@ -28,15 +28,14 @@ const (
 
 	// Amostra de 3 leituras com 1 s entre elas: CPU total e o disco do sistema; depois os processos que mais usam CPU agora.
 	scriptPerf = psPrefs +
-		`$sd=[string]$env:SystemDrive;$cpu=@();$q=@();$lat=@()` + "\n" +
+		`$sd=[string]$env:SystemDrive;$cpu=@();$lat=@()` + "\n" +
 		`for($i=0;$i -lt 3;$i++){` +
 		`$c=Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor|Where-Object{$_.Name -eq '_Total'};if($c){$cpu+=[double]$c.PercentProcessorTime};` +
-		`$d=Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk|Where-Object{$_.Name -like ('*'+$sd+'*')}|Select-Object -First 1;if($d){$q+=[double]$d.AvgDiskQueueLength};` +
-		`$w=Get-CimInstance Win32_PerfRawData_PerfDisk_PhysicalDisk|Where-Object{$_.Name -like ('*'+$sd+'*')}|Select-Object -First 1;if($w){$lat+=@{n=[string]$w.AvgDisksecPerTransfer;d=[string]$w.AvgDisksecPerTransfer_Base;f=[string]$w.Frequency_PerfTime}};` +
+		`$w=Get-CimInstance Win32_PerfRawData_PerfDisk_PhysicalDisk|Where-Object{$_.Name -like ('*'+$sd+'*')}|Select-Object -First 1;if($w){$lat+=@{n=[string]$w.AvgDisksecPerTransfer;d=[string]$w.AvgDisksecPerTransfer_Base;f=[string]$w.Frequency_PerfTime;q=[string]$w.AvgDiskQueueLength;t=[string]$w.Timestamp_Sys100NS}};` +
 		`if($i -lt 2){Start-Sleep -Seconds 1}}` + "\n" +
 		`$lp=[int](Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors` + "\n" +
 		`$top=@(Get-CimInstance Win32_PerfFormattedData_PerfProc_Process|Where-Object{$_.Name -ne '_Total' -and $_.Name -ne 'Idle' -and $_.IDProcess -ne $PID}|Sort-Object PercentProcessorTime -Descending|Select-Object -First 5|ForEach-Object{@{Name=[string]$_.Name;Pid=$_.IDProcess;Cpu=$_.PercentProcessorTime}})` + "\n" +
-		`@{cpu=$cpu;q=$q;lat=$lat;lp=$lp;top=$top}|ConvertTo-Json -Compress -Depth 4`
+		`@{cpu=$cpu;lat=$lat;lp=$lp;top=$top}|ConvertTo-Json -Compress -Depth 4`
 
 	scriptMem = psPrefs +
 		`$cs=Get-CimInstance Win32_ComputerSystem;$m=Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory` + "\n" +
@@ -207,7 +206,6 @@ func collectWindows(ctx context.Context, d Deps, r *Report) {
 // perfSample é a amostra do script de desempenho: CPU total, fila e latência do disco do sistema e os processos.
 type perfSample struct {
 	cpuSamples []float64
-	queue      []float64
 	lat        []rawLat
 	logical    int
 	top        []Process
@@ -215,7 +213,51 @@ type perfSample struct {
 
 // rawLat é uma amostra dos contadores brutos do disco: n = ticks acumulados (AvgDisksecPerTransfer), d = transferências
 // acumuladas (AvgDisksecPerTransfer_Base) e f = ticks por segundo (Frequency_PerfTime).
-type rawLat struct{ n, d, f float64 }
+type rawLat struct {
+	n, d, f float64 // latência (PERF_AVERAGE_TIMER)
+	// q = AvgDiskQueueLength BRUTO (integral acumulada, PERF_COUNTER_100NS_QUEUELEN_TYPE) e t = Timestamp_Sys100NS (100 ns):
+	// a fila média entre duas amostras é (q1-q0)/(t1-t0). O valor formatado do CIM é INTEIRO e trunca (1,9 vira 1).
+	q, t float64
+	hasQ bool
+}
+
+// queueStats calcula a fila média (entre a primeira e a última amostra) e o pico (maior média entre amostras vizinhas) pelos
+// contadores brutos. Menos de 2 amostras com q e t, tempo que não avança ou contador que voltou = sem leitura (nil), nunca 0.
+func (p perfSample) queueStats() (avg, peak *float64) {
+	var qs []rawLat
+	for _, e := range p.lat {
+		if e.hasQ {
+			qs = append(qs, e)
+		}
+	}
+	if len(qs) < 2 {
+		return nil, nil
+	}
+	rate := func(a, b rawLat) (float64, bool) {
+		dt, dq := b.t-a.t, b.q-a.q
+		if dt <= 0 || dq < 0 {
+			return 0, false
+		}
+		v := dq / dt
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return 0, false
+		}
+		return v, true
+	}
+	total, ok := rate(qs[0], qs[len(qs)-1])
+	if !ok {
+		return nil, nil
+	}
+	pk := 0.0
+	for i := 1; i < len(qs); i++ {
+		v, ok := rate(qs[i-1], qs[i])
+		if !ok {
+			return nil, nil // um intervalo inválido invalida a medida (nada de média parcial)
+		}
+		pk = max(pk, v)
+	}
+	return &total, &pk
+}
 
 // latencyMs aplica a fórmula do PERF_AVERAGE_TIMER entre a primeira e a última amostra: ((N1-N0)/F)/(D1-D0) segundos por
 // transferência, em ms. Menos de 2 amostras, D sem aumento, N que voltou ou F <= 0 = sem leitura (nil), nunca 0 ms.
@@ -240,13 +282,15 @@ func readPerf(v any) (perfSample, error) {
 	if m == nil {
 		return perfSample{}, errNoData
 	}
-	p := perfSample{cpuSamples: numList(m["cpu"]), queue: numList(m["q"])}
+	p := perfSample{cpuSamples: numList(m["cpu"])}
 	for _, e := range asList(m["lat"]) { // só amostra COMPLETA (n, d e f presentes); número solto (formato antigo) não é leitura
 		n, ok1 := num(e["n"])
 		d, ok2 := num(e["d"])
 		f, ok3 := num(e["f"])
+		q, ok4 := num(e["q"])
+		tt, ok5 := num(e["t"])
 		if ok1 && ok2 && ok3 {
-			p.lat = append(p.lat, rawLat{n, d, f})
+			p.lat = append(p.lat, rawLat{n: n, d: d, f: f, q: q, t: tt, hasQ: ok4 && ok5})
 		}
 	}
 	p.logical, _ = inum(m["lp"])
@@ -361,15 +405,7 @@ func readDisk(v any, r *Report, p perfSample) error {
 	if f, ok := unum(m["free"]); ok {
 		d.FreeBytes = &f
 	}
-	if len(p.queue) > 0 {
-		var sum, peak float64
-		for _, q := range p.queue {
-			sum += q
-			peak = max(peak, q)
-		}
-		avg := sum / float64(len(p.queue))
-		d.QueueAvg, d.QueuePeak = &avg, &peak
-	}
+	d.QueueAvg, d.QueuePeak = p.queueStats()
 	d.LatencyMs = p.latencyMs()
 	if !d.measured() { // só o "drive" (que o script sempre preenche) não é leitura: a área fica sem leitura
 		return errNoData

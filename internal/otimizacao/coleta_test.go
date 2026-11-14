@@ -18,7 +18,7 @@ var testNow = time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
 
 // Fixtures SINTÉTICAS: nada aqui veio de uma máquina real (nomes e números inventados).
 const (
-	fxPerf     = `{"cpu":[10,92,88],"q":[0.5,3,2],"lat":[{"n":"1000000000000","d":"1000","f":"10000000"},{"n":"1000020000000","d":"1100","f":"10000000"},{"n":"1000036000000","d":"1200","f":"10000000"}],"lp":4,"top":[{"Name":"chrome#2","Pid":4242,"Cpu":240},{"Name":"editor","Pid":77,"Cpu":"40"},{"Name":null,"Pid":null,"Cpu":null}]}`
+	fxPerf     = `{"cpu":[10,92,88],"lat":[{"n":"1000000000000","d":"1000","f":"10000000","q":"0","t":"1000000000"},{"n":"1000020000000","d":"1100","f":"10000000","q":"30000000","t":"1010000000"},{"n":"1000036000000","d":"1200","f":"10000000","q":"50000000","t":"1020000000"}],"lp":4,"top":[{"Name":"chrome#2","Pid":4242,"Cpu":240},{"Name":"editor","Pid":77,"Cpu":"40"},{"Name":null,"Pid":null,"Cpu":null}]}`
 	fxMem      = `{"total":17179869184,"avail":1073741824,"committed":15032385536,"limit":17179869184,"swap":[{"Alloc":2048,"Used":1900}],"top":[{"Name":"chrome","Pid":4242,"Mem":2147483648},{"Name":"editor","Pid":77,"Mem":"1073741824"}]}`
 	fxDisk     = `{"drive":"C","size":512110190592,"free":30000000000,"name":"Disco Fake","media":"HDD","bus":"SATA"}`
 	fxStartup  = `{"wmi":[{"Name":"AppUm","Cmd":"\"C:\\Programas\\AppUm\\um.exe\" --minimizado","Loc":"HKU\\x\\Run"},{"Name":"AppDois","Cmd":"C:\\Programas\\dois.exe","Loc":"Startup"}],"run":[{"Name":"appum","Cmd":"C:\\Programas\\AppUm\\um.exe","Loc":"HKCU:\\Run"},{"Name":"AppTres","Cmd":"tres.exe /x","Loc":"HKLM:\\Run"}]}`
@@ -515,5 +515,84 @@ func TestAlgoLidoSemAchadoContinuaSemGargalo(t *testing.T) {
 	out := Summary(r, Analyze(r, diagfmt.PT), diagfmt.PT)
 	if !strings.Contains(out, "nenhum gargalo evidente") || strings.Contains(out, "inconclusivo") {
 		t.Errorf("área lida e sem achado:\n%s", out)
+	}
+}
+
+// ---- fila do disco pelos contadores BRUTOS (PERF_COUNTER_100NS_QUEUELEN_TYPE) ----
+
+// queueRawJSON monta o JSON de desempenho com amostras {n,d,f,q,t}: q = AvgDiskQueueLength bruto (integral acumulada) e
+// t = Timestamp_Sys100NS (em 100 ns). A fila média entre duas amostras é (q1-q0)/(t1-t0). Sintético.
+func queueRawJSON(samples ...[2]string) string {
+	var parts []string
+	for _, s := range samples {
+		parts = append(parts, `{"n":"1000","d":"10","f":"10000000","q":"`+s[0]+`","t":"`+s[1]+`"}`)
+	}
+	return `{"cpu":[10,20,30],"lat":[` + strings.Join(parts, ",") + `],"lp":4,"top":[]}`
+}
+
+func queueOf(t *testing.T, perf string) (avg, peak *float64) {
+	t.Helper()
+	s := fxAll()
+	s[scriptPerf] = perf
+	r, _ := runWin(t, s, Deps{Lang: diagfmt.PT})
+	if r.Disk == nil {
+		t.Fatalf("o disco devia ter sido lido: %+v", r.Skipped)
+	}
+	return r.Disk.QueueAvg, r.Disk.QueuePeak
+}
+
+func queueFires(t *testing.T, perf string) bool {
+	t.Helper()
+	s := fxAll()
+	s[scriptPerf] = perf
+	r, _ := runWin(t, s, Deps{Lang: diagfmt.PT})
+	for _, f := range Analyze(r, diagfmt.PT) {
+		if strings.Contains(strings.ToLower(f.Title), "fila") {
+			return true
+		}
+	}
+	return false
+}
+
+// Lupa #79: intervalos de 1,9 e 2,9 (média real 2,4) DEVEM alertar (limiar >= 2); o valor formatado do CIM é inteiro e
+// truncado daria (1+2)/2 = 1,5 e o alerta sumiria.
+func TestFilaDoDiscoPelosContadoresBrutosComFracoes(t *testing.T) {
+	// 1 s = 1e7 unidades de 100 ns; dq = fila x dt
+	alerta := queueRawJSON([2]string{"0", "1000000000"}, [2]string{"19000000", "1010000000"}, [2]string{"48000000", "1020000000"})
+	avg, peak := queueOf(t, alerta)
+	if avg == nil || math.Abs(*avg-2.4) > 0.001 || peak == nil || math.Abs(*peak-2.9) > 0.001 {
+		t.Fatalf("fila média/pico = %v / %v, quer 2,4 / 2,9", avg, peak)
+	}
+	if !queueFires(t, alerta) {
+		t.Error("média 2,4 (>= 2) devia alertar")
+	}
+	abaixo := queueRawJSON([2]string{"0", "1000000000"}, [2]string{"19000000", "1010000000"}, [2]string{"38000000", "1020000000"}) // 1,9 e 1,9
+	if a, _ := queueOf(t, abaixo); a == nil || math.Abs(*a-1.9) > 0.001 {
+		t.Fatalf("fila média = %v, quer 1,9", a)
+	}
+	if queueFires(t, abaixo) {
+		t.Error("média 1,9 (< 2) não devia alertar")
+	}
+	igual := queueRawJSON([2]string{"0", "1000000000"}, [2]string{"20000000", "1010000000"}, [2]string{"40000000", "1020000000"}) // 2,0
+	if !queueFires(t, igual) {
+		t.Error("média exatamente 2 (>= 2) devia alertar")
+	}
+}
+
+// Sem leitura válida a fila é nil (nunca 0 e nunca 'ok'): amostra única, tempo que não avança, contador que voltou.
+func TestFilaDoDiscoSemLeituraValida(t *testing.T) {
+	for name, perf := range map[string]string{
+		"uma amostra":      queueRawJSON([2]string{"0", "1000000000"}),
+		"tempo parado":     queueRawJSON([2]string{"0", "1000000000"}, [2]string{"19000000", "1000000000"}),
+		"contador voltou":  queueRawJSON([2]string{"50000000", "1000000000"}, [2]string{"10000000", "1010000000"}),
+		"sem campos q e t": `{"cpu":[10,20,30],"lat":[{"n":"1000","d":"10","f":"10000000"},{"n":"2000","d":"20","f":"10000000"}],"lp":4,"top":[]}`,
+		"formato antigo q": `{"cpu":[10,20,30],"q":[0.5,3,2],"lat":[],"lp":4,"top":[]}`,
+	} {
+		s := fxAll()
+		s[scriptPerf] = perf
+		r, _ := runWin(t, s, Deps{Lang: diagfmt.PT})
+		if r.Disk != nil && (r.Disk.QueueAvg != nil || r.Disk.QueuePeak != nil) {
+			t.Errorf("%s: fila sem leitura válida tem de ser nil: %v / %v", name, r.Disk.QueueAvg, r.Disk.QueuePeak)
+		}
 	}
 }
