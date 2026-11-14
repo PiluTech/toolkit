@@ -72,7 +72,9 @@ type Installer struct {
 type Detect struct {
 	AppBundle   string // macos: nome do bundle em /Applications ou ~/Applications ("Discord.app")
 	BundleID    string // macos: CFBundleIdentifier ("com.hnc.Discord")
-	DisplayName string // windows: DisplayName do registro Uninstall
+	DisplayName string // windows: DisplayName do registro Uninstall (nome exato, ou com versão e (x64) no fim)
+	Publisher   string // windows: Publisher do registro Uninstall; quando informado, tem de ser igual (sem diferenciar maiúsculas)
+	AppPath     string // windows: nome do exe em App Paths ("chrome.exe"); evidência complementar, só presença
 	DesktopID   string // linux: arquivo .desktop ("discord.desktop")
 	FlatpakID   string // linux: id do flatpak
 	Snap        string // linux: nome do snap
@@ -82,7 +84,7 @@ type Detect struct {
 
 // Empty diz se nenhum campo está preenchido.
 func (d Detect) Empty() bool {
-	return d.AppBundle == "" && d.BundleID == "" && d.DisplayName == "" && d.DesktopID == "" && d.FlatpakID == "" && d.Snap == ""
+	return d.AppBundle == "" && d.BundleID == "" && d.DisplayName == "" && d.Publisher == "" && d.AppPath == "" && d.DesktopID == "" && d.FlatpakID == "" && d.Snap == ""
 }
 
 // App é um item do catálogo.

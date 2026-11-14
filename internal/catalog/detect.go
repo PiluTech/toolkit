@@ -14,7 +14,7 @@ import (
 // são erros diferentes (como nos instaladores).
 var detectFields = map[string][]string{
 	KeyMacOS:   {"app_bundle", "bundle_id"},
-	KeyWindows: {"display_name"},
+	KeyWindows: {"display_name", "publisher", "app_path"},
 	KeyLinux:   {"desktop_id", "flatpak_id", "snap"},
 }
 
@@ -27,6 +27,7 @@ var (
 	bundleIDRe  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]*$`)
 	desktopIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*\.desktop$`)
 	flatpakIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+	appPathRe   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._ +-]*\.exe$`)
 	snapRe      = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 )
 
@@ -94,7 +95,7 @@ func (p *parser) parseDetectOS(appID, osKey string, n *yaml.Node) (Detect, bool)
 			p.errAt(v, "app %q: detect.%s: %q não pode ser vazio nem ter espaço nas pontas", appID, osKey, k.Value)
 			continue
 		}
-		if utf8.RuneCountInString(val) > maxDetectLen || (strings.Contains(val, "..") && k.Value != "display_name") {
+		if utf8.RuneCountInString(val) > maxDetectLen || (strings.Contains(val, "..") && k.Value != "display_name" && k.Value != "publisher") {
 			p.errAt(v, "app %q: detect.%s: %q com tamanho ou formato inválido", appID, osKey, k.Value)
 			continue
 		}
@@ -109,6 +110,12 @@ func (p *parser) parseDetectOS(appID, osKey string, n *yaml.Node) (Detect, bool)
 		case "display_name":
 			ok = true // texto livre (já sem controle e formatação pela carga); casa com o DisplayName do registro
 			d.DisplayName = val
+		case "publisher":
+			ok = true // texto livre, como display_name
+			d.Publisher = val
+		case "app_path":
+			ok = appPathRe.MatchString(val)
+			d.AppPath = val
 		case "desktop_id":
 			ok = desktopIDRe.MatchString(val)
 			d.DesktopID = val
@@ -141,6 +148,8 @@ func detectHint(field string) string {
 		return "nome do bundle terminado em .app, sem barras, como Discord.app"
 	case "bundle_id":
 		return "letras, números, ponto e hífen, como com.hnc.Discord"
+	case "app_path":
+		return "nome do executável terminado em .exe, sem barras, como chrome.exe"
 	case "desktop_id":
 		return "arquivo terminado em .desktop, sem barras"
 	case "flatpak_id":

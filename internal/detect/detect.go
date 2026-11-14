@@ -28,6 +28,10 @@ type Found struct {
 	Where string
 	// Version é a versão lida do Info.plist, do registro, do flatpak ou do snap; vazia se não deu para ler. Já sanitizada.
 	Version string
+	// Incomplete só vem com ok == false: a leitura falhou em parte (ex.: uma raiz do registro com acesso negado)
+	// ou por inteiro, então "não achei" NÃO quer dizer "não está instalado". A UI diz "não detectado (leitura
+	// incompleta)" em vez de "não instalado".
+	Incomplete bool
 }
 
 // Options configura o detector. Tudo é injetável: os testes nunca tocam o disco nem o sistema reais.
