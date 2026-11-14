@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/PiluTech/toolkit/internal/diagnostico"
 	"github.com/PiluTech/toolkit/internal/exec"
@@ -325,5 +326,50 @@ func TestRootImprimeQualquerErroSemSequenciasDeEscape(t *testing.T) {
 	noRawControls(t, "stderr", e.String())
 	if !strings.Contains(e.String(), "erro: ") || !strings.Contains(e.String(), `\x1b`) {
 		t.Errorf("%q", e.String())
+	}
+}
+
+// Lupa #62: o --json escapa DEL (U+007F) e emite pares substitutos UTF-16 para runas acima de U+FFFF (U+E0001 e U+E0020 são
+// caracteres de formatação "tag"), e cada campo decodificado é IGUAL ao original (o escape nunca altera o dado).
+func TestDiagnosticoJSONEscapaDELESuplementaresSemAlterarODado(t *testing.T) {
+	del, tag1, tag20, c1 := "\u007f", string(rune(0xE0001)), string(rune(0xE0020)), "\u009b"
+	model := "Note" + del + "X" + tag1 + "Y" + tag20 + "Z" + c1
+	diskName := "SSD" + tag1 + del
+	msgText := "falha" + tag20 + tag1 + del + "fim fim2"
+	deps := diagDeps(t, nil)
+	deps.Diag.Collect = func(context.Context, string, diagnostico.Deps) *diagnostico.Report {
+		r := diagReport()
+		r.Hardware.Model = model
+		r.Disks = []diagnostico.Disk{{Name: diskName, Health: diagnostico.HealthBad, HealthRaw: "FAILING"}}
+		r.Events = []diagnostico.Event{{Source: "kern" + tag1, Level: "erro", Count: 1, Message: msgText}}
+		return r
+	}
+	out, _, err := runDiag(t, deps, "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range out {
+		if r != '\n' && r != '\t' && r != ' ' && (r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) || r == 0x2028 || r == 0x2029 || (r >= 0xE0000 && r <= 0xE007F) || unicode.Is(unicode.Cf, r)) {
+			t.Fatalf("controle cru %U na saída do --json:\n%q", r, out)
+		}
+	}
+	var doc struct {
+		Report struct {
+			Hardware struct{ Model string }
+			Disks    []struct{ Name string }
+			Events   []struct{ Source, Message string }
+		} `json:"report"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("JSON inválido: %v\n%q", err, out)
+	}
+	if doc.Report.Hardware.Model != model {
+		t.Errorf("modelo alterado: %q, quer %q", doc.Report.Hardware.Model, model)
+	}
+	if len(doc.Report.Disks) != 1 || doc.Report.Disks[0].Name != diskName {
+		t.Errorf("disco alterado: %+v", doc.Report.Disks)
+	}
+	if len(doc.Report.Events) != 1 || doc.Report.Events[0].Source != "kern"+tag1 || doc.Report.Events[0].Message != msgText {
+		t.Errorf("evento alterado: %+v", doc.Report.Events)
 	}
 }

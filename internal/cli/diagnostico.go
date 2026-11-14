@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf16"
 
 	"github.com/spf13/cobra"
 
@@ -130,13 +131,19 @@ func runDiagnostico(ctx context.Context, out, errOut io.Writer, deps Deps, f dia
 }
 
 // jsonSafe escapa, dentro das strings do JSON, os caracteres que o encoding/json deixa passar mas que um terminal pode
-// tratar como controle (C1 U+0080 a U+009F, formatação/bidi e separadores de linha/parágrafo): vira \uXXXX, que continua
-// JSON válido e decodifica para o mesmo dado.
+// tratar como controle: DEL (U+007F), C1 (U+0080 a U+009F), formatação/bidi/tags (categoria Cf, inclusive acima de U+FFFF) e
+// os separadores de linha e de parágrafo (U+2028 e U+2029). Vira \uXXXX; uma runa acima de U+FFFF vira o PAR SUBSTITUTO
+// UTF-16 (\ud8xx\udcxx), que decodifica para a mesma runa: o escape nunca altera o dado.
 func jsonSafe(s string) string {
 	var b strings.Builder
 	for _, r := range s {
-		if (r >= 0x80 && r <= 0x9f) || unicode.Is(unicode.Cf, r) || r == 0x2028 || r == 0x2029 {
-			fmt.Fprintf(&b, `\u%04x`, r)
+		if r == 0x7f || (r >= 0x80 && r <= 0x9f) || unicode.Is(unicode.Cf, r) || r == 0x2028 || r == 0x2029 {
+			if r > 0xFFFF {
+				hi, lo := utf16.EncodeRune(r)
+				fmt.Fprintf(&b, `\u%04x\u%04x`, hi, lo)
+			} else {
+				fmt.Fprintf(&b, `\u%04x`, r)
+			}
 			continue
 		}
 		b.WriteRune(r)
