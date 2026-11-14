@@ -230,7 +230,7 @@ func (b *appsBackend) Load(ctx context.Context) ([]tui.AppInfo, error) {
 	}
 	var out []tui.AppInfo
 	for _, a := range cat.List() {
-		info := tui.AppInfo{ID: a.ID, Name: a.Name, Category: a.Category, Versions: a.Versions.Enabled()}
+		info := tui.AppInfo{ID: a.ID, Name: a.Name, Category: a.Category, Versions: a.Versions.Enabled(), Note: a.Note}
 		for _, in := range a.InstallersFor(b.deps.GOOS) {
 			info.Managers = append(info.Managers, in.Provider)
 		}

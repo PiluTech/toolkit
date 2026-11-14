@@ -123,3 +123,18 @@ apps:
     category: utilitarios
     windows: [{ provider: winget, id: Giorgiotani.Peazip }]
     linux:   [{ provider: flatpak, id: io.github.peazip.PeaZip }]
+
+  # Acesso remoto (PR13, decisão 3 do plano): RustDesk (AGPL-3.0) entra SÓ com o aviso na tela. Ids verificados em
+  # 2026-11-14: cask rustdesk (API do Homebrew, com sha256) e flatpak com.rustdesk.RustDesk (Flathub, verificado pelo
+  # site do fabricante). Windows fica SEM instalador: o id do winget não existe no winget-pkgs; sem url/github-release
+  # (um hash por release exigiria um PR por versão). O toolkit instala a versão ATUAL do gerenciador e NÃO confere a
+  # versão instalada: o aviso diz a mínima (1.5.0: NVD, 2026-11-14; ver docs/plano-seguranca-e-tui.md) e a revisão do
+  # catálogo precisa reconferi-la a cada PR que mexer neste app.
+  rustdesk:
+    name: RustDesk
+    category: utilitarios
+    note: "RustDesk dá controle remoto da máquina: só instale se quem vai usar entende isso. Use senha forte e temporária, desative o acesso permanente e prefira servidor próprio; o toolkit não configura nada. Versão mínima sem CVE alto ou crítico conhecido sem correção: 1.5.0 (NVD, verificado em 2026-11-14). O toolkit instala a versão atual do gerenciador e não confere a instalada: veja a versão no app."
+    macos:   [{ provider: brew, cask: rustdesk }]
+    linux:   [{ provider: flatpak, id: com.rustdesk.RustDesk }]
+    detect:
+      macos: { app_bundle: RustDesk.app, bundle_id: com.carriez.rustdesk }
