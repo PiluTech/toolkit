@@ -82,7 +82,9 @@ Sem isto, um app instalado à mão (o Discord que veio do `.dmg`, o programa do 
 |---|---|---|---|
 | `macos` | `app_bundle` | nome do bundle (`Discord.app`) | existe como pasta em `/Applications` ou `~/Applications`; a versão vem de `Contents/Info.plist` (`CFBundleShortVersionString`, senão `CFBundleVersion`) |
 | `macos` | `bundle_id` | `CFBundleIdentifier` (`com.hnc.Discord`) | se o nome não existir, olha o `Info.plist` dos `.app` dessas duas pastas (até 500 por pasta), para achar um app renomeado |
-| `windows` | `display_name` | `DisplayName` do registro Uninstall (`Discord`) | um PowerShell de texto fixo (caminho absoluto, só leitura) lista `HKLM` e `HKCU`, visões 64 e 32 bits; a versão é o `DisplayVersion` |
+| `windows` | `display_name` | `DisplayName` do registro Uninstall (`Discord`) | um PowerShell de texto fixo (caminho absoluto, só leitura, sem elevar) lê as chaves `Uninstall` de `HKLM`, `HKLM\WOW6432Node` e `HKCU`; a versão é o `DisplayVersion`; ignora `SystemComponent=1`, atualizações (`ParentKeyName`/`ReleaseType`) e nome vazio |
+| `windows` | `publisher` | `Publisher` do registro (`Google LLC`) | opcional; quando informado, tem de ser igual ao do registro (sem diferenciar maiúsculas); publisher ausente no registro não casa |
+| `windows` | `app_path` | nome do exe em `App Paths` (`chrome.exe`) | evidência complementar: a chave `HKLM`/`HKCU` `\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\<exe>` existe (sem versão). Só vale quando o Uninstall não tem o app. Só declare para exe conhecido; termina em `.exe`, sem barras |
 | `linux` | `desktop_id` | arquivo `.desktop` (`discord.desktop`) | existe em `/usr/share/applications` ou `~/.local/share/applications` |
 | `linux` | `flatpak_id` | id do flatpak | `flatpak list --app` (também vale quando o instalador do catálogo é o próprio flatpak: a segunda leitura é redundante, mas inofensiva) |
 | `linux` | `snap` | nome do snap | `snap list <nome>` |
@@ -99,6 +101,14 @@ Regras:
 - O `display_name` casa sem diferenciar maiúsculas com o `DisplayName` do registro **depois de tirar do fim** os grupos
   entre parênteses e os tokens que são só versão: `7-Zip 24.08 (x64)` casa com `7-Zip`, `Mozilla Firefox (x64 pt-BR)`
   com `Mozilla Firefox`; `Git Extensions` **não** casa com `Git`. Escreva o nome base.
+- No Windows o estado diz de onde veio: `instalado (fora do winget)` e, no detalhe da aba, no `toolkit list` e no
+  `install`, o lugar: `Programas e recursos do Windows [HKCU] ("Discord")` ou `App Paths do Windows [HKLM] (chrome.exe)`.
+  Uma raiz do registro que falha (acesso negado, chave ausente) só some da leitura: as outras continuam valendo, e
+  falha de leitura NUNCA vira "instalado". O script termina sempre com `exit 0` (uma raiz ausente não pode
+  derrubar a saída das outras). Apps da Microsoft Store (AppX) não são lidos: o catálogo não tem nome de pacote
+  AppX para nenhum app. Python não tem `detect.windows` de propósito: as versões menores convivem e o `DisplayName`
+  (`Python 3.13.x (64-bit)`) não diz se é a que o usuário pediu. O `install` NÃO instala por cima sem o
+  `--force` (o aviso `já instalado fora do winget em ...` e o plano vazio); com `--force` ele segue e repete o aviso.
 - A detecção é de melhor esforço: `plutil`, PowerShell, `flatpak` ou `snap` ausentes ou falhando viram "não
   detectado", nunca um erro que trave o install. Todo texto lido (plist, registro, saída de comando, nome de
   arquivo) passa por `textsafe` e é limitado em tamanho.

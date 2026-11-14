@@ -93,6 +93,14 @@ func TestDetectErros(t *testing.T) {
 		{"display com borda em branco", "    detect:\n      windows: { display_name: \" Discord\" }\n", `display_name`},
 		{"valor não é texto", "    detect:\n      linux: { snap: [a] }\n", `snap`},
 		{"ESC no valor", "    detect:\n      windows: { display_name: \"Dis\\ecord\" }\n", `U+001B`},
+		{"publisher em outro SO", "    detect:\n      macos: { publisher: X }\n", `não vale para detect.macos`},
+		{"app_path em outro SO", "    detect:\n      linux: { app_path: chrome.exe }\n", `não vale para detect.linux`},
+		{"app_path sem .exe", "    detect:\n      windows: { app_path: chrome }\n", `app_path`},
+		{"app_path com barra", "    detect:\n      windows: { app_path: \"a\\\\b.exe\" }\n", `app_path`},
+		{"app_path com ..", "    detect:\n      windows: { app_path: \"a..b.exe\" }\n", `app_path`},
+		{"publisher vazio", "    detect:\n      windows: { publisher: \"  \" }\n", `publisher`},
+		{"publisher com ESC", "    detect:\n      windows: { publisher: \"Go\\eogle\" }\n", `U+001B`},
+		{"publisher gigante", "    detect:\n      windows: { publisher: \"" + strings.Repeat("a", 201) + "\" }\n", `publisher`},
 		{"bidi", "    detect:\n      windows: { display_name: \"Dis\\u202Ecord\" }\n", `U+202E`},
 	}
 	for _, tc := range cases {
@@ -116,5 +124,31 @@ func TestDetectErroTemLinhaEColuna(t *testing.T) {
 	var es Errors
 	if !errors.As(err, &es) || es[0].Line != 10 || es[0].Col == 0 {
 		t.Fatalf("posição: %v", err)
+	}
+}
+
+func TestDetectWindowsPublisherEAppPath(t *testing.T) {
+	src := detectBase + `    detect:
+      windows: { display_name: Google Chrome, publisher: "Google LLC", app_path: chrome.exe }
+`
+	c, err := Parse("catalog.yaml", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := c.Get("discord")
+	w, ok := a.DetectFor("windows")
+	if !ok || w.Publisher != "Google LLC" || w.AppPath != "chrome.exe" {
+		t.Fatalf("%+v", w)
+	}
+	// So app_path (sem display_name) também é um bloco válido, e o Merge copia os campos novos.
+	only := detectBase + "    detect:\n      windows: { app_path: chrome.exe }\n"
+	c2, err := Parse("catalog.yaml", []byte(only))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, _ := Merge(c2, nil, false)
+	a2, _ := m.Get("discord")
+	if d, ok := a2.DetectFor("windows"); !ok || d.AppPath != "chrome.exe" {
+		t.Fatalf("merge: %+v %v", d, ok)
 	}
 }
