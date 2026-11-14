@@ -1,0 +1,24 @@
+ toolkit  [1 Otimização]                                                 v0.1.0
+────────────────────────────────────────────────────────────────────────────────
+ PLANO DAS ANIMAÇÕES (EXPERIMENTAL)
+ Reduzir animações do Windows (EXPERIMENTAL)
+
+ Animação de janelas ao minimizar e maximizar desligada
+   As janelas minimizam e maximizam sem animação.
+   ! HKCU\Control Panel\Desktop\WindowMetrics\MinAnimate: "1" -> "0"
+
+ Algumas animações só valem depois de reabrir a sessão do Windows ou o Explorer.
+
+ 1 mudança(s) pendente(s).
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+ Só leitura: nada foi alterado. Esc volta.
+ ↑↓ rolar  Esc voltar  ? ajuda  q sair

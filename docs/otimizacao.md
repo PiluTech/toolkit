@@ -1,8 +1,9 @@
 # `toolkit otimizacao` (só Windows): leitura de gargalos
 
 Lê o que pesa no Windows **só para leitura, sem alterar nada e sem administrador**, e diz o que fazer **em texto**. É a parte A
-da função 3 do [plano](plano-seguranca-e-tui.md); a parte B (reduzir animações, com plano, backup e desfazer) é outro PR e **não
-existe ainda**: esta tela e este comando não mudam nenhuma configuração.
+da função 3 do [plano](plano-seguranca-e-tui.md); o comando `toolkit otimizacao` (sem subcomando) e a leitura de gargalos da TUI não
+mudam nenhuma configuração. A parte B (reduzir animações, com plano, backup e desfazer, **EXPERIMENTAL**) é o subcomando
+`toolkit otimizacao animacoes`, descrito [no fim deste documento](#animações-experimental-toolkit-otimizacao-animacoes).
 
 ```sh
 toolkit otimizacao                       # resumo: o que pesa e o que fazer
@@ -107,3 +108,67 @@ leituras): `c` (ou Enter) lê, `Esc` cancela uma leitura em andamento, `c` lê d
 completos. A partir de 110 colunas o painel de detalhe mostra os limiares e a lista do que o toolkit nunca faz. Estados
 padronizados (carregando, erro, ainda não lido, cancelado); fora do Windows: `só existe no Windows (este sistema é <SO>)`. Ver
 [tui.md](tui.md).
+
+## Animações (EXPERIMENTAL): `toolkit otimizacao animacoes`
+
+Parte B da função 3 do [plano](plano-seguranca-e-tui.md). **Experimental** enquanto os valores não forem confirmados numa VM:
+o selo aparece no título do plano, na confirmação e na seção da TUI, e o resumo do plano avisa.
+
+```sh
+toolkit otimizacao animacoes --dry-run   # só o plano (valor atual -> novo); nada muda
+toolkit otimizacao animacoes             # plano, [s/N], backup, aplica (sem terminal exige --yes)
+toolkit otimizacao animacoes desfazer    # plano do que volta (atual -> original), [s/N], restaura, remove o backup
+```
+
+`--dry-run` e `--yes`/`-y` existem nos dois. O plano vem sempre antes; fora do Windows os comandos terminam com `só existe no
+Windows` sem tocar em nada. Código: `internal/animacoes` (núcleo), `internal/cli/otimizacao_animacoes.go` (comando) e
+`internal/cli/tui_otimizacao_animacoes.go` + `internal/tui/otimizacao_anim.go` (TUI).
+
+**O que muda (catálogo FECHADO, só HKCU, `animacoes.Items()`).**
+
+| Valor (HKCU) | Tipo | O toolkit grava | Efeito | Fonte |
+|---|---|---|---|---|
+| `Control Panel\Desktop\WindowMetrics` `MinAnimate` | REG_SZ | `"0"` | janelas minimizam e maximizam sem animação | referência de chaves de registro do Windows no TechNet (REG_SZ, 0 ou 1, padrão 1) |
+
+Só entra no catálogo o que tem fonte oficial confirmada (teste de catálogo fechado: só HKCU, só estes valores). Nada de
+`UserPreferencesMask` (máscara binária frágil), HKLM, serviços, tarefas, transparência ou energia (decisão 10 do plano).
+
+**Backup e desfazer.** Antes da **primeira** escrita o estado original de cada valor (tipo e conteúdo, ou "não existia") vai para
+`otimizacao-animacoes-backup-<SID>.json` (0600, atômico, dono = SID do usuário, em `%LOCALAPPDATA%\toolkit`; é por usuário, então
+com ou sem elevação é o mesmo arquivo). O backup é conferido contra o catálogo **antes de qualquer leitura ou escrita**: entrada
+que aponta para HKLM, outra chave, outro valor ou tipo desconhecido, ou backup de outro usuário, é recusado sem mudar nada.
+Reaplicar não sobrescreve o original. Desfazer restaura exatamente (tipo preservado; só apaga o que não existia) e remove o
+backup; se algo falha no meio, o que não foi restaurado fica no backup.
+
+**Revalidação depois da confirmação (CLI).** Depois do `[s/N]` (e também com `--yes`, logo antes de aplicar) e ANTES de qualquer
+backup ou escrita, o comando recalcula o plano e exige o MESMO texto e as mesmas pendências do que foi mostrado; no desfazer
+reconfere também o backup (mesmo conteúdo). Divergência (outro processo mexeu no valor durante a pergunta) =
+`o estado mudou desde o plano mostrado; nada foi alterado; veja o plano de novo`, zero mutações e backup intacto.
+
+**Leitura do registro.** Pelo mesmo `reg.exe` da privacidade (caminho absoluto, `ReadOnlyRunner` para ler e `MutatingRunner` para
+escrever, ausência de valor **provada**, nunca "exit 1 = ausente"), mas o System das animações expõe só o registro e recusa
+qualquer chave que não comece com `HKCU\` antes de executar um comando (`ErrSoHKCU`). Nunca há `Elevate` e nunca administrador.
+
+**Efeito e honestidade.** Algumas animações só valem depois de reabrir a sessão do Windows ou o Explorer; o toolkit **não**
+reinicia o Explorer (só avisa em texto). Reduzir animação melhora a sensação de resposta, não prova ganho de desempenho.
+
+**TUI.** Seção Máquina › Otimização: `m` alterna entre Gargalos (leitura, `c`) e Animações. Em Animações: `p` ver plano
+(só leitura), `a` aplicar… e `d` desfazer… abrem a confirmação única (foco em Cancelar, backup e como desfazer na tela), `c` lê de
+novo, `m` volta aos gargalos. O plano mostrado tem ID de uso único: a confirmação aplica só o plano exibido e só se o sistema (ou o
+backup) continua igual; `Esc` cancela a preparação; o resultado vira faixa (`x` fecha); releitura com erro depois de mudar não diz
+"nada foi alterado" nem promete backup. Sem estado utilizável (carregando, erro de leitura) as teclas `a`/`d`/`p` e a
+confirmação são recusadas: nunca há plano armado fora da tela (só `c` e `m`).
+
+### A VERIFICAR (animações)
+
+- `TaskbarAnimations` (DWORD em `Explorer\Advanced`): só relatos da comunidade (0 desliga, 1 liga; o padrão aparece como 1 ou 0
+  conforme a fonte). **Fora do catálogo** até haver fonte oficial e teste em VM.
+- `VisualFXSetting` (DWORD em `Explorer\VisualEffects`; relatos: 0 deixar o Windows escolher, 1 melhor aparência, 2 melhor
+  desempenho, 3 personalizado): só comunidade. **Fora do catálogo.**
+- `SystemParametersInfo` (`SPI_SETANIMATION`, `SPI_SETCLIENTAREAANIMATION`, `SPIF_SENDCHANGE`): a API documentada aplicaria na hora e
+  alimentaria o backup pela leitura `SPI_GET...`, mas este PR grava só o valor de registro (via `reg.exe`); a regra do plano de
+  preferir a API fica para depois da confirmação em VM.
+- Em VM: o `MinAnimate` gravado sozinho muda o comportamento sem sair da sessão? Quais animações só valem depois de reabrir a sessão
+  ou o Explorer? A reversão devolve o mesmo estado visual?
+- A pasta do backup quando o usuário que eleva é outro (SID e `%LOCALAPPDATA%` diferentes): coberto pelo dono gravado no arquivo,
+  mas não testado numa máquina real.

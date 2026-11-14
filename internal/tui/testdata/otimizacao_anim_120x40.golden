@@ -1,0 +1,40 @@
+ toolkit  [1 Otimização]                                                                                         v0.1.0
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ANIMAÇÕES DO WINDOWS · [experimental] · só o usuário atual                │ Animações (experimental)
+ Reduz as animações de janela do usuário atual (HKCU), sem administrador.  │
+   Os valores ainda não foram confirmados numa máquina de teste; antes de  │ O QUE FAZ
+   mudar o valor original vai para um backup, e a tecla d desfaz.          │ Define o valor MinAnimate do usuário atual
+─ Ajustes ─────────────────────────────────────────────────────────────────│ para "0": as janelas minimizam e maximizam
+ ○ pendente       Animação de janelas ao minimizar e maximizar desligada   │ sem animação. Nada além disso é alterado.
+                                                                           │
+ Sem backup: nada foi aplicado por aqui.                                   │ EFEITO
+ Reduzir animação melhora a sensação de resposta; não é promessa de ganho  │ Algumas animações só valem depois de
+   de desempenho.                                                          │ reabrir a sessão do Windows ou o Explorer.
+                                                                           │ O toolkit não reinicia o Explorer sozinho.
+                                                                           │
+                                                                           │ COMO DESFAZ
+                                                                           │ O valor original (inclusive "não existia")
+                                                                           │ vai para um backup antes da primeira
+                                                                           │ mudança. A tecla d restaura tipo e
+                                                                           │ conteúdo; reaplicar não sobrescreve o
+                                                                           │ original.
+                                                                           │
+                                                                           │ LIMITES
+                                                                           │ Só HKCU, sem administrador, sem serviços,
+                                                                           │ tarefas ou HKLM. Função experimental até os
+                                                                           │ valores serem confirmados numa máquina de
+                                                                           │ teste.
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Animações (experimental) — só o usuário atual; nada muda antes de confirmar
+ p ver plano  a aplicar…  d desfazer…  c ler de novo  m gargalos  ? ajuda  q sair

@@ -1,0 +1,16 @@
+ toolkit  [1 Otim]                                   v0.1.0
+────────────────────────────────────────────────────────────
+ ✓ Animações reduzidas                           [x] fechar
+ ANIMAÇÕES DO WINDOWS · [experimental] · só o usuário atual
+ Reduz as animações de janela do usuário atual (HKCU), sem
+   administrador. Os valores ainda não foram confirmados
+   numa máquina de teste; antes de mudar o valor original
+   vai para um backup, e a tecla d desfaz.
+─ Ajustes ──────────────────────────────────────────────────
+ ○ pendente       Animação de janelas ao minimizar e
+                  maximizar desligada
+
+ Sem backup: nada foi aplicado por aqui.
+─────────────────────────────────────────── ↓ mais 2 linhas
+ Aplicado: 1 mudança(s).
+ p ver plano  a aplicar…  d desfazer…  ? ajuda  q sair
