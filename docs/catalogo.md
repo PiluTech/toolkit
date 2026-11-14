@@ -21,6 +21,7 @@ apps:
   <id-do-app>:
     name: <nome exibido>
     category: <categoria>
+    note: <aviso curto>          # opcional: texto puro mostrado no plano, na Revisão e no detalhe (ver Aviso)
     versions: true | [lista]     # opcional: habilita a seleção de versão (ver Versões)
     windows: [<instalador>, ...] # em ordem de preferência
     macos:   [<instalador>, ...]
@@ -40,6 +41,14 @@ apps:
   tenta o próximo da lista.
 - **Validação**: na carga, com erro no formato `catalog.yaml:42:7: app "discord": provider "winget"
   exige "id"`. Chave desconhecida também é erro (pega `pakage:` no lugar de `package:`).
+
+## Aviso (`note`)
+
+Campo opcional por app: um texto curto (até 600 caracteres, em pt-BR, **sem template** `{{ }}`) que o toolkit mostra **antes de
+confirmar** a instalação: no plano do `toolkit install` (e do `--dry-run`) como `aviso (<id>): <texto>`, na lista de avisos da Revisão da TUI
+e no painel de detalhe da aba Apps (seção Aviso). Vale a mesma regra de todo texto do catálogo: caractere de controle ou de formatação
+(ESC, quebra de linha, bidi) é erro na carga, e na saída o texto ainda passa por `printable`. O aviso só sai quando o app vai ser instalado (não quando já está
+instalado). É informação, nunca bloqueio nem configuração do app.
 
 ## Categorias
 
@@ -115,7 +124,7 @@ discord:
 
 ## Apps do catálogo embutido
 
-Navegadores: Firefox, Brave, Google Chrome. Escritório: LibreOffice. Utilitários: 7-Zip, PeaZip. Os ids vêm de páginas públicas (winget-pkgs, API do
+Navegadores: Firefox, Brave, Google Chrome. Escritório: LibreOffice. Utilitários: 7-Zip, PeaZip, RustDesk (acesso remoto, com aviso). Os ids vêm de páginas públicas (winget-pkgs, API do
 Homebrew, Flathub); o que não foi confirmado fica de fora (PeaZip no macOS, LibreOffice por apt/dnf). Brave, LibreOffice e PeaZip no Linux entram só por
 flatpak (apt/dnf exigiriam repositório de terceiros).
 
@@ -123,6 +132,12 @@ flatpak (apt/dnf exigiriam repositório de terceiros).
 - **Chrome e hash divergente.** O instalador do winget aponta para uma URL do fabricante cujo conteúdo muda a cada versão. Se o manifesto ainda não acompanhou,
   a instalação falha com "hash divergente". É o comportamento correto: o toolkit nunca usa `--ignore-security-hash`. Tente de novo depois que o manifesto for
   atualizado.
+- **RustDesk (acesso remoto, AGPL-3.0)** entra só com o `note:` de segurança e só com ids verificados em 2026-11-14: cask `rustdesk` (macOS) e flatpak
+  `com.rustdesk.RustDesk` (Linux, verificado na Flathub pelo site do fabricante). **Windows: sem instalador**, porque o id do winget não existe no winget-pkgs
+  (a opção por `github-release` com hash fixado exigiria um PR por versão e ficou de fora). A versão mínima sem CVE alto ou crítico conhecido sem correção é a **1.5.0**
+  (NVD, 2026-11-14; lista dos CVEs em `docs/plano-seguranca-e-tui.md`). O toolkit instala a versão **atual** do gerenciador e **não confere** a versão instalada
+  (`SupportsVersion` do brew e do flatpak sempre recusa fixar versão): o aviso diz a mínima e manda conferir no app, nunca afirma que a instalada cumpre.
+  Quem mexer na entrada deve reconferir o NVD no mesmo PR.
 - Licenças de Brave, LibreOffice e PeaZip ainda a confirmar na fonte de cada projeto (`docs/plano-seguranca-e-tui.md`, pendência 11).
 
 ## Campos por provider

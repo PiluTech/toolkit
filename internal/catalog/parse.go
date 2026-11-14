@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"go.yaml.in/yaml/v3"
 
@@ -211,6 +212,8 @@ func (p *parser) parseApp(key, node *yaml.Node) (App, bool) {
 			if !slices.Contains(Categories, v.Value) {
 				p.errAt(v, "app %q: categoria %q desconhecida (use: %s)", id, v.Value, strings.Join(Categories, ", "))
 			}
+		case k.Value == "note":
+			app.Note = p.parseNote(id, v)
 		case k.Value == "versions":
 			versionsNode = v
 			app.Versions = p.parseVersions(id, v)
@@ -237,6 +240,25 @@ func (p *parser) parseApp(key, node *yaml.Node) (App, bool) {
 	}
 	p.checkVersionTemplates(app, versionsNode)
 	return app, len(p.errs) == start
+}
+
+// parseNote valida o aviso do app: texto não vazio, até MaxNote caracteres, sem template ({{ }} é de id/args). Caractere
+// de controle ou de formatação já é recusado em todo o arquivo (rejectControl); na saída o texto ainda passa por printable.
+func (p *parser) parseNote(id string, v *yaml.Node) string {
+	if v.Kind != yaml.ScalarNode || v.Tag == "!!null" {
+		p.errAt(v, "app %q: \"note\" deve ser um texto", id)
+		return ""
+	}
+	s := strings.TrimSpace(v.Value)
+	switch {
+	case s == "":
+		p.errAt(v, "app %q: \"note\" não pode ser vazio", id)
+	case utf8.RuneCountInString(s) > MaxNote:
+		p.errAt(v, "app %q: \"note\" passa de %d caracteres", id, MaxNote)
+	case strings.Contains(s, "{{"):
+		p.errAt(v, "app %q: \"note\" é texto puro, sem template ({{ }})", id)
+	}
+	return s
 }
 
 func (p *parser) parseVersions(id string, v *yaml.Node) Versions {

@@ -139,7 +139,7 @@ func (p *tuiPlanner) planTargets(ctx context.Context, targets []installTarget, p
 		case l == "":
 		case strings.HasPrefix(l, "==> "):
 			cur = strings.TrimPrefix(l, "==> ")
-		case l == msg.InstallFlatpakNote || l == msg.InstallReboot:
+		case l == msg.InstallFlatpakNote || l == msg.InstallReboot || strings.HasPrefix(l, msg.InstallNotePrefix):
 			plan.Warnings = appendUnique(plan.Warnings, l)
 		default:
 			plan.Changes = append(plan.Changes, prefix+cur+": "+l)
