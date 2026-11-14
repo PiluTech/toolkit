@@ -61,7 +61,7 @@ type NatResult struct {
 }
 
 // NativeAppsBackend liga a aba ao pacote appsnativos. Load, Plan e Reinstall só leem (Reinstall só devolve texto);
-// Apply muda o sistema e só é chamado depois da confirmação [s/N] dentro da aba.
+// Apply muda o sistema e só é chamado depois da confirmação (botão Remover ou "s") dentro da aba.
 type NativeAppsBackend interface {
 	Load(ctx context.Context) (NatInfo, error)
 	Plan(ctx context.Context, sel NatSelection) (NatPlan, error)
@@ -129,6 +129,7 @@ type NativeAppsTab struct {
 	plan   NatPlan
 	sel    NatSelection // seleção do plano mostrado
 	asking bool
+	conf   *Confirm // confirmação única (só existe com asking)
 	notice string
 	warn   bool
 	result string
@@ -162,7 +163,7 @@ func (t *NativeAppsTab) loadCmd() tea.Cmd {
 	}
 }
 
-// Capturing implementa Tab: durante a confirmação [s/N] e a remoção todas as teclas são da aba.
+// Capturing implementa Tab: durante a confirmação e a remoção todas as teclas são da aba.
 func (t *NativeAppsTab) Capturing() bool { return t.asking || t.busy == natBusyApply }
 
 // Selected implementa Tab: quantos apps estão marcados.
@@ -251,12 +252,40 @@ func (t *NativeAppsTab) onPlan(m natPlanMsg) {
 		t.setNotice("Só texto: o toolkit não reinstala nada. Esc volta.", false)
 	case m.plan.Pending == 0:
 		t.setNotice("Nada a remover: os apps marcados já estão ausentes.", false)
-	case m.plan.NeedsAdmin && !m.plan.IsAdmin:
-		t.setNotice("Este plano tem itens que exigem administrador e este terminal não é: nada foi alterado. Abra o terminal como administrador (botão direito, \"Executar como administrador\") e rode o toolkit de novo, ou volte (Esc) e desligue \"todos os usuários\" (u). O toolkit nunca eleva sozinho.", true)
 	default:
 		t.asking = true
+		t.conf = t.buildConfirm()
 		t.notice = ""
 	}
+}
+
+// buildConfirm monta a tela de confirmação a partir do plano do backend (o texto vira corpo rolável). Plano com
+// itens de administrador num terminal sem administrador entra com o botão Remover indisponível.
+func (t *NativeAppsTab) buildConfirm() *Confirm {
+	p := t.plan
+	blocked := p.NeedsAdmin && !p.IsAdmin
+	reason := ""
+	if blocked {
+		reason = "sem administrador"
+	}
+	c := NewConfirm("Remover", reason)
+	c.Title = fmt.Sprintf("Remover %d app(s) nativo(s)?", p.Pending)
+	scope := "só do usuário atual"
+	if t.sel.AllUsers {
+		scope = "de todos os usuários e do provisionamento"
+	}
+	c.Summary = fmt.Sprintf("Remove %d app(s) nativo(s) do Windows, %s.", p.Pending, scope)
+	c.Warn = "Não há desfazer automático: o toolkit não reinstala apps."
+	switch {
+	case blocked:
+		c.Warn += " Este plano tem itens que exigem administrador e este terminal não é: nada será alterado. Cancele e abra o terminal como administrador (botão direito, \"Executar como administrador\"), ou cancele e desligue \"todos os usuários\" (u). O toolkit nunca eleva sozinho."
+	case p.NeedsAdmin:
+		c.Warn += " Parte da remoção exige administrador (este terminal é)."
+	}
+	c.Backup = "a identidade de cada app removido é guardada em backup; o caminho aparece ao fim."
+	c.Undo = "a tecla i mostra, só como texto, como reinstalar cada app (nada é executado)."
+	c.Text = p.Text
+	return c
 }
 
 func (t *NativeAppsTab) onDone(m natDoneMsg) {
@@ -299,16 +328,7 @@ func (t *NativeAppsTab) key(k string) tea.Cmd {
 		return nil
 	}
 	if t.asking {
-		switch k {
-		case "up", "down", "pgup", "pgdown":
-			t.scrollKey(k)
-			return nil
-		case "s", "S", "y", "Y":
-			return t.confirm()
-		}
-		t.asking, t.view = false, false
-		t.setNotice("Cancelado: nada foi alterado.", false)
-		return nil
+		return t.confirmKey(k)
 	}
 	if t.view {
 		switch k {
@@ -350,6 +370,18 @@ func (t *NativeAppsTab) key(k string) tea.Cmd {
 		return t.planCmd(natRemove)
 	case "i":
 		return t.planCmd(natReinstall)
+	}
+	return nil
+}
+
+// confirmKey entrega a tecla à confirmação: só o botão Remover ativo remove; Cancelar, "n" e Esc voltam sem mudar nada.
+func (t *NativeAppsTab) confirmKey(k string) tea.Cmd {
+	switch t.conf.Update(k) {
+	case ConfirmAccept:
+		return t.confirm()
+	case ConfirmCancel:
+		t.asking, t.view, t.conf, t.scroll = false, false, nil, 0
+		t.setNotice("Cancelado: nada foi alterado.", false)
 	}
 	return nil
 }
@@ -415,7 +447,7 @@ func (t *NativeAppsTab) planCmd(kind natKind) tea.Cmd {
 }
 
 func (t *NativeAppsTab) confirm() tea.Cmd {
-	t.asking, t.busy, t.notice = false, natBusyApply, ""
+	t.asking, t.conf, t.busy, t.notice = false, nil, natBusyApply, ""
 	be, ctx, sel, id := t.be, t.ctx, t.sel, t.plan.ID
 	return tea.Batch(func() tea.Msg {
 		res, err := be.Apply(ctx, sel, id)
@@ -429,7 +461,7 @@ func (t *NativeAppsTab) Keys() []KeyHint {
 	case !t.usable() || t.busy == natBusyApply:
 		return nil
 	case t.asking:
-		return []KeyHint{{"s", "confirmar"}, {"n", "cancelar"}, {"↑↓", "rolar"}}
+		return t.conf.keyHints()
 	case t.view:
 		return []KeyHint{{"↑↓", "rolar"}, {"Esc", "voltar"}}
 	}
@@ -440,11 +472,11 @@ func (t *NativeAppsTab) Keys() []KeyHint {
 	return []KeyHint{{"↑↓", "mover"}, {"espaço", "marcar"}, {"p", "ver plano"}, {"r", "remover"}, {"b", "básico"}, {"c", "completo"}, {"u", all}, {"i", "reinstalar"}}
 }
 
-// Status implementa Tab: a pergunta [s/N], o aviso ou o resultado.
+// Status implementa Tab: a dica de teclas da confirmação, o aviso ou o resultado.
 func (t *NativeAppsTab) Status() string {
 	switch {
-	case t.asking:
-		return fmt.Sprintf("Remover %d app(s)? O backup guarda a identidade de cada um, mas não há desfazer automático. [s/N]", t.plan.Pending)
+	case t.asking && t.conf != nil:
+		return t.conf.Hint()
 	case t.busy == natBusyApply:
 		return t.theme.Spin(t.frame) + " Removendo… não feche a janela."
 	case t.notice != "" && t.warn:
@@ -459,6 +491,9 @@ func (t *NativeAppsTab) Status() string {
 func (t *NativeAppsTab) More() int {
 	if !t.usable() {
 		return 0
+	}
+	if t.asking {
+		return 0 // a confirmação mostra o próprio "↓ mais N linhas"
 	}
 	if t.view {
 		return max(len(t.planLines(t.lastW))-(t.scroll+t.lastH-1), 0)
@@ -482,6 +517,9 @@ func (t *NativeAppsTab) View(w, h int) string {
 		return strings.Join(lines, "\n")
 	}
 	var lines []string
+	if t.asking && t.conf != nil {
+		return strings.Join(t.conf.View(t.theme, w, h), "\n")
+	}
 	if t.view {
 		lines = t.fitPlan(w, h)
 	} else {

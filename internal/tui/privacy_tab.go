@@ -73,7 +73,7 @@ type PrivResult struct {
 }
 
 // PrivacyBackend liga a aba ao pacote privacidade. Load e Plan/UndoPlan só leem; Apply e Undo mudam o sistema e
-// só são chamados depois da confirmação [s/N] dentro da aba.
+// só são chamados depois da confirmação (botão Aplicar/Restaurar ou "s") dentro da aba.
 type PrivacyBackend interface {
 	Load(ctx context.Context) (PrivInfo, error)
 	Plan(ctx context.Context, p PrivProfile, onlyUser bool) (PrivPlan, error)
@@ -141,7 +141,8 @@ type PrivacyTab struct {
 	plan    PrivPlan
 	profile PrivProfile // perfil do plano mostrado
 	asking  bool
-	only    bool // onlyUser do plano mostrado
+	conf    *Confirm // confirmação única (só existe com asking)
+	only    bool     // onlyUser do plano mostrado
 	notice  string
 	warn    bool // o aviso é de problema (símbolo "!")
 	result  string
@@ -175,8 +176,8 @@ func (t *PrivacyTab) loadCmd() tea.Cmd {
 	}
 }
 
-// Capturing implementa Tab: durante a confirmação [s/N] e a aplicação, todas as teclas são da aba (q, Tab e os números não saem).
-// Capturing diz que, durante a confirmação [s/N] e a aplicação, todas as teclas são da aba (q, Tab e os números não saem).
+// Capturing implementa Tab: durante a confirmação e a aplicação, todas as teclas são da aba (q, Tab e os números não saem).
+// Capturing diz que, durante a confirmação e a aplicação, todas as teclas são da aba (q, Tab e os números não saem).
 func (t *PrivacyTab) Capturing() bool { return t.asking || t.busy == busyApply }
 
 // Selected implementa Tab.
@@ -257,14 +258,64 @@ func (t *PrivacyTab) onPlan(m privPlanMsg) {
 		t.setNotice("Só leitura: nada foi alterado. Esc volta.", false)
 	case m.kind == privApply && m.plan.Pending == 0:
 		t.setNotice("Nada a fazer: tudo já está como o perfil manda.", false)
-	case m.plan.NeedsAdmin && !m.plan.IsAdmin && m.kind == privApply:
-		t.setNotice("Este plano tem itens que exigem administrador e este terminal não é: nada foi alterado. Abra o terminal como administrador (botão direito, \"Executar como administrador\") e rode o toolkit de novo, ou volte (Esc) e use m para aplicar só o que é do usuário. O toolkit nunca eleva sozinho.", true)
-	case m.plan.NeedsAdmin && !m.plan.IsAdmin && m.kind == privUndo:
-		t.setNotice("O backup tem itens que exigem administrador e este terminal não é: nada foi alterado. Abra o terminal como administrador e tente desfazer de novo.", true)
 	default:
 		t.asking = true
+		t.conf = t.buildConfirm()
 		t.notice = ""
 	}
+}
+
+// buildConfirm monta a tela de confirmação a partir do plano que o backend devolveu (o texto vira corpo rolável).
+// Plano com itens de administrador num terminal sem administrador entra com o botão de confirmar indisponível.
+func (t *PrivacyTab) buildConfirm() *Confirm {
+	p := t.plan
+	blocked := p.NeedsAdmin && !p.IsAdmin
+	reason := ""
+	if blocked {
+		reason = "sem administrador"
+	}
+	var c *Confirm
+	switch {
+	case t.kind == privUndo && p.Pending == 0:
+		c = NewConfirm("Remover backup", reason)
+		c.Title = "Remover o backup de privacidade?"
+		c.Summary = "Tudo já está como antes: não há o que restaurar. Só o arquivo de backup será removido."
+		c.Backup = "o backup será apagado; depois dele não há mais como voltar a estes valores."
+		c.Undo = "se quiser os valores atuais de volta, aplique o perfil de novo (a)."
+	case t.kind == privUndo:
+		c = NewConfirm("Restaurar", reason)
+		c.Title = "Restaurar o estado anterior?"
+		c.Summary = fmt.Sprintf("Devolve %d item(ns) ao valor que tinham antes do perfil (valor atual -> original).", p.Pending)
+		c.Backup = "os valores originais vêm do backup; ele é removido depois de restaurar."
+		c.Undo = "depois de restaurar não há backup; para voltar ao perfil, aplique-o de novo (a)."
+	default:
+		c = NewConfirm("Aplicar", reason)
+		c.Title = "Aplicar o perfil " + string(t.profile) + "?"
+		c.Summary = fmt.Sprintf("Muda %d ajuste(s) de privacidade do Windows", p.Pending)
+		if t.only {
+			c.Summary += ", só os itens do usuário."
+		} else {
+			c.Summary += "."
+		}
+		c.Backup = "o valor original de cada item é guardado em backup antes de mudar; o caminho aparece ao fim."
+		c.Undo = "na aba Privacidade, a tecla d restaura os valores do backup."
+	}
+	switch {
+	case blocked && t.kind == privUndo:
+		c.Warn = "O backup tem itens que exigem administrador e este terminal não é: nada será alterado. Cancele, abra o terminal como administrador (botão direito, \"Executar como administrador\") e tente de novo. O toolkit nunca eleva sozinho."
+	case blocked:
+		c.Warn = "Este plano tem itens que exigem administrador e este terminal não é: nada será alterado. Cancele e abra o terminal como administrador (botão direito, \"Executar como administrador\"), ou cancele e use m para aplicar só o que é do usuário. O toolkit nunca eleva sozinho."
+	case p.NeedsAdmin:
+		c.Warn = "Parte das mudanças é de sistema e exige administrador (este terminal é)."
+	}
+	var keep []string
+	for _, l := range strings.Split(strings.TrimRight(p.Text, "\n"), "\n") {
+		if !isUndoHint(l) { // o comando manual de cada item cansa a leitura; o backup já restaura (tecla d)
+			keep = append(keep, l)
+		}
+	}
+	c.Text = strings.Join(keep, "\n")
+	return c
 }
 
 func (t *PrivacyTab) onDone(m privDoneMsg) {
@@ -315,16 +366,7 @@ func (t *PrivacyTab) key(k string) tea.Cmd {
 		return nil
 	}
 	if t.asking {
-		switch k {
-		case "up", "down", "pgup", "pgdown":
-			t.scrollKey(k)
-			return nil
-		case "s", "S", "y", "Y":
-			return t.confirm()
-		}
-		t.asking, t.view = false, false
-		t.setNotice("Cancelado: nada foi alterado.", false)
-		return nil
+		return t.confirmKey(k)
 	}
 	if t.view {
 		switch k {
@@ -351,6 +393,18 @@ func (t *PrivacyTab) key(k string) tea.Cmd {
 		return t.planCmd(privApply)
 	case "d":
 		return t.planCmd(privUndo)
+	}
+	return nil
+}
+
+// confirmKey entrega a tecla à confirmação: só o botão de confirmar ativo aplica; Cancelar, "n" e Esc voltam sem mudar nada.
+func (t *PrivacyTab) confirmKey(k string) tea.Cmd {
+	switch t.conf.Update(k) {
+	case ConfirmAccept:
+		return t.confirm()
+	case ConfirmCancel:
+		t.asking, t.view, t.conf, t.scroll = false, false, nil, 0
+		t.setNotice("Cancelado: nada foi alterado.", false)
 	}
 	return nil
 }
@@ -389,7 +443,7 @@ func (t *PrivacyTab) planCmd(kind privKind) tea.Cmd {
 }
 
 func (t *PrivacyTab) confirm() tea.Cmd {
-	t.asking, t.busy, t.notice = false, busyApply, ""
+	t.asking, t.conf, t.busy, t.notice = false, nil, busyApply, ""
 	be, ctx, p, only, kind, id := t.be, t.ctx, t.profile, t.only, t.kind, t.plan.ID
 	return tea.Batch(func() tea.Msg {
 		var res PrivResult
@@ -411,7 +465,7 @@ func (t *PrivacyTab) Keys() []KeyHint {
 	case t.busy == busyApply:
 		return nil
 	case t.asking:
-		return []KeyHint{{"s", "confirmar"}, {"n", "cancelar"}, {"↑↓", "rolar"}}
+		return t.conf.keyHints()
 	case t.view:
 		return []KeyHint{{"↑↓", "rolar"}, {"Esc", "voltar"}}
 	}
@@ -422,15 +476,11 @@ func (t *PrivacyTab) Keys() []KeyHint {
 	return []KeyHint{{"↑↓", "perfil"}, {"p", "ver plano"}, {"a", "aplicar"}, {"d", "desfazer"}, {"m", only}}
 }
 
-// Status implementa Tab: a pergunta [s/N], o aviso ou o resultado.
+// Status implementa Tab: a dica de teclas da confirmação, o aviso ou o resultado.
 func (t *PrivacyTab) Status() string {
 	switch {
-	case t.asking && t.kind == privUndo && t.plan.Pending == 0:
-		return "Tudo já está como antes. Remover o backup? [s/N]"
-	case t.asking && t.kind == privUndo:
-		return "Restaurar estes itens do backup? [s/N]"
-	case t.asking:
-		return fmt.Sprintf("Aplicar o perfil %s? O valor original de cada item será guardado em backup. [s/N]", t.profile)
+	case t.asking && t.conf != nil:
+		return t.conf.Hint()
 	case t.busy == busyApply:
 		return t.theme.Spin(t.frame) + " Aplicando… não feche a janela."
 	case t.notice != "" && t.warn:
@@ -447,6 +497,9 @@ func (t *PrivacyTab) More() int {
 		return 0
 	}
 	var n int
+	if t.asking {
+		return 0 // a confirmação mostra o próprio "↓ mais N linhas"
+	}
 	if t.view {
 		n = len(t.planLines(t.lastW)) - (t.scroll + t.lastH - 1)
 	} else {
@@ -469,6 +522,9 @@ func (t *PrivacyTab) View(w, h int) string {
 		return " A privacidade só existe no Windows (este sistema é " + t.info.OS + "). Nada a mudar aqui."
 	}
 	var lines []string
+	if t.asking && t.conf != nil {
+		return strings.Join(t.conf.View(t.theme, w, h), "\n")
+	}
 	if t.view {
 		lines = t.fitPlan(w, h)
 	} else {

@@ -1,0 +1,40 @@
+ toolkit  [1 Privacidade]                                                                                        v0.1.0
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ APLICAR O PERFIL RECOMENDADO?
+ Muda 3 ajuste(s) de privacidade do Windows.
+ ! aviso: Este plano tem itens que exigem administrador e este terminal não é: nada será alterado. Cancele e abra o
+   terminal como administrador (botão direito, "Executar como administrador"), ou cancele e use m para aplicar só o que
+   é do usuário. O toolkit nunca eleva sozinho.
+ Backup: o valor original de cada item é guardado em backup antes de mudar; o caminho aparece ao fim.
+ Como desfazer: na aba Privacidade, a tecla d restaura os valores do backup.
+
+ Perfil: recomendado
+
+ ID de publicidade desligado
+   ! HKCU\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo\Enabled: 1 -> 0
+ Dados de diagnóstico no mínimo [exige administrador]
+   ! HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection\AllowTelemetry: não definido -> 0
+ Serviço de telemetria [exige administrador]
+   ! serviço DiagTrack: em execução -> desativado
+
+ >[ Cancelar ]<   ( Aplicar: sem administrador )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Enter ou Esc cancelam · ↑↓ rolam o plano
+ Enter cancela  Esc cancela  ↑↓ rolar  ? ajuda  q sair

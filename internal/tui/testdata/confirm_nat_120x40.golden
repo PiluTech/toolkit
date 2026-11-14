@@ -1,0 +1,40 @@
+ toolkit  [1 Apps nativos]                                                                                       v0.1.0
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ REMOVER 3 APP(S) NATIVO(S)?
+ Remove 3 app(s) nativo(s) do Windows, só do usuário atual.
+ ! aviso: Não há desfazer automático: o toolkit não reinstala apps.
+ Backup: a identidade de cada app removido é guardada em backup; o caminho aparece ao fim.
+ Como desfazer: a tecla i mostra, só como texto, como reinstalar cada app (nada é executado).
+
+ Apps nativos do Windows
+ Escopo: somente o usuário atual
+
+ Será removido:
+   - MSN Clima: Microsoft.BingWeather_4.53.33420.0_x64__8wekyb3d8bbwe
+   - Skype: Microsoft.SkypeApp 15.0.0.0
+   - Vínculo com o Celular: Microsoft.YourPhone 1.24.0.0
+
+ >[ Cancelar ]<    [ Remover ]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Tab muda o botão · Enter ativa · s confirma · Esc cancela
+ Tab botão  Enter ativa  s confirma  Esc cancela  ↑↓ rolar  ? ajuda  q sair

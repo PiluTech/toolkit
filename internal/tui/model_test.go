@@ -55,8 +55,19 @@ func press(m *Model, code rune, mod tea.KeyMod, text string) tea.Cmd {
 	return cmd
 }
 
+// trimTrailing tira os espaços finais de cada linha: os goldens novos não os carregam (git diff --check) e a comparação
+// ignora-os nos antigos.
+func trimTrailing(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		lines[i] = strings.TrimRight(l, " \t")
+	}
+	return strings.Join(lines, "\n")
+}
+
 func golden(t *testing.T, name, got string) {
 	t.Helper()
+	got = trimTrailing(got)
 	p := filepath.Join("testdata", name+".golden")
 	if os.Getenv("UPDATE_GOLDEN") == "1" {
 		if err := os.MkdirAll("testdata", 0o755); err != nil {
@@ -70,7 +81,7 @@ func golden(t *testing.T, name, got string) {
 	if err != nil {
 		t.Fatalf("falta %s (rode com UPDATE_GOLDEN=1): %v", p, err)
 	}
-	if strings.TrimRight(string(want), "\n") != got {
+	if trimTrailing(strings.TrimRight(string(want), "\n")) != got {
 		t.Fatalf("%s diverge.\n--- obtido ---\n%s\n--- esperado ---\n%s", name, got, want)
 	}
 }

@@ -241,8 +241,8 @@ func TestPrivacyTabAplicarPedeConfirmacao(t *testing.T) {
 	be := &fakePriv{info: privSample(true), plan: PrivPlan{Text: planText, Pending: 1, IsAdmin: true}, applyRes: PrivResult{Applied: 1, BackupPath: `C:\b.json`}}
 	tab := privTab(t, be)
 	pkey(tab, "down", "a")
-	if !tab.Capturing() || !strings.HasSuffix(tab.Status(), "[s/N]") || !strings.Contains(tab.Status(), "recomendado") {
-		t.Fatalf("confirmação: capturing=%v status=%q", tab.Capturing(), tab.Status())
+	if v := tab.View(100, 24); !tab.Capturing() || !strings.Contains(tab.Status(), "s confirma") || !strings.Contains(strings.ToLower(v), "recomendado") || !strings.Contains(v, ">[ Cancelar ]<") {
+		t.Fatalf("confirmação: capturing=%v status=%q\n%s", tab.Capturing(), tab.Status(), tab.View(100, 24))
 	}
 	if len(be.applies) != 0 {
 		t.Fatal("aplicou antes da confirmação")
@@ -263,7 +263,8 @@ func TestPrivacyTabAplicarPedeConfirmacao(t *testing.T) {
 }
 
 func TestPrivacyTabSoSConfirma(t *testing.T) {
-	for _, k := range []string{"n", "N", "enter", "esc", "x", "q", "1", "tab"} {
+	// Cancelam: n, N, esc, e Enter no foco inicial (Cancelar).
+	for _, k := range []string{"n", "N", "enter", "esc"} {
 		be := &fakePriv{info: privSample(true), plan: PrivPlan{Text: planText, Pending: 1, IsAdmin: true}}
 		tab := privTab(t, be)
 		pkey(tab, "a", k)
@@ -272,6 +273,24 @@ func TestPrivacyTabSoSConfirma(t *testing.T) {
 		}
 		if tab.Capturing() || !strings.Contains(tab.Status(), "Cancelado") {
 			t.Errorf("tecla %q: capturing=%v status=%q", k, tab.Capturing(), tab.Status())
+		}
+	}
+	// Teclas aleatórias não confirmam nem cancelam: a pergunta continua.
+	for _, k := range []string{"x", "q", "1", "space", "a", "r"} {
+		be := &fakePriv{info: privSample(true), plan: PrivPlan{Text: planText, Pending: 1, IsAdmin: true}}
+		tab := privTab(t, be)
+		pkey(tab, "a", k)
+		if len(be.applies) != 0 || !tab.Capturing() {
+			t.Errorf("tecla %q: applies=%d capturing=%v", k, len(be.applies), tab.Capturing())
+		}
+	}
+	// s/y confirmam direto; Tab + Enter confirma pelo botão.
+	for _, keys := range [][]string{{"s"}, {"y"}, {"tab", "enter"}} {
+		be := &fakePriv{info: privSample(true), plan: PrivPlan{Text: planText, Pending: 1, IsAdmin: true}}
+		tab := privTab(t, be)
+		pkey(tab, append([]string{"a"}, keys...)...)
+		if len(be.applies) != 1 {
+			t.Errorf("%v não confirmou", keys)
 		}
 	}
 }
@@ -286,14 +305,14 @@ func TestPrivacyTabConfirmacaoCapturaTeclasDaRaiz(t *testing.T) {
 	}
 	m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	if m.Quitting() {
-		t.Error("q durante [s/N] não pode sair")
+		t.Error("q durante a confirmação não pode sair")
 	}
 }
 
 func TestPrivacyTabRolarNaConfirmacaoNaoCancela(t *testing.T) {
 	be := &fakePriv{info: privSample(true), plan: PrivPlan{Text: planText, Pending: 1, IsAdmin: true}}
 	tab := privTab(t, be)
-	pkey(tab, "a", "down", "up")
+	pkey(tab, "a", "down", "up", "pgdown", "pgup")
 	if !tab.Capturing() || len(be.applies) != 0 {
 		t.Error("rolar mantém a pergunta")
 	}
@@ -303,18 +322,21 @@ func TestPrivacyTabSemAdminRecusaAntesDeMudar(t *testing.T) {
 	be := &fakePriv{info: privSample(false), plan: PrivPlan{Text: planText, Pending: 3, NeedsAdmin: true, IsAdmin: false}}
 	tab := privTab(t, be)
 	pkey(tab, "down", "a")
-	if tab.Capturing() {
-		t.Fatal("sem administrador não há confirmação")
+	if !tab.Capturing() {
+		t.Fatal("a confirmação abre, com o botão de aplicar indisponível")
 	}
-	st := tab.Status()
-	for _, want := range []string{"administrador", "nada foi alterado", "m "} {
-		if !strings.Contains(st, want) {
-			t.Errorf("faltou %q: %q", want, st)
+	v := tab.View(100, 24)
+	for _, want := range []string{"administrador", "nada será alterado", "( Aplicar: sem administrador )", ">[ Cancelar ]<", "m para aplicar só"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("faltou %q:\n%s", want, v)
 		}
 	}
-	pkey(tab, "s")
+	pkey(tab, "s", "y", "tab", "enter")
 	if len(be.applies) != 0 {
 		t.Fatal("aplicou sem administrador")
+	}
+	if tab.Capturing() { // tab não vai ao botão indisponível: Enter ativa Cancelar
+		t.Error("Enter em Cancelar deveria fechar a confirmação")
 	}
 }
 
@@ -370,8 +392,8 @@ func TestPrivacyTabDesfazer(t *testing.T) {
 	be := &fakePriv{info: privSample(true), undoPlan: PrivPlan{Text: "O que será restaurado\n  ! x: 0 -> 1\n", Pending: 1, IsAdmin: true}, undoRes: PrivResult{Applied: 1}}
 	tab := privTab(t, be)
 	pkey(tab, "d")
-	if !tab.Capturing() || !strings.Contains(tab.Status(), "Restaurar") || !strings.Contains(tab.View(100, 16), "0 -> 1") {
-		t.Fatalf("status=%q", tab.Status())
+	if !tab.Capturing() || !strings.Contains(tab.View(100, 24), "RESTAURAR") || !strings.Contains(tab.View(100, 24), "0 -> 1") {
+		t.Fatalf("status=%q view=%s", tab.Status(), tab.View(100, 24))
 	}
 	if be.undoCalls != 0 {
 		t.Fatal("restaurou antes do s")
@@ -395,8 +417,8 @@ func TestPrivacyTabDesfazerSemAdmin(t *testing.T) {
 	be := &fakePriv{info: privSample(false), undoPlan: PrivPlan{Text: "x", Pending: 1, NeedsAdmin: true}}
 	tab := privTab(t, be)
 	pkey(tab, "d")
-	if tab.Capturing() || !strings.Contains(tab.Status(), "administrador") {
-		t.Errorf("status=%q", tab.Status())
+	if v := tab.View(100, 24); !tab.Capturing() || !strings.Contains(v, "administrador") || !strings.Contains(v, "( Restaurar: sem administrador )") {
+		t.Errorf("view=%s", v)
 	}
 	pkey(tab, "s")
 	if be.undoCalls != 0 {
@@ -408,8 +430,8 @@ func TestPrivacyTabDesfazerNadaARestaurar(t *testing.T) {
 	be := &fakePriv{info: privSample(true), undoPlan: PrivPlan{Text: "x", Pending: 0, IsAdmin: true}, undoRes: PrivResult{Nothing: true}}
 	tab := privTab(t, be)
 	pkey(tab, "d")
-	if !strings.Contains(tab.Status(), "Remover o backup? [s/N]") {
-		t.Fatalf("status=%q", tab.Status())
+	if v := tab.View(100, 24); !strings.Contains(v, "REMOVER O BACKUP DE PRIVACIDADE?") {
+		t.Fatalf("view=%s", v)
 	}
 	pkey(tab, "s")
 	if !strings.Contains(tab.Status(), "nada a restaurar") {
