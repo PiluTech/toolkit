@@ -299,3 +299,54 @@ func (invalidatingDetector) Find(context.Context, catalog.App) (detect.Found, bo
 	return detect.Found{}, false, nil
 }
 func (d invalidatingDetector) Invalidate() { *d.n++ }
+
+// fakeDetector devolve sempre o mesmo resultado (para testar só o encanamento do estado).
+type fakeDetector struct{ f detect.Found }
+
+func (d fakeDetector) Find(context.Context, catalog.App) (detect.Found, bool, error) {
+	return d.f, false, nil
+}
+
+func TestEstadoLeituraIncompletaNaoViraNaoInstalado(t *testing.T) {
+	f := macFake(t)
+	deps := macDeps(f, nil)
+	deps.Detector = func(exec.Runner) ExternalDetector { return fakeDetector{detect.Found{Incomplete: true}} }
+	out, _, err := runCmd(t, deps, "list", "--installed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "não detectado (leitura incompleta)") || strings.Contains(out, "não instalado") {
+		t.Fatalf("esperava 'não detectado (leitura incompleta)':\n%s", out)
+	}
+	jout, _, _ := runCmd(t, deps, "list", "--installed", "--json")
+	if !strings.Contains(jout, `"detect_gap": "incomplete"`) {
+		t.Fatalf("json sem detect_gap:\n%s", jout)
+	}
+	b := &appsBackend{deps: deps}
+	if st := b.Status(context.Background(), "vlc"); st.Installed || st.DetectGap != tui.DetectIncomplete {
+		t.Fatalf("tui: %+v", st)
+	}
+	noMutation(t, f)
+}
+
+// No Windows, app sem bloco detect (Python, Microsoft Store): "não detectado", não "não instalado".
+func TestEstadoAppSemDeteccaoNoWindowsDizNaoDetectado(t *testing.T) {
+	cat := `apps:
+  py:
+    name: Python
+    category: dev
+    windows: [{ provider: winget, id: Python.Python.3.12 }]
+`
+	f := exectest.New(t).WithPath("winget", `C:\winget.exe`).
+		On("winget list --id Python.Python.3.12 -e --disable-interactivity", exectest.Exit(int(uint32(0x8A150014)), ""))
+	deps := Deps{GOOS: "windows", EmbeddedYML: []byte(cat), NewRunner: func() exec.Runner { return f },
+		CheckElevation: func(exec.Cmd) error { return nil }, Interactive: func() bool { return false },
+		Detector: func(r exec.Runner) ExternalDetector { return detect.New(r, detect.Options{GOOS: "windows"}) }}
+	out, _, err := runCmd(t, deps, "list", "--installed", "--os", "windows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "não detectado") || strings.Contains(out, "não instalado") {
+		t.Fatalf("esperava 'não detectado':\n%s", out)
+	}
+}

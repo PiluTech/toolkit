@@ -44,6 +44,8 @@ const (
 	ListStateExternalAt   = " em %s"
 	ListStateNo           = "não instalado"
 	ListStateUnknown      = "não deu para verificar"
+	ListStateUndetected   = "não detectado"
+	ListStateIncomplete   = "não detectado (leitura incompleta)"
 	ListVersionsAny       = "sim"
 	ListVersionsNone      = "-"
 )

@@ -236,7 +236,7 @@ func (d Deps) externalFinder(rn exec.Runner, app catalog.App) providers.External
 	}
 	return func(ctx context.Context) (providers.External, bool, error) {
 		f, ok, err := det.Find(ctx, app)
-		return providers.External{Where: f.Where, Version: f.Version}, ok, err
+		return providers.External{Where: f.Where, Version: f.Version, Incomplete: f.Incomplete}, ok, err
 	}
 }
 
