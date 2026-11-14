@@ -1,0 +1,30 @@
+ toolkit  0 Início  1 Instalar [2 Máquina] 3 Segurança  4 Rede  5 Histórico                            v0.1.0
+ Máquina ›  Diagnóstico  [Apps nativos]                                                            admin: sim
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ APPS NATIVOS DO WINDOWS · administrador: sim                    │ Skype
+ Escopo: só o usuário atual · marcados: 1                        │ pacote: skype
+   [ ] ✓ instalado  basico    MSN Clima                          │
+ > [x] ○ ausente    basico    Skype                              │ PERFIL
+   [ ] ✓ instalado  completo  Vínculo com o Celular              │ básico (também entra no completo)
+   [ ] ✓ instalado  completo  Mapas                              │
+                                                                 │ ESTADO
+                                                                 │ ○ ausente: nada a remover
+                                                                 │ [x] marcado para a remoção
+                                                                 │ escopo: só o usuário atual
+                                                                 │
+                                                                 │ COMO REINSTALAR
+                                                                 │ A tecla i mostra, só como texto, como
+                                                                 │ reinstalar a partir do backup; nada é
+                                                                 │ executado.
+                                                                 │ O toolkit não reinstala apps sozinho.
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ ↑↓ mover  espaço marcar  p ver plano  r remover…  b básico  t todos  m todos os usuários  ? ajuda  q sair

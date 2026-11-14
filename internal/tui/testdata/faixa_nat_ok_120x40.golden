@@ -4,37 +4,37 @@
    Backup em C:\ProgramData\toolkit\backups\apps-nativos-20261114-1200.json
    Para reinstalar: tecle i
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- APPS NATIVOS DO WINDOWS · administrador: sim
- Escopo: só o usuário atual · marcados: 0
- > [ ] ✓ instalado  basico    MSN Clima
-   [ ] ○ ausente    basico    Skype
-   [ ] ✓ instalado  completo  Vínculo com o Celular
-   [ ] ✓ instalado  completo  Mapas
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+ APPS NATIVOS DO WINDOWS · administrador: sim                              │ MSN Clima
+ Escopo: só o usuário atual · marcados: 0                                  │ pacote: bing-weather
+ > [ ] ✓ instalado  basico    MSN Clima                                    │
+   [ ] ○ ausente    basico    Skype                                        │ PERFIL
+   [ ] ✓ instalado  completo  Vínculo com o Celular                        │ básico (também entra no completo)
+   [ ] ✓ instalado  completo  Mapas                                        │
+                                                                           │ ESTADO
+                                                                           │ ✓ instalado
+                                                                           │ escopo: só o usuário atual
+                                                                           │
+                                                                           │ COMO REINSTALAR
+                                                                           │ A tecla i mostra, só como texto, como
+                                                                           │ reinstalar a partir do backup; nada é
+                                                                           │ executado.
+                                                                           │ O toolkit não reinstala apps sozinho.
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  Removidos: 2 app(s).
  ↑↓ mover  espaço marcar  p ver plano  r remover…  b básico  t todos  m todos os usuários  ? ajuda  q sair

@@ -323,3 +323,11 @@ func (t *DiagTab) More() int {
 	}
 	return max(len(t.wrapped())-(t.top+max(t.lastH, 1)), 0)
 }
+
+// Detail implementa Detailer: na visão de receitas é o detalhe da receita sob o cursor; na visão Máquina não há painel.
+func (t *DiagTab) Detail(w, h int) string {
+	if t.machine {
+		return ""
+	}
+	return t.rec.Detail(w, h)
+}

@@ -38,6 +38,15 @@ type Tab interface {
 // Reloader é implementada pelas abas que mostram o estado do sistema: depois de uma execução elas o releem.
 type Reloader interface{ Reload() tea.Cmd }
 
+// Detailer é implementada pelas seções que têm painel de detalhe (docs/tui.md, fase 7). A partir de DetailMinWidth
+// colunas a raiz pergunta a Detail(w, h) o texto do item sob o cursor (w = DetailWidth) e o desenha à direita da lista,
+// que recebe o resto da largura. O painel é SÓ LEITURA (nunca repete ação) e usa só o que a seção já tem em memória.
+// Devolver "" significa "nada a detalhar agora" (carregando, erro, vazio, não suportado, plano ou confirmação na tela, modal
+// da seção): a raiz então desenha a lista na largura toda. Texto de fora passa por textsafe e QUEBRA; nunca reticências.
+type Detailer interface {
+	Detail(w, h int) string
+}
+
 // ResultKind é o tipo de um resultado: dá o símbolo e a palavra da faixa (✓ feito, ! parcial, ✗ falhou, i info, ! pendente).
 type ResultKind int
 

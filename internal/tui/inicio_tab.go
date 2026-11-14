@@ -217,3 +217,33 @@ func (t *InicioTab) View(w, h int) string {
 	t.more = len(lines) - bottom
 	return strings.Join(lines[t.top:bottom], "\n")
 }
+
+// Detail implementa Detailer: o objetivo sob o cursor (para que serve e para onde o Enter leva). Só usa o que o Início já tem.
+func (t *InicioTab) Detail(w, h int) string {
+	if len(t.items) == 0 {
+		return ""
+	}
+	it := t.items[t.cur]
+	d := newDetail(t.theme, w)
+	d.name(it.Title)
+	d.section("Para que serve")
+	d.para(it.Desc)
+	d.section("Destino")
+	if it.Unavailable {
+		d.para(it.Title + ": ainda não existe nesta versão.")
+	} else {
+		d.para("Enter abre " + it.Dest)
+		if t.cur < t.digitLimit() {
+			d.para("ou a tecla " + itoa(t.cur+1))
+		}
+	}
+	if it.Tag != "" {
+		d.section("Requisito")
+		p := Paint{}
+		if strings.HasPrefix(it.Tag, SymWarn+" ") {
+			p = t.theme.Warn()
+		}
+		d.status(p, it.Tag)
+	}
+	return d.render(h)
+}

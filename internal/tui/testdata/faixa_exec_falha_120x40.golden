@@ -4,37 +4,37 @@
    Falharam: Receita linux-dev
    Detalhes: aba Log
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- DEV
- > [x] Git                                                         | verificando                                 apt
-   [ ] Python                                                   ▾  | verificando                                 apt
- MIDIA
-   [ ] VLC                                                         - sem instalador
- NAVEGADORES
-   [ ] Firefox                                                     | verificando                                 flatpak
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+ DEV                                                                       │ Git
+ > [x] Git                             | verificando                       │ git · dev
+   [ ] Python                       ▾  | verificando                       │
+ MIDIA                                                                     │ ESTADO
+   [ ] VLC                             - sem instalador                    │ | verificando
+ NAVEGADORES                                                               │ [x] marcado para a Revisão (versão mais
+   [ ] Firefox                         | verificando                       │ recente)
+                                                                           │
+                                                                           │ INSTALAÇÃO
+                                                                           │ - apt: o primeiro que o toolkit tenta
+                                                                           │   usa sudo -n (rode sudo -v antes; o
+                                                                           │   toolkit nunca pede senha)
+                                                                           │ Só a versão atual do gerenciador.
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  git — Git (apt)                                                                                 Enter revisa 1 marcado
  ↑↓ mover  espaço marcar  / buscar  Enter revisar  v versões  ? ajuda  q sair

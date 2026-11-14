@@ -880,6 +880,18 @@ func startBlockedRun(t *testing.T, script func(ctx context.Context, ch chan<- Ev
 	if m.mode != modeRun {
 		t.Fatalf("a execução devia estar ativa (mode=%v)", m.mode)
 	}
+	// Lupa: o runner preso em ctx.Done não pode vazar goroutine depois do teste: cancela a execução e ESPERA o runner
+	// sair (com prazo), mesmo quando o teste falha no meio.
+	t.Cleanup(func() {
+		if m.cancel != nil {
+			m.cancel()
+		}
+		select {
+		case <-cancelled:
+		case <-time.After(5 * time.Second):
+			t.Error("o runner preso em ctx.Done não saiu em 5s depois do cancelamento (goroutine vazada)")
+		}
+	})
 	return m, cancelled
 }
 

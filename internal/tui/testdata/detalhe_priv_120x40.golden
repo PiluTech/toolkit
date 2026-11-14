@@ -1,0 +1,40 @@
+ toolkit  0 Início  1 Instalar  2 Máquina [3 Segurança] 4 Rede  5 Histórico                                      v0.1.0
+ Segurança › [Privacidade]                                                                                   admin: sim
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ! aviso: este terminal não é administrador. O perfil recomendado só aplica│ Perfil recomendado
+   num terminal aberto como administrador (botão direito, "Executar como   │
+   administrador"); aqui, m aplica só os itens do usuário. O toolkit nunca │ O QUE FAZ
+   eleva sozinho.                                                          │ Faz o básico e também ajusta política,
+ PRIVACIDADE DO WINDOWS · edição pro · administrador: não                  │ serviço e tarefas da máquina. Exige
+   basico        só o que é do usuário · não exige administrador           │ administrador.
+ > recomendado   básico + política, serviço e tarefas · exige administrador│ Os nomes de cada chave, serviço e tarefa
+─ Ajustes do perfil recomendado ───────────────────────────────────────────│ aparecem no plano (tecla p), antes de
+ ✓ aplicado       ID de publicidade desligado                              │ qualquer mudança.
+ ○ pendente       Sugestões no menu Iniciar desligadas                     │
+ ○ pendente       Dados de diagnóstico no mínimo [admin]                   │ AJUSTES
+ ! parcial        Serviço de telemetria [admin]                            │ 4 ajustes: 1 aplicado, 2 pendentes, 1
+                                                                           │ parcial
+                                                                           │
+                                                                           │ ADMINISTRADOR
+                                                                           │ Exige administrador: este terminal não é.
+                                                                           │ Aqui só vale aplicar os itens do usuário
+                                                                           │ (tecla m). O toolkit nunca eleva sozinho.
+                                                                           │
+                                                                           │ COMO DESFAZ
+                                                                           │ Antes de aplicar o toolkit guarda um backup
+                                                                           │ dos valores originais. A tecla d restaura a
+                                                                           │ partir dele, depois da confirmação.
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ ↑↓ perfil  p ver plano  a aplicar…  d desfazer…  m só usuário  ? ajuda  q sair
