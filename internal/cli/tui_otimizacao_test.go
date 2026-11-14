@@ -14,7 +14,14 @@ import (
 // otimAreas monta as áreas reais com um coletor falso que conta as chamadas.
 func otimAreas(t *testing.T, goos string, calls *int) []tui.AreaDef {
 	t.Helper()
+	return otimAreasWith(t, goos, calls, newAnimSys(), &privStore{})
+}
+
+// otimAreasWith injeta o registro e o backup das animações (nenhum teste toca o Windows real).
+func otimAreasWith(t *testing.T, goos string, calls *int, sys *animSys, st *privStore) []tui.AreaDef {
+	t.Helper()
 	deps := otimDeps(t, goos, otimReport(), nil)
+	deps.Otim.AnimSystem, deps.Otim.AnimStore = sys, st
 	deps.Otim.Collect = func(_ context.Context, g string, _ otimizacao.Deps) *otimizacao.Report {
 		*calls++
 		r := otimReport()
@@ -105,8 +112,9 @@ func TestInicioTemOObjetivoDeixarOWindowsMaisLeve(t *testing.T) {
 		if got := areas[it.Area].Tabs[it.Section].Title(); got != "Otimização" || it.Area != 2 {
 			t.Errorf("abre %q (área %d), queria Otimização na área 2", got, it.Area)
 		}
-		if strings.Contains(strings.ToLower(it.Desc), "animaç") || strings.Contains(strings.ToLower(it.Desc), "acelera") {
-			t.Errorf("a descrição só promete o que existe (leitura de gargalos): %q", it.Desc)
+		low := strings.ToLower(it.Desc)
+		if strings.Contains(low, "acelera") || strings.Contains(low, "ganho") || !strings.Contains(low, "experimental") {
+			t.Errorf("a descrição só promete o que existe (leitura e animações experimentais, sem ganho): %q", it.Desc)
 		}
 		if it.Unavailable || it.Tag != "" {
 			t.Errorf("no Windows o objetivo está disponível e sem etiqueta: %+v", it)

@@ -83,7 +83,7 @@ var actionKeys = []KeyDef{
 	{Key: "p", Label: "ver plano", Help: "mostra o que mudaria, sem alterar nada."},
 	{Key: "c", Label: "ler de novo", Help: "lê o estado outra vez (recarrega)."},
 	{Key: "r", Label: "remover", Confirms: true, Help: "remove o que está marcado."},
-	{Key: "m", Label: "alternar", Alt: []string{"só usuário", "todos os usuários", "máquina", "receitas"}, Help: "alterna o escopo ou a visão."},
+	{Key: "m", Label: "alternar", Alt: []string{"só usuário", "todos os usuários", "máquina", "receitas", "animações", "gargalos"}, Help: "alterna o escopo ou a visão."},
 	{Key: "i", Label: "como reinstalar", Help: "mostra, só como texto, como reinstalar."},
 	{Key: "b", Label: "básico", Help: "marca o perfil básico (o conservador)."},
 	{Key: "t", Label: "todos", Help: "marca todo o catálogo da seção."},

@@ -38,7 +38,7 @@ Seção interativa (`internal/tui/inicio_tab.go`, montada em `internal/cli/tui_i
 título, uma frase didática (quebra na largura, nunca leva reticências) e, quando vale, uma etiqueta de estado ou requisito
 (símbolo + palavra, nunca só cor). Os oito objetivos: Instalar programas (1 Apps), Preparar a máquina com uma receita (1
 Receitas), Ver a saúde da máquina (2 Diagnóstico), Remover apps nativos do Windows (2 Apps nativos; `! só Windows` fora do
-Windows), Deixar o Windows mais leve (2 Otimização; `! só Windows` fora do Windows; só promete a leitura de gargalos), Proteger a privacidade do Windows (3 Privacidade; `! só Windows` fora do Windows, `! pede administrador para alguns
+Windows), Deixar o Windows mais leve (2 Otimização; `! só Windows` fora do Windows; a descrição promete a leitura de gargalos e as animações experimentais, com backup e desfazer; sem ganho), Proteger a privacidade do Windows (3 Privacidade; `! só Windows` fora do Windows, `! pede administrador para alguns
 itens` no Windows sem administrador), Analisar a rede (4 Análise) e Ver o que já rodou (5 Execuções). As etiquetas
 usam só o que o cli já sabe (GOOS e `Options.IsAdmin`): nada é lido do sistema. A etiqueta vai à direita do título quando cabe,
 senão numa linha própria. Com folga há uma linha em branco entre os itens (120x40); em 80x24 a lista compacta e cabe inteira.
@@ -232,6 +232,7 @@ Goldens: `rede_analise_{80x24,120x40,60x16}` e `rede_analise_vazio_80x24`.
 | Diagnóstico | spinner no item; relatório etapa a etapa | "Nenhum diagnóstico para este sistema." Nunca rodou: "Enter roda." | etapa com `✗`, código de saída e saída como veio. Ferramenta ausente: `- pulado: smartctl não está instalado` |
 | Rede › Análise | `\| Lendo a rede…` (Esc cancela) | "A rede ainda não foi lida. Tecle c ..." (nada roda ao abrir); cancelada: "A leitura da rede foi cancelada." | "Não deu para ler a rede." com o motivo, "Tente de novo (c)." e "Nada foi alterado." |
 | Otimização (`internal/tui/otimizacao_tab.go`) | `\| Lendo os gargalos do Windows…` com `Esc cancela.`; NÃO lê ao abrir, só com `c` ou Enter | `i Nada por aqui`: "Os gargalos desta máquina ainda não foram lidos." + `1. Tecle c para ler`; cancelada: "Leitura cancelada. Nada foi alterado." | `✗ Erro`, `Tente de novo (c)`, `Nada foi alterado.`. Fora do Windows: `só existe no Windows (este sistema é <SO>)` sem chamar o backend |
+| Otimização › Animações (`internal/tui/otimizacao_anim.go`, EXPERIMENTAL; `m` abre) | `\| Lendo o estado das animações…`; preparando o plano: `Esc cancela` | sem backup: "Sem backup: nada foi aplicado por aqui."; tudo aplicado: "Nada a fazer" | `✗ Erro`, `Tente de novo (c)`; releitura com erro depois de mudar usa o estado `StateErrorAfterChange` (não diz "Nada foi alterado"). Fora do Windows: a seção inteira só avisa |
 | Log | itens e log ao vivo | "Nada rodou nesta sessão. Marque apps ou receitas e tecle Enter. Logs anteriores: <pasta>" | "! Não deu para gravar o log em arquivo; a execução continua e o log fica só na tela." |
 | Revisão | `\| Lendo o estado do sistema…`; só Voltar até o plano chegar | "Nada a fazer: tudo já está instalado." Só Voltar | item não planejável: lista os erros, "Nada foi executado", só Voltar. Sem credencial do sudo: aviso com `sudo -v`, Executar continua disponível |
 
@@ -259,12 +260,12 @@ Ações por sentido (a mesma letra em todas as seções):
 
 | Tecla | Sentido | Onde |
 |---|---|---|
-| a | aplicar… (abre confirmação) | Privacidade |
-| d | desfazer… (abre confirmação) | Privacidade |
-| p | ver plano (só leitura) | Privacidade, Apps nativos |
-| c | ler de novo (recarrega; em Otimização é também a primeira leitura) | Diagnóstico, visão Máquina; Otimização |
+| a | aplicar… (abre confirmação) | Privacidade, Otimização › Animações (experimental) |
+| d | desfazer… (abre confirmação) | Privacidade, Otimização › Animações |
+| p | ver plano (só leitura) | Privacidade, Apps nativos, Otimização › Animações |
+| c | ler de novo (recarrega; em Otimização é também a primeira leitura dos gargalos; na parte Animações relê o estado) | Diagnóstico, visão Máquina; Otimização |
 | r | remover… (abre confirmação) | Apps nativos |
-| m | alterna o escopo ou a visão: `só usuário` (Privacidade), `todos os usuários` (Apps nativos, exige administrador), `máquina` / `receitas` (Diagnóstico) | Privacidade, Apps nativos, Diagnóstico |
+| m | alterna o escopo ou a visão: `só usuário` (Privacidade), `todos os usuários` (Apps nativos, exige administrador), `máquina` / `receitas` (Diagnóstico), `animações` / `gargalos` (Otimização) | Privacidade, Apps nativos, Diagnóstico, Otimização |
 | i | como reinstalar (só texto; nada é executado) | Apps nativos |
 | b | marca o perfil básico | Apps nativos |
 | t | marca todo o catálogo (o perfil completo) | Apps nativos |

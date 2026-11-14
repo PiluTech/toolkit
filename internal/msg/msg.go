@@ -154,7 +154,7 @@ const (
 	TUIInicioNativos        = "Remover apps nativos do Windows"
 	TUIInicioNativosDesc    = "Remove só os apps do Windows que você escolher, depois de ver o plano."
 	TUIInicioOtimizacao     = "Deixar o Windows mais leve"
-	TUIInicioOtimizacaoDesc = "Lê o que pesa na máquina (CPU, memória, disco, inicialização) e diz o que fazer; só leitura."
+	TUIInicioOtimizacaoDesc = "Lê o que pesa na máquina (CPU, memória, disco, inicialização) e diz o que fazer; e reduz as animações do usuário (experimental), com backup e desfazer."
 	TUIInicioPrivacidade    = "Proteger a privacidade do Windows"
 	TUIInicioPrivDesc       = "Ajustes de privacidade, um por um, com confirmação e como desfazer."
 	TUIInicioRede           = "Analisar a rede"
@@ -209,6 +209,27 @@ const (
 	OtimHint        = "Para ver todos os dados lidos: toolkit otimizacao --completo (ou --relatorio arquivo.txt)."
 )
 
+// Textos de `toolkit otimizacao animacoes` (só Windows; EXPERIMENTAL; só HKCU).
+const (
+	AnimShort     = "Reduz as animações de janela do Windows (EXPERIMENTAL; mostra o plano antes, guarda backup e desfaz)"
+	AnimLong      = "Mostra o plano (valor atual -> novo) e, depois da confirmação [s/N] (sem terminal exige --yes), reduz as animações de janela do usuário atual. FUNÇÃO EXPERIMENTAL: os valores ainda não foram confirmados numa máquina de teste. Só mexe no HKCU (sem administrador, sem serviços, tarefas ou HKLM); antes de mudar grava o valor original em backup. Algumas animações só valem depois de reabrir a sessão ou o Explorer (o toolkit não o reinicia). Para voltar: `toolkit otimizacao animacoes desfazer`."
+	AnimUndoShort = "Desfaz a redução de animações (restaura do backup)"
+	AnimUndoLong  = "Mostra o que será restaurado a partir do backup (tipo e conteúdo originais; apaga só o que não existia) e restaura depois da confirmação. Sem backup, não há o que desfazer."
+
+	AnimOnlyWindows  = "o comando otimizacao animacoes só existe no Windows (este sistema é %s); nada foi alterado"
+	AnimNothingToDo  = "Nada a fazer: as animações já estão como o plano manda."
+	AnimConfirmApply = "Aplicar estas mudanças (EXPERIMENTAL)? O valor original de cada item será guardado em backup."
+	AnimConfirmUndo  = "Restaurar estes itens do backup?"
+	AnimApplied      = "Aplicado: %d mudança(s). Backup em %s. Algumas animações só valem depois de reabrir a sessão ou o Explorer. Para desfazer: toolkit otimizacao animacoes desfazer."
+	AnimAppliedPart  = "Aplicadas antes da falha: %d mudança(s). O backup em %s guarda os valores originais; `toolkit otimizacao animacoes desfazer` restaura."
+	AnimRestored     = "Restaurado: %d item(ns). O backup foi removido."
+	AnimRestoredPart = "Restaurados antes da falha: %d item(ns); o que sobrou continua no backup."
+	AnimStateChanged = "o estado mudou desde o plano mostrado; nada foi alterado; veja o plano de novo"
+	AnimNoBackup     = "Não há backup de animações: nada a desfazer."
+	AnimUndoNothing  = "O backup existe, mas tudo já está como antes: nada a restaurar (o backup foi removido)."
+	AnimUndoHeader   = "O que será restaurado (valor atual -> original):"
+)
+
 // Textos do comando privacidade (só Windows).
 const (
 	PrivShort = "Reduz a coleta de dados do Windows (mostra o plano antes, guarda backup e desfaz)"
@@ -239,6 +260,7 @@ const (
 	PrivConfirmApply  = "Aplicar estas mudanças? O valor original de cada item será guardado em backup."
 	PrivConfirmUndo   = "Restaurar estes itens do backup?"
 	PrivCancelled     = "Cancelado: nada foi alterado."
+	PrivStale         = "o estado mudou desde o plano mostrado; nada foi alterado"
 	PrivApplied       = "Aplicado: %d mudança(s). Backup em %s. Para desfazer: toolkit privacidade desfazer."
 	PrivAppliedPart   = "Aplicadas antes da falha: %d mudança(s). O backup em %s guarda os valores originais; `toolkit privacidade desfazer` restaura."
 	PrivRestored      = "Restaurado: %d item(ns). O backup foi removido."
@@ -280,6 +302,7 @@ const (
 	AppsNatNeedsYes      = "sem terminal para confirmar: nada foi alterado; rode de novo com --yes (depois de conferir o plano com --dry-run)"
 	AppsNatConfirm       = "Remover estes apps? Não há desfazer automático; a identidade de cada um será guardada em backup."
 	AppsNatCancelled     = "Cancelado: nada foi alterado."
+	AppsNatStale         = "o estado mudou desde o plano mostrado; nada foi alterado"
 	AppsNatRemoved       = "Removido: %d app(s). Backup em %s. Para saber como reinstalar: toolkit apps-nativos reinstalar."
 	AppsNatRemovedPart   = "Removidos antes da falha: %d app(s). O backup em %s guarda a identidade de cada um."
 	AppsNatNoBackup      = "Não há backup de apps removidos: nada a reinstalar."
