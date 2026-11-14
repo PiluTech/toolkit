@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -27,7 +28,7 @@ func TestPrivacyBackendForaDoWindowsNaoToca(t *testing.T) {
 	if _, err := b.Plan(context.Background(), tui.PrivBasico, false); err == nil || !strings.Contains(err.Error(), "só existe no Windows") {
 		t.Errorf("plan: %v", err)
 	}
-	if _, err := b.Apply(context.Background(), tui.PrivBasico, false); err == nil {
+	if _, err := b.Apply(context.Background(), tui.PrivBasico, false, b.lastID()); err == nil {
 		t.Error("apply fora do Windows deveria falhar")
 	}
 	if sys.writes != 0 || st.b != nil {
@@ -53,7 +54,7 @@ func TestPrivacyBackendLoadEstados(t *testing.T) {
 	if _, err := b.Plan(context.Background(), tui.PrivBasico, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.Apply(context.Background(), tui.PrivBasico, false); err != nil {
+	if _, err := b.Apply(context.Background(), tui.PrivBasico, false, b.lastID()); err != nil {
 		t.Fatal(err)
 	}
 	info, _ = b.Load(context.Background())
@@ -79,7 +80,7 @@ func TestPrivacyBackendPlanoNaoMudaESemAdminRecusa(t *testing.T) {
 	if err != nil || !plan.NeedsAdmin || plan.IsAdmin || plan.Pending == 0 || !strings.Contains(plan.Text, "exige administrador") {
 		t.Fatalf("plan=%+v err=%v", plan, err)
 	}
-	if _, err := b.Apply(ctx, tui.PrivRecomendado, false); !errors.Is(err, tui.ErrPrivNeedsAdmin) {
+	if _, err := b.Apply(ctx, tui.PrivRecomendado, false, b.lastID()); !errors.Is(err, tui.ErrPrivNeedsAdmin) {
 		t.Fatalf("err=%v", err)
 	}
 	if sys.writes != 0 || st.b != nil {
@@ -89,7 +90,7 @@ func TestPrivacyBackendPlanoNaoMudaESemAdminRecusa(t *testing.T) {
 	if err != nil || user.NeedsAdmin || user.Pending == 0 {
 		t.Fatalf("somente usuário: %+v err=%v", user, err)
 	}
-	res, err := b.Apply(ctx, tui.PrivRecomendado, true)
+	res, err := b.Apply(ctx, tui.PrivRecomendado, true, b.lastID())
 	if err != nil || res.Applied == 0 || res.BackupPath == "" || st.b == nil {
 		t.Fatalf("res=%+v err=%v", res, err)
 	}
@@ -105,21 +106,21 @@ func TestPrivacyBackendAplicarEDesfazer(t *testing.T) {
 	if _, err := b.Plan(ctx, tui.PrivRecomendado, false); err != nil {
 		t.Fatal(err)
 	}
-	res, err := b.Apply(ctx, tui.PrivRecomendado, false)
+	res, err := b.Apply(ctx, tui.PrivRecomendado, false, b.lastID())
 	if err != nil || res.Applied == 0 {
 		t.Fatalf("res=%+v err=%v", res, err)
 	}
 	if _, err := b.Plan(ctx, tui.PrivRecomendado, false); err != nil {
 		t.Fatal(err)
 	}
-	if again, err := b.Apply(ctx, tui.PrivRecomendado, false); err != nil || again.Applied != 0 {
+	if again, err := b.Apply(ctx, tui.PrivRecomendado, false, b.lastID()); err != nil || again.Applied != 0 {
 		t.Fatalf("idempotente: %+v %v", again, err)
 	}
 	up, err := b.UndoPlan(ctx)
 	if err != nil || up.Pending == 0 || !strings.Contains(up.Text, "->") {
 		t.Fatalf("undo plan: %+v %v", up, err)
 	}
-	ur, err := b.Undo(ctx)
+	ur, err := b.Undo(ctx, b.lastID())
 	if err != nil || ur.Applied == 0 || st.b != nil {
 		t.Fatalf("undo: %+v %v backup=%v", ur, err, st.b)
 	}
@@ -220,7 +221,7 @@ func TestNewPrivacyTabWindowsSemAdminAvisa(t *testing.T) {
 func TestPrivacyBackendAplicarSemPlanoPreparadoRecusa(t *testing.T) {
 	sys, st := newPrivSys(true), &privStore{}
 	b := privBackend(t, sys, st, "windows")
-	if _, err := b.Apply(context.Background(), tui.PrivRecomendado, false); !errors.Is(err, tui.ErrPrivStalePlan) {
+	if _, err := b.Apply(context.Background(), tui.PrivRecomendado, false, ""); !errors.Is(err, tui.ErrPrivStalePlan) {
 		t.Fatalf("sem plano preparado deve recusar: %v", err)
 	}
 	if sys.writes != 0 || st.b != nil {
@@ -242,7 +243,7 @@ func TestPrivacyBackendMudarSystemEntrePlanoEAplicarRecusa(t *testing.T) {
 		break
 	}
 	sys.edit = privacidade.EditionEnterprise
-	if _, err := b.Apply(ctx, tui.PrivRecomendado, false); !errors.Is(err, tui.ErrPrivStalePlan) {
+	if _, err := b.Apply(ctx, tui.PrivRecomendado, false, b.lastID()); !errors.Is(err, tui.ErrPrivStalePlan) {
 		t.Fatalf("plano divergente deve recusar: %v", err)
 	}
 	if sys.writes != 0 || st.b != nil {
@@ -257,11 +258,11 @@ func TestPrivacyBackendPlanoDeUsoUnico(t *testing.T) {
 	if _, err := b.Plan(ctx, tui.PrivBasico, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.Apply(ctx, tui.PrivBasico, false); err != nil {
+	if _, err := b.Apply(ctx, tui.PrivBasico, false, b.lastID()); err != nil {
 		t.Fatal(err)
 	}
 	w := sys.writes
-	if _, err := b.Apply(ctx, tui.PrivBasico, false); !errors.Is(err, tui.ErrPrivStalePlan) {
+	if _, err := b.Apply(ctx, tui.PrivBasico, false, b.lastID()); !errors.Is(err, tui.ErrPrivStalePlan) {
 		t.Fatalf("o plano é de uso único: %v", err)
 	}
 	if sys.writes != w {
@@ -276,7 +277,7 @@ func TestPrivacyBackendPlanoDeOutroPerfilNaoAplica(t *testing.T) {
 	if _, err := b.Plan(ctx, tui.PrivBasico, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.Apply(ctx, tui.PrivRecomendado, false); !errors.Is(err, tui.ErrPrivStalePlan) {
+	if _, err := b.Apply(ctx, tui.PrivRecomendado, false, b.lastID()); !errors.Is(err, tui.ErrPrivStalePlan) {
 		t.Fatalf("perfil diferente do plano mostrado: %v", err)
 	}
 	if sys.writes != 0 {
@@ -292,7 +293,7 @@ func TestPrivacyBackendTrocarBackupEntreUndoPlanEUndoRecusa(t *testing.T) {
 	if _, err := b.Plan(ctx, tui.PrivRecomendado, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.Apply(ctx, tui.PrivRecomendado, false); err != nil {
+	if _, err := b.Apply(ctx, tui.PrivRecomendado, false, b.lastID()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := b.UndoPlan(ctx); err != nil {
@@ -309,7 +310,7 @@ func TestPrivacyBackendTrocarBackupEntreUndoPlanEUndoRecusa(t *testing.T) {
 	}
 	st.b = &swapped
 	w := sys.writes
-	if _, err := b.Undo(ctx); !errors.Is(err, tui.ErrPrivStalePlan) {
+	if _, err := b.Undo(ctx, b.lastID()); !errors.Is(err, tui.ErrPrivStalePlan) {
 		t.Fatalf("backup trocado deve recusar: %v", err)
 	}
 	if sys.writes != w || st.b == nil {
@@ -324,13 +325,124 @@ func TestPrivacyBackendUndoSemUndoPlanRecusa(t *testing.T) {
 	if _, err := b.Plan(ctx, tui.PrivBasico, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.Apply(ctx, tui.PrivBasico, false); err != nil {
+	if _, err := b.Apply(ctx, tui.PrivBasico, false, b.lastID()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.Undo(ctx); !errors.Is(err, tui.ErrPrivStalePlan) {
+	if _, err := b.Undo(ctx, b.lastID()); !errors.Is(err, tui.ErrPrivStalePlan) {
 		t.Fatalf("sem UndoPlan deve recusar: %v", err)
 	}
 	if st.b == nil {
 		t.Fatal("o backup não pode ser removido")
+	}
+}
+
+// lastID devolve o ID do plano preparado mais recente (só para os testes que não precisam do ID devolvido).
+func (b *privacyBackend) lastID() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	best, bestN := "", -1
+	for id := range b.prepared {
+		if n, err := strconv.Atoi(strings.TrimPrefix(id, "plano-")); err == nil && n > bestN {
+			best, bestN = id, n
+		}
+	}
+	return best
+}
+
+// Lupa #66 (3): A começa, Esc (a TUI abandona A), B começa e termina e é mostrado, A termina TARDE e grava; confirmar B
+// aplica B (não A), mesmo perfil com estados diferentes; o ID de A nunca é aplicável. Backend REAL, System/Store falsos.
+func TestPrivacyBackendPreparacaoCanceladaTardiaNaoSubstituiOPlanoMostrado(t *testing.T) {
+	sys, st := newPrivSys(true), &privStore{}
+	sys.entered, sys.gate = make(chan struct{}, 1), make(chan struct{})
+	b := privBackend(t, sys, st, "windows")
+	ctx := context.Background()
+	if _, err := b.Plan(ctx, tui.PrivBasico, false); err != nil { // aquece o ambiente (SID etc.) sem bloquear
+		t.Fatal(err)
+	}
+	b.take(b.lastID())
+
+	sys.armed.Store(true)
+	type res struct {
+		p   tui.PrivPlan
+		err error
+	}
+	aDone := make(chan res, 1)
+	go func() { p, err := b.Plan(ctx, tui.PrivBasico, false); aDone <- res{p, err} }() // A: bloqueado em Edition
+	<-sys.entered
+	// (Esc na TUI: A é abandonado.) B: o MESMO perfil, mas o sistema agora está diferente (um item já aplicado)
+	for _, st := range privacidade.Settings() {
+		for _, r := range st.Regs {
+			if !st.Admin {
+				sys.regs[pk(r.Key, r.Name)] = r.Value(privacidade.EditionPro)
+				goto changed
+			}
+		}
+	}
+changed:
+	planB, err := b.Plan(ctx, tui.PrivBasico, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	close(sys.gate) // A é liberado TARDE
+	a := <-aDone
+	if a.err != nil || a.p.ID == "" || a.p.ID == planB.ID {
+		t.Fatalf("A=%+v err=%v B=%+v", a.p, a.err, planB)
+	}
+	// confirmar B aplica B
+	before := sys.writes
+	got, err := b.Apply(ctx, tui.PrivBasico, false, planB.ID)
+	if err != nil || got.Applied != planB.Pending {
+		t.Fatalf("confirmar B deve aplicar B: res=%+v err=%v (B pendências=%d)", got, err, planB.Pending)
+	}
+	if sys.writes == before {
+		t.Fatal("B não escreveu nada")
+	}
+	// o plano de A nunca é aplicável (descartado ao aplicar B)
+	w := sys.writes
+	if _, err := b.Apply(ctx, tui.PrivBasico, false, a.p.ID); !errors.Is(err, tui.ErrPrivStalePlan) {
+		t.Fatalf("A não pode ser aplicado: %v", err)
+	}
+	if sys.writes != w {
+		t.Fatal("A não pode escrever")
+	}
+}
+
+// Mesmo cenário com o UndoPlan: a preparação de desfazer cancelada que termina tarde não substitui a exibida.
+func TestPrivacyBackendUndoPlanCanceladoTardioNaoSubstituiOExibido(t *testing.T) {
+	sys, st := newPrivSys(true), &privStore{}
+	sys.entered, sys.gate = make(chan struct{}, 1), make(chan struct{})
+	b := privBackend(t, sys, st, "windows")
+	ctx := context.Background()
+	if _, err := b.Plan(ctx, tui.PrivRecomendado, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Apply(ctx, tui.PrivRecomendado, false, b.lastID()); err != nil {
+		t.Fatal(err)
+	}
+	sys.armed.Store(true)
+	aDone := make(chan tui.PrivPlan, 1)
+	go func() { p, _ := b.UndoPlan(ctx); aDone <- p }() // A bloqueado
+	<-sys.entered
+	// o estado muda (um valor foi revertido à mão) e B é preparado e exibido
+	for k := range sys.regs {
+		delete(sys.regs, k)
+		break
+	}
+	planB, err := b.UndoPlan(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	close(sys.gate)
+	a := <-aDone
+	if a.ID == "" || a.ID == planB.ID {
+		t.Fatalf("A=%+v B=%+v", a, planB)
+	}
+	// confirmar B restaura B (e descarta os demais planos preparados)
+	got, err := b.Undo(ctx, planB.ID)
+	if err != nil || got.Applied == 0 || st.b != nil {
+		t.Fatalf("confirmar B deve restaurar B: res=%+v err=%v backup=%v", got, err, st.b)
+	}
+	if _, err := b.Undo(ctx, a.ID); !errors.Is(err, tui.ErrPrivStalePlan) {
+		t.Fatalf("o plano de A (tardio) não pode ser aplicado depois de B: %v", err)
 	}
 }

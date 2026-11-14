@@ -32,12 +32,12 @@ func (f *fakePriv) Plan(_ context.Context, p PrivProfile, only bool) (PrivPlan, 
 	f.plans = append(f.plans, string(p)+map[bool]string{true: "+user", false: ""}[only])
 	return f.plan, f.planErr
 }
-func (f *fakePriv) Apply(_ context.Context, p PrivProfile, only bool) (PrivResult, error) {
+func (f *fakePriv) Apply(_ context.Context, p PrivProfile, only bool, _ string) (PrivResult, error) {
 	f.applies = append(f.applies, string(p)+map[bool]string{true: "+user", false: ""}[only])
 	return f.applyRes, f.applyErr
 }
 func (f *fakePriv) UndoPlan(context.Context) (PrivPlan, error) { return f.undoPlan, f.undoErr }
-func (f *fakePriv) Undo(context.Context) (PrivResult, error) {
+func (f *fakePriv) Undo(context.Context, string) (PrivResult, error) {
 	f.undoCalls++
 	return f.undoRes, f.undoRunE
 }

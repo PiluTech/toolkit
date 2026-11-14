@@ -58,6 +58,7 @@ type PrivInfo struct {
 
 // PrivPlan é um plano pronto para mostrar (texto já formatado, na língua do usuário).
 type PrivPlan struct {
+	ID         string // ID opaco do plano: a confirmação aplica SÓ o plano com esse ID
 	Text       string
 	Pending    int
 	NeedsAdmin bool // alguma mudança pendente exige administrador
@@ -76,9 +77,9 @@ type PrivResult struct {
 type PrivacyBackend interface {
 	Load(ctx context.Context) (PrivInfo, error)
 	Plan(ctx context.Context, p PrivProfile, onlyUser bool) (PrivPlan, error)
-	Apply(ctx context.Context, p PrivProfile, onlyUser bool) (PrivResult, error)
+	Apply(ctx context.Context, p PrivProfile, onlyUser bool, planID string) (PrivResult, error)
 	UndoPlan(ctx context.Context) (PrivPlan, error)
-	Undo(ctx context.Context) (PrivResult, error)
+	Undo(ctx context.Context, planID string) (PrivResult, error)
 }
 
 type privKind int
@@ -389,14 +390,14 @@ func (t *PrivacyTab) planCmd(kind privKind) tea.Cmd {
 
 func (t *PrivacyTab) confirm() tea.Cmd {
 	t.asking, t.busy, t.notice = false, busyApply, ""
-	be, ctx, p, only, kind := t.be, t.ctx, t.profile, t.only, t.kind
+	be, ctx, p, only, kind, id := t.be, t.ctx, t.profile, t.only, t.kind, t.plan.ID
 	return tea.Batch(func() tea.Msg {
 		var res PrivResult
 		var err error
 		if kind == privUndo {
-			res, err = be.Undo(ctx)
+			res, err = be.Undo(ctx, id)
 		} else {
-			res, err = be.Apply(ctx, p, only)
+			res, err = be.Apply(ctx, p, only, id)
 		}
 		return privDoneMsg{kind: kind, res: res, err: err}
 	}, t.theme.Tick())

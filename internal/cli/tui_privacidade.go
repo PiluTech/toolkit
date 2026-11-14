@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strconv"
 	"sync"
 
 	"github.com/PiluTech/toolkit/internal/privacidade"
@@ -24,10 +25,12 @@ type privacyBackend struct {
 	deps Deps
 	mu   sync.Mutex
 	env  *privEnv
-	// prepared é o plano que a TUI mostrou ao usuário (de uso único): Apply e Undo só agem se o plano recalculado agora for
-	// IDÊNTICO a ele (mesmo perfil, escopo, texto, pendências e, no desfazer, o mesmo backup); senão recusam com
-	// ErrPrivStalePlan, sem mudar nada.
-	prepared *privPrepared
+	// prepared guarda os planos mostrados, por ID opaco. A TUI guarda o ID do plano EXIBIDO e a confirmação chama
+	// Apply/Undo(ID): só esse plano é aplicável (uso único) e, ao aplicar, todos os demais são descartados. Uma preparação
+	// cancelada (Esc) que termina tarde grava sob o SEU ID, que a TUI nunca usa: nunca é aplicável. Apply/Undo ainda
+	// exigem que o plano recalculado agora seja IDÊNTICO ao mostrado (sistema/backup não mudou); senão ErrPrivStalePlan.
+	prepared map[string]*privPrepared
+	nextID   int
 }
 
 type privPrepared struct {
@@ -39,17 +42,27 @@ type privPrepared struct {
 	backup   *privacidade.Backup
 }
 
-func (b *privacyBackend) prepare(p *privPrepared) {
-	b.mu.Lock()
-	b.prepared = p
-	b.mu.Unlock()
-}
+// maxPrepared limita os planos guardados (preparações abandonadas); passando disso, os antigos são descartados.
+const maxPrepared = 16
 
-// take devolve e CONSOME o plano preparado (uso único).
-func (b *privacyBackend) take() *privPrepared {
+// prepare guarda o plano e devolve o ID opaco dele.
+func (b *privacyBackend) prepare(p *privPrepared) string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	p := b.prepared
+	if b.prepared == nil || len(b.prepared) >= maxPrepared {
+		b.prepared = map[string]*privPrepared{}
+	}
+	b.nextID++
+	id := "plano-" + strconv.Itoa(b.nextID)
+	b.prepared[id] = p
+	return id
+}
+
+// take devolve e CONSOME o plano com esse ID (uso único) e descarta todos os outros.
+func (b *privacyBackend) take(id string) *privPrepared {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	p := b.prepared[id]
 	b.prepared = nil
 	return p
 }
@@ -138,12 +151,12 @@ func (b *privacyBackend) Plan(ctx context.Context, p tui.PrivProfile, onlyUser b
 		return tui.PrivPlan{}, err
 	}
 	text := plan.Format(e.lang)
-	b.prepare(&privPrepared{profile: p, onlyUser: onlyUser, text: text, pending: plan.Pending()})
-	return tui.PrivPlan{Text: textsafe.Multiline(text), Pending: plan.Pending(), NeedsAdmin: plan.NeedsAdmin(), IsAdmin: e.sys.IsAdmin(ctx)}, nil
+	id := b.prepare(&privPrepared{profile: p, onlyUser: onlyUser, text: text, pending: plan.Pending()})
+	return tui.PrivPlan{ID: id, Text: textsafe.Multiline(text), Pending: plan.Pending(), NeedsAdmin: plan.NeedsAdmin(), IsAdmin: e.sys.IsAdmin(ctx)}, nil
 }
 
-func (b *privacyBackend) Apply(ctx context.Context, p tui.PrivProfile, onlyUser bool) (tui.PrivResult, error) {
-	prep := b.take()
+func (b *privacyBackend) Apply(ctx context.Context, p tui.PrivProfile, onlyUser bool, planID string) (tui.PrivResult, error) {
+	prep := b.take(planID)
 	if prep == nil || prep.undo || prep.profile != p || prep.onlyUser != onlyUser {
 		return tui.PrivResult{}, tui.ErrPrivStalePlan
 	}
@@ -173,12 +186,12 @@ func (b *privacyBackend) UndoPlan(ctx context.Context) (tui.PrivPlan, error) {
 	if err != nil {
 		return tui.PrivPlan{}, tuiPrivErr(err)
 	}
-	b.prepare(&privPrepared{undo: true, text: formatUndo(plan), pending: plan.Pending(), backup: bk})
-	return tui.PrivPlan{Text: textsafe.Multiline(formatUndo(plan)), Pending: plan.Pending(), NeedsAdmin: plan.NeedsAdmin(), IsAdmin: e.sys.IsAdmin(ctx)}, nil
+	id := b.prepare(&privPrepared{undo: true, text: formatUndo(plan), pending: plan.Pending(), backup: bk})
+	return tui.PrivPlan{ID: id, Text: textsafe.Multiline(formatUndo(plan)), Pending: plan.Pending(), NeedsAdmin: plan.NeedsAdmin(), IsAdmin: e.sys.IsAdmin(ctx)}, nil
 }
 
-func (b *privacyBackend) Undo(ctx context.Context) (tui.PrivResult, error) {
-	prep := b.take()
+func (b *privacyBackend) Undo(ctx context.Context, planID string) (tui.PrivResult, error) {
+	prep := b.take(planID)
 	if prep == nil || !prep.undo {
 		return tui.PrivResult{}, tui.ErrPrivStalePlan
 	}
