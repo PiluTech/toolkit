@@ -174,6 +174,7 @@ func runAnimUndo(ctx context.Context, out io.Writer, deps Deps, f animFlags) err
 		if err := e.store.Remove(); err != nil {
 			return cleanErr(err)
 		}
+		_, _ = fmt.Fprintln(out, msg.AnimBackupRemoved) // só DEPOIS de Remove() retornar nil
 		return nil
 	}
 	res, err := animacoes.ApplyUndo(ctx, e.sys, e.store, fresh, freshBk)

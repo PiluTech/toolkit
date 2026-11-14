@@ -244,7 +244,8 @@ const (
 	AnimRestoredPart       = "Restaurados antes da falha: %d item(ns); o que sobrou continua no backup."
 	AnimStateChanged       = "o estado mudou desde o plano mostrado; nada foi alterado; veja o plano de novo"
 	AnimNoBackup           = "Não há backup de animações: nada a desfazer."
-	AnimUndoNothing        = "O backup existe, mas tudo já está como antes: nada a restaurar (o backup foi removido)."
+	AnimUndoNothing        = "O backup existe, mas tudo já está como antes: nada a restaurar."
+	AnimBackupRemoved      = "O backup foi removido."
 	AnimUndoHeader         = "O que será restaurado (valor atual -> original):"
 )
 
@@ -284,7 +285,8 @@ const (
 	PrivAppliedPart        = "Aplicadas antes da falha: %d mudança(s). O backup em %s guarda os valores originais; `toolkit privacidade desfazer` restaura."
 	PrivRestored           = "Restaurado: %d item(ns). O backup foi removido."
 	PrivNoBackup           = "Não há backup de privacidade: nada a desfazer."
-	PrivUndoNothing        = "O backup existe, mas tudo já está como antes: nada a restaurar (o backup foi removido)."
+	PrivUndoNothing        = "O backup existe, mas tudo já está como antes: nada a restaurar."
+	PrivBackupRemoved      = "O backup foi removido."
 	PrivUndoHeader         = "O que será restaurado (valor atual -> original):"
 	PrivRestoredPart       = "Restaurados antes da falha: %d item(ns); o que sobrou continua no backup."
 	PrivPendingFormat      = "  ! %s: %s -> %s"

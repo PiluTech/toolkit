@@ -111,7 +111,8 @@ func (s *privSys) TaskSetEnabled(_ context.Context, p string, e bool) error {
 }
 
 type privStore struct {
-	b *privacidade.Backup
+	removeErr error // faz o Remove() falhar (backup preservado)
+	b         *privacidade.Backup
 	// afterLoad (opcional) roda DEPOIS de cada Load, com o número da chamada: simula o backup mudando entre leituras.
 	loads     int
 	afterLoad func(call int)
@@ -133,8 +134,14 @@ func (m *privStore) Load() (*privacidade.Backup, error) {
 	return &cp, nil
 }
 func (m *privStore) Save(b *privacidade.Backup) error { m.b = b; return nil }
-func (m *privStore) Remove() error                    { m.b = nil; return nil }
-func (m *privStore) Path() string                     { return `C:\ProgramData\toolkit\privacidade-backup.json` }
+func (m *privStore) Remove() error {
+	if m.removeErr != nil {
+		return m.removeErr
+	}
+	m.b = nil
+	return nil
+}
+func (m *privStore) Path() string { return `C:\ProgramData\toolkit\privacidade-backup.json` }
 
 func privDeps(t *testing.T, sys *privSys, st *privStore, goos string, tty bool, input string) Deps {
 	t.Helper()

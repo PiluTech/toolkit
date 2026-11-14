@@ -172,3 +172,7 @@ confirmação são recusadas: nunca há plano armado fora da tela (só `c` e `m`
   ou o Explorer? A reversão devolve o mesmo estado visual?
 - A pasta do backup quando o usuário que eleva é outro (SID e `%LOCALAPPDATA%` diferentes): coberto pelo dono gravado no arquivo,
   mas não testado numa máquina real.
+
+## Acompanhamento: janela entre a revalidação e a remoção do backup
+
+No desfazer com zero pendências o CLI pergunta "Tudo já está como antes. Remover o backup? [s/N]", relê o backup e o estado depois da confirmação e só então remove; a frase "O backup foi removido." só sai DEPOIS de `Remove()` retornar sem erro (cancelar, sem terminal, estado ou backup alterado e erro de `Remove()` deixam o backup e não anunciam remoção). Resta uma janela mínima entre a revalidação e o `Remove()`: o `Store` não tem remoção condicional nem trava compartilhada com `Save`, então o arquivo removido pode não ser exatamente a versão revalidada se outro processo gravar nesse intervalo. Acompanhamento: uma trava compartilhada Save/Remove (ou remoção condicional por conteúdo/versão) no `Store`.

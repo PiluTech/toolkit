@@ -269,6 +269,7 @@ func runPrivUndo(ctx context.Context, out io.Writer, deps Deps, f privFlags) err
 		if err := e.store.Remove(); err != nil {
 			return cleanErr(err)
 		}
+		_, _ = fmt.Fprintln(out, msg.PrivBackupRemoved) // só DEPOIS de Remove() retornar nil
 		return nil
 	}
 	plan, bk = fresh, freshBk

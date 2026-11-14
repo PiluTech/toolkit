@@ -311,3 +311,70 @@ func TestAnimBackendUndoZeroPendenciasRevalida(t *testing.T) {
 		t.Fatalf("res=%+v err=%v backup=%v", res, err, st.b)
 	}
 }
+
+// Lupa #88: a saída NUNCA diz que o backup foi removido antes de Remove() retornar nil: cancelar, sem terminal, estado ou
+// backup alterado e erro de Remove() deixam o backup e a saída não afirma que apagou; no sucesso a frase vem DEPOIS da pergunta.
+func TestDesfazerZeroPendenciasSoAnunciaRemocaoDepoisDeRemover(t *testing.T) {
+	type cli struct {
+		name string
+		run  func(t *testing.T, tty bool, input string, hook func(), removeErr error, args ...string) (out string, err error, backup func() bool)
+	}
+	privRun := func(t *testing.T, tty bool, input string, hook func(), removeErr error, args ...string) (string, error, func() bool) {
+		sys, st := privZeroStore()
+		st.removeErr = removeErr
+		if hook != nil {
+			sys.onEdition = func(call int) {
+				if call == 2 { // na releitura DEPOIS da confirmação
+					sys.regs[pk(advKey, "Enabled")] = privacidade.DWORD(1)
+				}
+			}
+		}
+		out, err := runPriv(t, privDeps(t, sys, st, "windows", tty, input), append([]string{"desfazer"}, args...)...)
+		return out, err, func() bool { return st.b != nil }
+	}
+	animRun := func(t *testing.T, tty bool, input string, hook func(), removeErr error, args ...string) (string, error, func() bool) {
+		sys, st := animZero(t)
+		st.removeErr = removeErr
+		if hook != nil {
+			sys.afterRead = func() { sys.set(animStr("5")) }
+		}
+		out, err := runAnim(t, animDeps(t, sys, st, "windows", tty, input), append([]string{"animacoes", "desfazer"}, args...)...)
+		return out, err, func() bool { return st.b != nil }
+	}
+	for _, c := range []cli{{"privacidade", privRun}, {"animacoes", animRun}} {
+		fail := map[string]struct {
+			tty       bool
+			input     string
+			hook      func()
+			removeErr error
+			args      []string
+		}{
+			"cancelar (n)":        {tty: true, input: "n\n"},
+			"sem terminal":        {tty: false},
+			"estado alterado":     {tty: true, input: "s\n", hook: func() {}},
+			"Remove() com erro":   {tty: true, input: "s\n", removeErr: errors.New("disco cheio")},
+			"--yes + Remove erro": {tty: false, removeErr: errors.New("disco cheio"), args: []string{"--yes"}},
+		}
+		for name, f := range fail {
+			t.Run(c.name+"/"+name, func(t *testing.T) {
+				out, _, hasBackup := c.run(t, f.tty, f.input, f.hook, f.removeErr, f.args...)
+				if !hasBackup() {
+					t.Fatal("o backup tem de ficar")
+				}
+				if strings.Contains(strings.ToLower(out), "foi removido") {
+					t.Errorf("a saída afirma que o backup foi removido sem ter sido:\n%s", out)
+				}
+			})
+		}
+		t.Run(c.name+"/sucesso anuncia só depois", func(t *testing.T) {
+			out, err, hasBackup := c.run(t, true, "s\n", nil, nil)
+			if err != nil || hasBackup() {
+				t.Fatalf("err=%v backup=%v\n%s", err, hasBackup(), out)
+			}
+			iq, ir := strings.Index(out, "Remover o backup?"), strings.Index(out, "O backup foi removido")
+			if iq < 0 || ir < 0 || ir < iq {
+				t.Errorf("'O backup foi removido' deve vir DEPOIS da pergunta (pergunta=%d, aviso=%d):\n%s", iq, ir, out)
+			}
+		})
+	}
+}
