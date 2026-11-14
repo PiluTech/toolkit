@@ -193,10 +193,12 @@ func TestHelpModalAndQuit(t *testing.T) {
 }
 
 func TestTooSmallWindow(t *testing.T) {
-	for _, sz := range [][2]int{{59, 24}, {80, 15}, {20, 5}} {
+	for _, sz := range [][2]int{{59, 24}, {80, 15}, {20, 9}} {
 		m := sized(Options{Mono: true}, sz[0], sz[1], fakes()...)
 		out := m.render()
-		if !strings.Contains(out, "Janela pequena demais (mínimo 60 × 16)") || !strings.Contains(out, "toolkit --no-tui") {
+		flat := strings.Join(strings.Fields(out), " ")
+		if !strings.Contains(flat, "Terminal pequeno: a interface precisa de 60×16 e esta janela tem "+itoa(sz[0])+"×"+itoa(sz[1])+".") ||
+			!strings.Contains(flat, "Aumente a janela ou use os comandos sem a interface: toolkit --help") || !strings.Contains(flat, "q sair") {
 			t.Errorf("%v: %q", sz, out)
 		}
 		if cmd := press(m, 'q', 0, "q"); cmd == nil {
@@ -304,5 +306,38 @@ func TestBackgroundColorSetsTheme(t *testing.T) {
 	// só confere que a mensagem é aceita sem quebrar a tela
 	if strings.TrimSpace(m.render()) == "" {
 		t.Fatal("tela vazia")
+	}
+}
+
+// A6: o aviso quebra na largura da janela (nada é cortado) e, se faltar altura, "q sair" sobrevive; redimensionar volta
+// à interface normal sem perder o estado.
+func TestTooSmallWrapsAndKeepsQuitHint(t *testing.T) {
+	for _, sz := range [][2]int{{20, 30}, {10, 40}, {30, 4}, {30, 2}, {12, 1}} {
+		m := sized(Options{Mono: true}, sz[0], sz[1], fakes()...)
+		out := m.render()
+		lines := strings.Split(out, "\n")
+		if len(lines) > sz[1] {
+			t.Errorf("%v: %d linhas passam da altura %d:\n%s", sz, len(lines), sz[1], out)
+		}
+		for _, l := range lines {
+			if w := lipgloss.Width(l); w > sz[0] {
+				t.Errorf("%v: linha com %d colunas passa da largura: %q", sz, w, l)
+			}
+		}
+		if !strings.Contains(lines[len(lines)-1], "q sair") {
+			t.Errorf("%v: a última linha é o 'q sair': %q", sz, lines[len(lines)-1])
+		}
+		if sz[1] >= 12 { // com altura de sobra o texto inteiro aparece (quebrado)
+			flat := strings.Join(strings.Fields(out), " ")
+			if !strings.Contains(strings.ReplaceAll(flat, " ", ""), strings.ReplaceAll("Terminal pequeno: a interface precisa de 60×16 e esta janela tem "+itoa(sz[0])+"×"+itoa(sz[1])+".", " ", "")) {
+				t.Errorf("%v: texto cortado:\n%s", sz, out)
+			}
+		}
+	}
+	m := sized(Options{Mono: true}, 40, 10, fakes()...)
+	press(m, '3', 0, "3") // estado: troca de aba antes de a janela encolher? (só a aba muda)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	if out := m.render(); strings.Contains(out, "Terminal pequeno") {
+		t.Errorf("com a janela de volta a 80×24 a interface normal volta:\n%s", out)
 	}
 }
