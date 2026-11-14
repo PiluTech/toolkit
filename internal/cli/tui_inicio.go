@@ -23,6 +23,7 @@ func newInicioTab(areas []tui.AreaDef, goos string, admin bool, th tui.Theme) tu
 		{msg.TUIInicioNativos, msg.TUIInicioNativosDesc, "maquina", "Apps nativos"},
 		{msg.TUIInicioOtimizacao, msg.TUIInicioOtimizacaoDesc, "maquina", msg.TUISecaoOtimizacao},
 		{msg.TUIInicioPrivacidade, msg.TUIInicioPrivDesc, "seguranca", "Privacidade"},
+		{msg.TUIInicioUSB, msg.TUIInicioUSBDesc, "seguranca", msg.TUISecaoUSB},
 		{msg.TUIInicioRede, msg.TUIInicioRedeDesc, "rede", msg.TUISecaoAnalise},
 		{msg.TUIInicioHistorico, msg.TUIInicioHistoricoDesc, "historico", msg.TUISecaoExecucoes},
 	}
@@ -53,6 +54,14 @@ func inicioTag(section, goos string, admin bool) string {
 		if goos != "windows" {
 			return msg.TUIInicioTagSoWindows
 		}
+	case msg.TUISecaoUSB:
+		if goos != "windows" {
+			return msg.TUIInicioTagSoWindows
+		}
+		if admin {
+			return msg.TUIInicioTagExperimental
+		}
+		return msg.TUIInicioTagUSB
 	case "Privacidade":
 		switch {
 		case goos != "windows":

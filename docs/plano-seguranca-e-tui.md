@@ -487,7 +487,7 @@ Continuação da numeração dos PRs de produto (o último documentado é o PR8 
 | **PR11** Otimização: leitura de gargalos | `internal/otimizacao` (leitura), `toolkit otimizacao`, TUI área 2 > Otimização (parte Gargalos) | nada | baixo | fixtures; limiares com fronteira; "sem evento" não vira "rápido" |
 | **PR12** Otimização: animações (muda `HKCU`) | plano, backup, desfazer, API `SystemParametersInfo`, TUI parte Animações | PR11, valores confirmados em VM | médio | ida e volta; nenhuma escrita em `HKLM`; nenhum serviço |
 | **PR13** Apps: acesso remoto (RustDesk, se aprovado) | entrada com aviso de segurança | decisão do Paulo e id confirmado | médio | aviso na tela; hash fixado; sem configuração do app |
-| **PR14** USB: Windows | `internal/usb`, leitura PnP, plano, política em camadas, timer de reversão, backup/desfazer, TUI área 3 > USB permitidos, `docs/usb.md` com roteiro de recuperação | tudo acima, VM de laboratório | **alto** | todos os testes da função 1; roteiro de recuperação **testado em VM**; revisão reforçada; só depois do smoke do Paulo |
+| **PR14** USB: Windows (feito como EXPERIMENTAL, sem VM: `docs/usb.md`) | `internal/usb`, leitura PnP, plano, política em camadas, timer de reversão, backup/desfazer, TUI área 3 > USB permitidos, `docs/usb.md` com roteiro de recuperação | tudo acima, VM de laboratório | **alto** | todos os testes da função 1; roteiro de recuperação **testado em VM**; revisão reforçada; só depois do smoke do Paulo |
 | **PR15** USB: Linux (USBGuard) | `usbguard` via apt/dnf, `rules.conf`, serviço com confirmação | PR14 (reuso do desenho) | alto | idem; sem pacote no gerenciador = "indisponível" |
 | **PR16** USB: macOS (orientação) | texto e, se existir forma suportada, leitura; sem mudança | PR14 | baixo | texto honesto; nada executa |
 
@@ -501,14 +501,14 @@ Sugestão de **ordem**: PR8, PR10, PR11 podem andar em paralelo (independentes);
 | 2 | O portal cativo entra na primeira versão da análise de rede? (PR8: aplicada a recomendação, fora da fase; PR9: entra junto do IP público, só sob pedido e com URL informada) | **Não**: junto do IP público, no PR9 |
 | 3 | RustDesk entra no catálogo, dadas as CVEs de 2026 e o uso em golpes? | **Resolvida no PR13 (2026-11-14): entra**, no macOS (cask) e no Linux (flatpak), com o aviso na tela e a versão mínima **1.5.0** verificada no NVD; **sem instalador no Windows** (id do winget inexistente). O toolkit NÃO enforça a versão mínima (ver [Verificação do PR13](#verificação-do-pr13-rustdesk-e-versão-mínima)) |
 | 4 | Chrome entra apesar da possibilidade de falha de hash por URL do fabricante mutável? | **Entra**, com a mensagem explicativa; hash divergente nunca é contornado |
-| 5 | USB no Windows Home: recusar ou tentar? | **Recusar** (a Microsoft não lista a edição); revalidar na VM |
-| 6 | USB: identificar por ID de hardware (modelo) ou por ID de instância (unidade)? | **ID de hardware** com todos os nós do dispositivo; instância só se a VM mostrar que é estável |
-| 7 | Prazo do timer de reversão | **10 minutos**, configurável por flag, mínimo 2 |
+| 5 | USB no Windows Home: recusar ou tentar? (PR14: aplicada a recomendação) | **Recusar** (a Microsoft não lista a edição); revalidar na VM |
+| 6 | USB: identificar por ID de hardware (modelo) ou por ID de instância (unidade)? | **ID de hardware** com todos os nós do dispositivo; instância só se a VM mostrar que é estável (PR14: aplicada a recomendação) |
+| 7 | Prazo do timer de reversão | **10 minutos**, configurável por flag, mínimo 2 (PR14: aplicada, `--prazo`, máximo 60) |
 | 8 | Linux: aceitar USBGuard só onde há pacote no gerenciador? | **Sim**; Arch fica de fora até confirmar pacote oficial |
 | 9 | macOS: só orientação? | **Sim** |
 | 10 | Otimização: incluir mais que animações (ex.: efeitos de transparência, modo de energia)? | **Não** nesta rodada; só animações (reversíveis por usuário) |
 | 11 | Categoria nova `remoto` para acesso remoto, ou `utilitarios`? | **`utilitarios`** (não criar categoria por um app) |
-| 12 | Quem tem a VM de laboratório e quando roda o smoke de USB (Windows e Linux)? | Antes de iniciar o PR14; sem VM, o PR14 não começa |
+| 12 | Quem tem a VM de laboratório e quando roda o smoke de USB (Windows e Linux)? | Antes de iniciar o PR14; sem VM, o PR14 não começa. **PR14: sem VM; o Paulo e o Maestro mandaram implementar mesmo assim, COMO EXPERIMENTAL** (rótulo no título da seção, no CLI, nas docs e na ajuda; nada se aplica por padrão; lista A VERIFICAR em `docs/usb.md`). O smoke em VM continua sendo a condição para tirar o rótulo |
 
 ## Pendências A VERIFICAR
 

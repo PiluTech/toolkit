@@ -1,0 +1,16 @@
+ toolkit  [1 USB]                                    v0.1.0
+────────────────────────────────────────────────────────────
+ MODO EMPRESA: USB PERMITIDOS · [experimental] · só Windows
+ ! experimental: ainda não foi testado numa máquina real (a
+   verificar em VM). Nada se aplica por padrão e nada muda
+   antes de você confirmar. Isto reduz o risco, não o
+   elimina: um dispositivo que clona o VID/PID de um
+   permitido passa.
+ edição pro · administrador: sim
+ ! ESTADO ORIGINAL DESCONHECIDO. o backup não existe, mas há
+   sinais de aplicação. O toolkit não restaura nada às
+   cegas; p mostra a recuperação manual.
+─ USB conectados agora ─────────────────────────────────────
+─────────────────────────────────────────── ↓ mais 7 linhas
+ USB permitidos (experimental) — nada muda antes de confir…
+ p ver plano  c ler de novo  ? ajuda  q sair

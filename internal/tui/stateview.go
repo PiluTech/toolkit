@@ -125,6 +125,21 @@ func StateUnsupported(th Theme, w, h int, what, reason string, osName string) []
 	return b.render(w, h)
 }
 
+// StateUnsupportedEdition é "a edição X do Windows não é suportada por esta função": o sistema é o Windows, mas a edição não
+// consta na documentação da política. reason diz por quê. Leva "Nada foi alterado.".
+func StateUnsupportedEdition(th Theme, w, h int, what, edition, reason string) []string {
+	ed := safe(edition)
+	if ed == "" {
+		ed = "desconhecida"
+	}
+	lead := upperFirst(safeWhat(what, "Isto")) + ": a edição " + ed + " do Windows não é suportada."
+	b := stateBlock{title: th.Title().Render(titleUnsupported), lead: []string{lead}, tail: NothingChanged}
+	if r := safe(reason); r != "" {
+		b.detail = []string{r}
+	}
+	return b.render(w, h)
+}
+
 // StateEmpty é "nada por aqui": what é a frase inteira (ex.: "Nenhuma receita para este sistema.") e os passos dizem
 // o que fazer para ter conteúdo. Não é erro, então não leva "Nada foi alterado.".
 func StateEmpty(th Theme, w, h int, what string, steps ...string) []string {

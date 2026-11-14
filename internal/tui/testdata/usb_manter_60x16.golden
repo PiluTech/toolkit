@@ -1,0 +1,16 @@
+ toolkit  [1 USB]                                    v0.1.0
+────────────────────────────────────────────────────────────
+ MANTER O MODO EMPRESA DE USB? (EXPERIMENTAL)
+ Cancela a reversão automática: a política continua aplicada
+   e só sai quando você desfizer (tecla d).
+ ! aviso: Só mantenha depois de testar o teclado e o mouse e
+   de ver que os USB de que você precisa funcionam. Isto
+   reduz o risco, não o elimina: um dispositivo que clona o
+   VID/PID de um permitido passa.
+ Backup: o snapshot protegido continua em
+   C:\ProgramData\toolkit; é ele que o desfazer restaura.
+ ↓ mais 5 linhas
+ >[ Cancelar ]<    [ Manter ]
+────────────────────────────────────────────────────────────
+ Confirmação aberta: nada muda até você confirmar.
+ Tab botão  Enter ativa  s confirma  ? ajuda  q sair

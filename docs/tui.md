@@ -21,7 +21,7 @@ saída. Em CI (`CI`, `GITHUB_ACTIONS`, `TF_BUILD` e semelhantes ligadas; vazio, 
 ## Áreas e seções (fase 3 do redesign, variante A)
 
 A raiz tem **áreas**, cada uma com **seções** (as abas): `0 Início` (objetivos que levam às outras áreas, abaixo), `1 Instalar` (Apps, Receitas), `2 Máquina`
-(Diagnóstico, Apps nativos, Otimização), `3 Segurança` (Privacidade), `4 Rede` (Análise: a leitura da rede, só leitura; veja "Rede › Análise" abaixo) e `5 Histórico` (Execuções, o Log). Tudo continua numa lista PLANA de seções (`Model.tabs`):
+(Diagnóstico, Apps nativos, Otimização), `3 Segurança` (Privacidade, USB permitidos (experimental)), `4 Rede` (Análise: a leitura da rede, só leitura; veja "Rede › Análise" abaixo) e `5 Histórico` (Execuções, o Log). Tudo continua numa lista PLANA de seções (`Model.tabs`):
 execução, seleção, `Reloader`, resultados e origens seguem por índice plano; `Model.areas` só agrupa os índices.
 `NewWithAreas(o, []AreaDef)` monta o modo áreas (é o que `toolkit` abre, via `tui.RunAreas`); `New(o, tabs...)` é o modo
 legado (uma área por aba, números 1 a N, Tab percorre todas, sem a linha 2) e segue valendo para os testes.
@@ -36,10 +36,10 @@ legado (uma área por aba, números 1 a N, Tab percorre todas, sem a linha 2) e 
 
 Seção interativa (`internal/tui/inicio_tab.go`, montada em `internal/cli/tui_inicio.go`): uma lista por OBJETIVO, cada um com
 título, uma frase didática (quebra na largura, nunca leva reticências) e, quando vale, uma etiqueta de estado ou requisito
-(símbolo + palavra, nunca só cor). Os oito objetivos: Instalar programas (1 Apps), Preparar a máquina com uma receita (1
+(símbolo + palavra, nunca só cor). Os nove objetivos: Instalar programas (1 Apps), Preparar a máquina com uma receita (1
 Receitas), Ver a saúde da máquina (2 Diagnóstico), Remover apps nativos do Windows (2 Apps nativos; `! só Windows` fora do
 Windows), Deixar o Windows mais leve (2 Otimização; `! só Windows` fora do Windows; a descrição promete a leitura de gargalos e as animações experimentais, com backup e desfazer; sem ganho), Proteger a privacidade do Windows (3 Privacidade; `! só Windows` fora do Windows, `! pede administrador para alguns
-itens` no Windows sem administrador), Analisar a rede (4 Análise) e Ver o que já rodou (5 Execuções). As etiquetas
+itens` no Windows sem administrador), Permitir só os USB conhecidos (modo empresa) — experimental (3 USB permitidos (experimental); `! só Windows` fora do Windows, `! experimental · pede administrador` no Windows sem administrador e `! experimental` como administrador; Enter só abre a seção, que não lê nada até a tecla `c`), Analisar a rede (4 Análise) e Ver o que já rodou (5 Execuções). As etiquetas
 usam só o que o cli já sabe (GOOS e `Options.IsAdmin`): nada é lido do sistema. A etiqueta vai à direita do título quando cabe,
 senão numa linha própria. Com folga há uma linha em branco entre os itens (120x40); em 80x24 a lista compacta e cabe inteira.
 Abaixo disso rola, mantendo o item do cursor inteiro na tela, e a régua mostra `↓ mais N linhas`.
@@ -273,11 +273,12 @@ Ações por sentido (a mesma letra em todas as seções):
 
 | Tecla | Sentido | Onde |
 |---|---|---|
-| a | aplicar… (abre confirmação) | Privacidade, Otimização › Animações (experimental) |
-| d | desfazer… (abre confirmação) | Privacidade, Otimização › Animações |
-| p | ver plano (só leitura) | Privacidade, Apps nativos, Otimização › Animações |
+| a | aplicar… (abre confirmação) | Privacidade, Otimização › Animações (experimental), USB permitidos (experimental) |
+| d | desfazer… (abre confirmação) | Privacidade, Otimização › Animações, USB permitidos (experimental) |
+| p | ver plano (só leitura) | Privacidade, Apps nativos, Otimização › Animações, USB permitidos (experimental) |
 | c | ler de novo (recarrega; em Otimização é também a primeira leitura dos gargalos; na parte Animações relê o estado) | Diagnóstico, visão Máquina; Otimização |
 | r | remover… (abre confirmação) | Apps nativos |
+| n | manter… (abre confirmação: mantém o que foi aplicado e cancela a reversão automática) | USB permitidos (experimental), só no estado "aplicado, aguardando confirmação" |
 | m | alterna o escopo ou a visão: `só usuário` (Privacidade), `todos os usuários` (Apps nativos, exige administrador), `máquina` / `receitas` (Diagnóstico), `animações` / `gargalos` (Otimização) | Privacidade, Apps nativos, Diagnóstico, Otimização |
 | i | como reinstalar (só texto; nada é executado) | Apps nativos |
 | b | marca o perfil básico | Apps nativos |
@@ -426,3 +427,27 @@ ctx que ele cancela ao sair).
   Touch ID do Paulo. Smoke manual das fases 2 e 3 (e da TUI) em Windows 11, macOS e Linux ainda por fazer.
 
 **Pendente de reinício.** Uma receita que espera reinício (`ItemReboot`) nunca vira "feito": a faixa usa o tipo `pendente` (`!`) e o título começa pela pendência ("Pendente de reinício: 1 aguardando reinício, 2 ok"), para a faixa compacta (menos de 20 linhas) não perdê-la.
+
+## Segurança › USB permitidos (experimental) (PR14, só Windows)
+
+Seção nova da área `3 Segurança` (texto completo e o roteiro de recuperação em `docs/usb.md`). **EXPERIMENTAL**: o rótulo vai no título da seção, no corpo e nas
+confirmações; nunca rodou numa máquina real (A VERIFICAR em VM) e nada se aplica por padrão. `internal/tui/usb_tab.go` (`UsbTab`, `UsbBackend`,
+`Reloader`, `Resulter`, `SectionHelper`); o backend real é `internal/cli/tui_usb.go`.
+
+- **Leitura preguiçosa**: `Init` não lê nada (a leitura do PnP varre todos os dispositivos e levaria segundos em toda abertura da TUI); a seção mostra "ainda não lido" e a primeira leitura é a tecla `c`.
+- **Estados** (padronizados em `stateview.go`): carregando, erro (com `StateErrorAfterChange` depois de uma ação), fora do Windows (`StateUnsupported`), edição
+  sem suporte (`StateUnsupportedEdition`, novo), e os cinco estados do modo empresa: nunca aplicado (lista dos USB com `espaço` marca/desmarca), **aplicado,
+  aguardando confirmação** (mostra `REVERTE SOZINHO às HH:MM`; o horário é ESTÁTICO, sem contagem viva, por isso o golden é determinístico e
+  `TOOLKIT_REDUCE_MOTION` não muda nada), aplicado e confirmado, sobra de uma aplicação e **estado original desconhecido** (só mostra a recuperação manual).
+- **Teclas** (legenda única de `keys.go`): `↑↓` dispositivo, `espaço` marcar, `p` ver plano, `a` aplicar…, `n` manter… (letra nova, só no estado armado), `d`
+  desfazer…, `c` ler de novo. `s`/`y` só aplicam dentro de uma confirmação aberta; plano recusado (sem prova, edição, política existente) ou desfazer sem como
+  restaurar nunca vira confirmação.
+- **Confirmação única** (`confirm.go`) com a evidência: lista de dispositivos e o que fica permitido ou bloqueado, a prova, o risco de trancar o teclado, o
+  backup protegido, o prazo da reversão e o roteiro de recuperação; foco inicial em Cancelar; sem administrador o botão de confirmar fica indisponível. `n`
+  tem confirmação própria.
+- **Plano de uso único por ID** (como a Privacidade): a confirmação só age sobre o plano exibido, Esc cancela a preparação, a resposta tardia de um plano
+  cancelado nunca abre nada; o backend ainda exige que o plano recalculado seja idêntico ao mostrado (inclusive a seleção de dispositivos).
+- **Faixa de resultado** (`Resulter`): aplicado = `ResultPending` ("Aplicado, aguardando confirmação"; a ação não terminou até manter ou reverter), mantido,
+  desfeito, plano mudou, precisa de administrador, falha no meio (registro restaurado na hora).
+- Início: objetivo "Permitir só os USB conhecidos (modo empresa) — experimental" (`! só Windows` / `! experimental · pede administrador` / `! experimental`).
+- Goldens: `usb_{principal,confirma,confirma_semadmin,recusado,armado,manter,desconhecido,linux,home,faixa_aplicado}_{80x24,120x40,60x16}.golden`.
