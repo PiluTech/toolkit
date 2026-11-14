@@ -21,6 +21,7 @@ func newInicioTab(areas []tui.AreaDef, goos string, admin bool, th tui.Theme) tu
 		{msg.TUIInicioReceitas, msg.TUIInicioReceitasDesc, "instalar", "Receitas"},
 		{msg.TUIInicioSaude, msg.TUIInicioSaudeDesc, "maquina", "Diagnóstico"},
 		{msg.TUIInicioNativos, msg.TUIInicioNativosDesc, "maquina", "Apps nativos"},
+		{msg.TUIInicioOtimizacao, msg.TUIInicioOtimizacaoDesc, "maquina", msg.TUISecaoOtimizacao},
 		{msg.TUIInicioPrivacidade, msg.TUIInicioPrivDesc, "seguranca", "Privacidade"},
 		{msg.TUIInicioRede, msg.TUIInicioRedeDesc, "rede", msg.TUISecaoAnalise},
 		{msg.TUIInicioHistorico, msg.TUIInicioHistoricoDesc, "historico", msg.TUISecaoExecucoes},
@@ -48,7 +49,7 @@ func newInicioTab(areas []tui.AreaDef, goos string, admin bool, th tui.Theme) tu
 // inicioTag é a etiqueta de estado ou requisito de um objetivo, só com o que o cli já sabe: GOOS e administrador.
 func inicioTag(section, goos string, admin bool) string {
 	switch section {
-	case "Apps nativos":
+	case "Apps nativos", msg.TUISecaoOtimizacao:
 		if goos != "windows" {
 			return msg.TUIInicioTagSoWindows
 		}
