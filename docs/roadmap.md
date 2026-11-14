@@ -61,7 +61,8 @@ depende só de cor (todo estado tem símbolo E palavra, a aba ativa leva colchet
 foco leva `>`); modo sem cor (`NO_COLOR`) com layout idêntico e testado; cores só pela paleta ANSI do terminal
 (o contraste segue o tema do usuário, claro ou escuro); o único movimento é o spinner de 4 quadros (nada pisca
 mais de 3 vezes por segundo); funciona em 60x16 e redimensiona; erros dizem o que houve e o que fazer.
-Falta: teste automatizado de contraste para o par de cores escuro/claro dos tokens (medir, não estimar); opção
+Contraste (Fase 1): a cor vai só no símbolo e a palavra de estado sai na cor padrão do terminal (`theme_test.go` garante
+que nenhum token de texto leva cor e que todo estado tem símbolo e palavra). Falta: opção
 para desligar o spinner (`TOOLKIT_REDUCE_MOTION=1`/`--no-motion`); verificar com leitor de tela (VoiceOver no
 Terminal do macOS, NVDA no Windows Terminal) que a ordem de leitura da tela cheia faz sentido e que a linha de
 estado e as perguntas `[s/N]` são anunciadas; anúncio de mudança de aba e de fim de execução.
