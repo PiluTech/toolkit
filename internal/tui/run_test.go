@@ -142,3 +142,25 @@ func runBatch(cmd tea.Cmd) tea.Msg {
 	}
 	return msg
 }
+
+// RunAreas entrega o ctx às seções de TODAS as áreas e volta quando o ctx do chamador é cancelado.
+func TestRunAreasCancelsAndStopsEveryArea(t *testing.T) {
+	be := &blockingBackend{apps: []AppInfo{{ID: "a", Name: "A", Category: "dev"}}}
+	apps := NewAppsTab(context.Background(), be, Theme{Mono: true}, "linux")
+	ctx, cancel := context.WithCancel(context.Background())
+	in, _ := io.Pipe()
+	done := make(chan error, 1)
+	go func() {
+		done <- runAreas(ctx, Options{Mono: true}, []tea.ProgramOption{tea.WithInput(in), tea.WithOutput(io.Discard), tea.WithWindowSize(80, 24)},
+			[]AreaDef{{Key: "inicio", Title: "Início", Short: "Iníc", Tabs: []Tab{NewInfoTab("Início", "Iníc", "oi")}}, {Key: "instalar", Title: "Instalar", Short: "Inst", Tabs: []Tab{apps}}})
+	}()
+	waitFor(t, "a verificação começar", func() bool { return be.inflight.Load() == 1 })
+	cancel()
+	select {
+	case err := <-done:
+		t.Logf("RunAreas voltou: %v", err) // o erro de cancelamento é esperado
+	case <-time.After(5 * time.Second):
+		t.Fatal("o RunAreas não voltou depois do cancelamento")
+	}
+	waitFor(t, "nenhuma chamada do backend viva", func() bool { return be.inflight.Load() == 0 })
+}

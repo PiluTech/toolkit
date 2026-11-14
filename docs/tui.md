@@ -18,7 +18,27 @@ saída. Em CI (`CI`, `GITHUB_ACTIONS`, `TF_BUILD` e semelhantes ligadas; vazio, 
   entra no `go.mod` junto com a primeira aba que o usa (textinput/viewport/spinner). Versões exatas no `go.mod`.
 - `internal/textsafe`: `Printable`/`Line`, a limpeza de todo texto de fora antes de ir ao terminal.
 
+## Áreas e seções (fase 3 do redesign, variante A)
+
+A raiz tem **áreas**, cada uma com **seções** (as abas): `0 Início` (orientação), `1 Instalar` (Apps, Receitas), `2 Máquina`
+(Diagnóstico, Apps nativos), `3 Segurança` (Privacidade), `4 Rede` (Análise: seção que ainda não existe e aparece com a
+explicação, em vez de sumir) e `5 Histórico` (Execuções, o Log). Tudo continua numa lista PLANA de seções (`Model.tabs`):
+execução, seleção, `Reloader`, resultados e origens seguem por índice plano; `Model.areas` só agrupa os índices.
+`NewWithAreas(o, []AreaDef)` monta o modo áreas (é o que `toolkit` abre, via `tui.RunAreas`); `New(o, tabs...)` é o modo
+legado (uma área por aba, números 1 a N, Tab percorre todas, sem a linha 2) e segue valendo para os testes.
+
+- Linha 1: `[n Área]` (ativa entre colchetes), à direita a versão ou `↑ v0.6.0 (u)` (`disponível` a partir de 100 colunas). A palavra
+  `toolkit` só a partir de 100 colunas; abaixo de 78 os nomes curtos (`Iníc Inst Máq Seg Rede Hist`). Nome de área nunca leva
+  reticências: se não cabe, usa o curto e por último tira o aviso de versão.
+- Linha 2: `Área › [Seção]  Outra` e, à direita, `admin: sim/não` (`Options.IsAdmin`, a mesma detecção do diagnóstico), com
+  `N marcados ·` antes a partir de 100 colunas. Linha 3: régua. O corpo fica com H−6 linhas.
+- Abaixo de 24 linhas a linha 2 some e a seção vai na linha 1 (`[2 Máq › Diag]`); o corpo fica com H−5.
+- `0` a `5` vão para a área (na última seção visitada dela); Tab e Shift+Tab trocam de seção DENTRO da área (dão a volta, não
+  saem). Números e Tab não agem durante confirmação, Revisão, execução (só leitura) e modal; seção capturando texto recebe tudo.
+
 ## Estrutura da tela (H = altura)
+
+Esta tabela é a do modo legado; no modo áreas o cabeçalho tem as 3 linhas descritas acima (ver "Áreas e seções").
 
 | Linha | Conteúdo |
 |---|---|
@@ -135,7 +155,8 @@ spinner (4 quadros, 100 ms). Troca de aba, modal e cursor são instantâneos; o 
 | Tecla | Onde | O que faz |
 |---|---|---|
 | Tab / Shift+Tab | Navegar, Executar, Resumo | próxima aba / anterior (na Revisão troca o botão em foco) |
-| 1 a 4 | idem | Apps, Receitas, Diagnóstico, Log |
+| 1 a 4 | idem (modo legado) | Apps, Receitas, Diagnóstico, Log |
+| 0 a 5 | modo áreas | Início, Instalar, Máquina, Segurança, Rede, Histórico (Tab e Shift+Tab trocam de seção na área) |
 | ↑ ↓ j k | tudo | move o cursor ou rola |
 | g / G / PgUp / PgDn | listas e rolagens | início, fim, página |
 | → l / ← h | Receitas, Diagnóstico | foco nas etapas ou no relatório / volta à lista |

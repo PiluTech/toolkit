@@ -41,23 +41,24 @@ func TestShouldOpenTUI(t *testing.T) {
 }
 
 // rootRun executa `toolkit [args]` com terminais e TERM injetados e um tui.Run espião.
-func rootRun(t *testing.T, stdin, stdout bool, term string, args ...string) (out string, opened bool, tabs []tui.Tab) {
+func rootRun(t *testing.T, stdin, stdout bool, term string, args ...string) (out string, opened bool, areas []tui.AreaDef) {
 	t.Helper()
 	return rootRunOS(t, "linux", stdin, stdout, term, args...)
 }
 
 // rootRunOS é o rootRun com o SO escolhido (no Windows o TERM não existe).
-func rootRunOS(t *testing.T, goos string, stdin, stdout bool, term string, args ...string) (out string, opened bool, tabs []tui.Tab) {
+func rootRunOS(t *testing.T, goos string, stdin, stdout bool, term string, args ...string) (out string, opened bool, areas []tui.AreaDef) {
 	t.Helper()
 	var o, e bytes.Buffer
 	deps := Deps{
 		GOOS: goos, EmbeddedYML: []byte(embedded), Interactive: func() bool { return stdin },
-		UpdateCheck: UpdateCheckDeps{Env: func(string) string { return "" }}, // hermético: o CI do runner não vaza
+		Diag:        DiagDeps{IsAdmin: func(context.Context, string, exec.Runner) bool { return false }}, // nunca consulta o PowerShell de verdade
+		UpdateCheck: UpdateCheckDeps{Env: func(string) string { return "" }},                             // hermético: o CI do runner não vaza
 		TUI: TUIDeps{
 			StdoutIsTerminal: func() bool { return stdout },
 			Term:             func() string { return term },
-			Run: func(_ context.Context, _ tui.Options, ts ...tui.Tab) error {
-				opened, tabs = true, ts
+			Run: func(_ context.Context, _ tui.Options, ts ...tui.AreaDef) error {
+				opened, areas = true, ts
 				return nil
 			},
 		},
@@ -67,20 +68,33 @@ func rootRunOS(t *testing.T, goos string, stdin, stdout bool, term string, args 
 	if err := cmd.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("%v\n%s", err, e.String())
 	}
-	return o.String(), opened, tabs
+	return o.String(), opened, areas
 }
 
 func TestRootWithoutArgsOpensTUIOnlyWithTerminal(t *testing.T) {
-	out, opened, tabs := rootRun(t, true, true, "xterm")
-	if !opened || len(tabs) != 6 {
-		t.Fatalf("deve abrir a TUI com 6 abas: opened=%v abas=%d (%s)", opened, len(tabs), out)
+	out, opened, areas := rootRun(t, true, true, "xterm")
+	if !opened || len(areas) != 6 {
+		t.Fatalf("deve abrir a TUI com 6 áreas: opened=%v áreas=%d (%s)", opened, len(areas), out)
 	}
-	var titles []string
-	for _, tb := range tabs {
-		titles = append(titles, tb.Title())
+	var titles, secs []string
+	for _, a := range areas {
+		titles = append(titles, a.Title)
+		var ss []string
+		for _, tb := range a.Tabs {
+			ss = append(ss, tb.Title())
+		}
+		secs = append(secs, strings.Join(ss, "+"))
 	}
-	if strings.Join(titles, ",") != "Apps,Receitas,Diagnóstico,Log,Privacidade,Apps nativos" {
-		t.Fatalf("abas: %v", titles)
+	if strings.Join(titles, ",") != "Início,Instalar,Máquina,Segurança,Rede,Histórico" {
+		t.Fatalf("áreas: %v", titles)
+	}
+	if strings.Join(secs, ",") != "Início,Apps+Receitas,Diagnóstico+Apps nativos,Privacidade,Análise,Execuções" {
+		t.Fatalf("seções: %v", secs)
+	}
+	for _, a := range areas {
+		if a.Short == "" || len([]rune(a.Short)) > 4 {
+			t.Errorf("nome curto de %s: %q", a.Title, a.Short)
+		}
 	}
 }
 
@@ -115,7 +129,7 @@ func TestRootSubcommandsUnaffected(t *testing.T) {
 	var o, e bytes.Buffer
 	deps := Deps{GOOS: "linux", EmbeddedYML: []byte(embedded), Interactive: func() bool { return true },
 		TUI: TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return "xterm" },
-			Run: func(context.Context, tui.Options, ...tui.Tab) error { t.Fatal("não abre"); return nil }}}
+			Run: func(context.Context, tui.Options, ...tui.AreaDef) error { t.Fatal("não abre"); return nil }}}
 	cmd := NewRootCmdWith(&o, &e, deps)
 	cmd.SetArgs([]string{"coisa-desconhecida"})
 	if err := cmd.ExecuteContext(context.Background()); err == nil {
@@ -355,7 +369,7 @@ func TestRootFullFlowWithRealStdinNeverOpensTUIWithoutTerminal(t *testing.T) {
 		deps := Deps{ // Interactive NÃO é injetado: vale a detecção real do stdin
 			GOOS: "linux", EmbeddedYML: []byte(embedded),
 			TUI: TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return "xterm-256color" },
-				Run: func(context.Context, tui.Options, ...tui.Tab) error { opened = true; return nil }},
+				Run: func(context.Context, tui.Options, ...tui.AreaDef) error { opened = true; return nil }},
 		}
 		cmd := NewRootCmdWith(&o, &e, deps)
 		cmd.SetArgs(nil)
@@ -428,9 +442,9 @@ func TestTuiSubcommandOpensTUI(t *testing.T) {
 		if goos == "linux" {
 			term = "xterm"
 		}
-		_, opened, tabs := rootRunOS(t, goos, true, true, term, "tui")
-		if !opened || len(tabs) != 6 {
-			t.Fatalf("%s: `toolkit tui` deve abrir a TUI: opened=%v abas=%d", goos, opened, len(tabs))
+		_, opened, areas := rootRunOS(t, goos, true, true, term, "tui")
+		if !opened || len(areas) != 6 {
+			t.Fatalf("%s: `toolkit tui` deve abrir a TUI: opened=%v áreas=%d", goos, opened, len(areas))
 		}
 	}
 }
@@ -449,7 +463,7 @@ func TestTuiSubcommandWithoutTerminalExplainsWhy(t *testing.T) {
 		var o, e bytes.Buffer
 		deps := Deps{GOOS: c.goos, EmbeddedYML: []byte(embedded), Interactive: func() bool { return c.stdin },
 			TUI: TUIDeps{StdoutIsTerminal: func() bool { return c.stdout }, Term: func() string { return c.term },
-				Run: func(context.Context, tui.Options, ...tui.Tab) error {
+				Run: func(context.Context, tui.Options, ...tui.AreaDef) error {
 					t.Errorf("%s: não deveria abrir", name)
 					return nil
 				}}}
@@ -490,7 +504,7 @@ func TestRootNeverAutoOpensTUIInCI(t *testing.T) {
 		deps := Deps{GOOS: goos, EmbeddedYML: []byte(embedded), Interactive: func() bool { return true },
 			UpdateCheck: UpdateCheckDeps{Env: func(k string) string { return env[k] }},
 			TUI: TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return term },
-				Run: func(context.Context, tui.Options, ...tui.Tab) error { opened = true; return nil }}}
+				Run: func(context.Context, tui.Options, ...tui.AreaDef) error { opened = true; return nil }}}
 		cmd := NewRootCmdWith(&o, &e, deps)
 		cmd.SetArgs([]string{"--no-update-check"})
 		if err := cmd.ExecuteContext(context.Background()); err != nil {
@@ -529,7 +543,7 @@ func TestTuiSubcommandIgnoresCIButNeedsTerminal(t *testing.T) {
 			return ""
 		}},
 		TUI: TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return "" },
-			Run: func(context.Context, tui.Options, ...tui.Tab) error { opened = true; return nil }}}
+			Run: func(context.Context, tui.Options, ...tui.AreaDef) error { opened = true; return nil }}}
 	cmd := NewRootCmdWith(&o, &e, deps)
 	cmd.SetArgs([]string{"tui", "--no-update-check"})
 	if err := cmd.ExecuteContext(context.Background()); err != nil || !opened {
@@ -553,7 +567,7 @@ func TestReduceMotionFlagAndEnvReachTheTUI(t *testing.T) {
 		deps := Deps{GOOS: "linux", EmbeddedYML: []byte(embedded), Interactive: func() bool { return true },
 			UpdateCheck: UpdateCheckDeps{Env: func(k string) string { return env[k] }},
 			TUI: TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return "xterm" },
-				Run: func(_ context.Context, opts tui.Options, _ ...tui.Tab) error {
+				Run: func(_ context.Context, opts tui.Options, _ ...tui.AreaDef) error {
 					got, called = opts.NoMotion, true
 					return nil
 				}}}
@@ -593,6 +607,35 @@ func TestNoMotionFlagIsDocumentedInHelp(t *testing.T) {
 		_ = cmd.ExecuteContext(context.Background())
 		if !strings.Contains(o.String(), "--no-motion") || !strings.Contains(o.String(), "TOOLKIT_REDUCE_MOTION=1") {
 			t.Errorf("%v: a ajuda deve citar --no-motion e TOOLKIT_REDUCE_MOTION=1:\n%s", args, o.String())
+		}
+	}
+}
+
+// O cabeçalho mostra "admin: sim/não": o cli preenche Options.IsAdmin com a mesma detecção do diagnóstico, e a seção
+// Rede/Análise explica que a análise não existe (em vez de sumir).
+func TestOpenTUIPassesAdminAndExplainsMissingSections(t *testing.T) {
+	for _, admin := range []bool{false, true} {
+		var got tui.Options
+		var areas []tui.AreaDef
+		var o, e bytes.Buffer
+		deps := Deps{GOOS: "linux", EmbeddedYML: []byte(embedded), Interactive: func() bool { return true },
+			UpdateCheck: UpdateCheckDeps{Env: func(string) string { return "" }},
+			Diag:        DiagDeps{IsAdmin: func(context.Context, string, exec.Runner) bool { return admin }},
+			TUI: TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return "xterm" },
+				Run: func(_ context.Context, op tui.Options, as ...tui.AreaDef) error { got, areas = op, as; return nil }}}
+		cmd := NewRootCmdWith(&o, &e, deps)
+		cmd.SetArgs(nil)
+		if err := cmd.ExecuteContext(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if got.IsAdmin != admin {
+			t.Errorf("IsAdmin=%v, quero %v", got.IsAdmin, admin)
+		}
+		if v := areas[4].Tabs[0].View(80, 10); !strings.Contains(v, "A análise de rede ainda não existe nesta versão") {
+			t.Errorf("Rede/Análise sem explicação: %q", v)
+		}
+		if v := areas[0].Tabs[0].View(100, 10); !strings.Contains(v, "Histórico") || !strings.Contains(v, "Tab") {
+			t.Errorf("Início sem as áreas e as teclas: %q", v)
 		}
 	}
 }

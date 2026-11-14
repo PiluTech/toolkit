@@ -164,7 +164,7 @@ func (m *Model) execute() tea.Cmd {
 		}
 	}
 	if _, i := m.logTab(); i >= 0 {
-		m.active = i
+		m.setActive(i)
 	}
 	r := m.runner
 	go r.Run(ctx, sel, ch)

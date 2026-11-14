@@ -117,6 +117,29 @@ const (
 	ErrTUINoConsoleWindows = "a TUI precisa de um console interativo do Windows (entrada e saída sem redirecionamento): abra o Windows Terminal, o PowerShell ou o cmd e rode \"toolkit tui\"; no Git Bash (mintty) use \"winpty toolkit.exe tui\"; ou use os comandos (list, install, recipe) sem a TUI"
 )
 
+// Áreas e seções da TUI (nomes inteiros e curtos; os curtos valem abaixo de 78 colunas).
+const (
+	TUIAreaInicio          = "Início"
+	TUIAreaInicioShort     = "Iníc"
+	TUIAreaInstalar        = "Instalar"
+	TUIAreaInstalarShort   = "Inst"
+	TUIAreaMaquina         = "Máquina"
+	TUIAreaMaquinaShort    = "Máq"
+	TUIAreaSeguranca       = "Segurança"
+	TUIAreaSegurancaShort  = "Seg"
+	TUIAreaRede            = "Rede"
+	TUIAreaRedeShort       = "Rede"
+	TUIAreaHistorico       = "Histórico"
+	TUIAreaHistoricoShort  = "Hist"
+	TUISecaoAnalise        = "Análise"
+	TUISecaoAnaliseShort   = "Anál"
+	TUISecaoExecucoes      = "Execuções"
+	TUISecaoExecucoesShort = "Exec"
+	TUIDetalhesHistorico   = "área Histórico (5)"
+	TUIAnaliseText         = "A análise de rede ainda não existe nesta versão."
+	TUIInicioText          = "Escolha uma área pelo número:\n0 Início   1 Instalar (apps e receitas)   2 Máquina (diagnóstico, apps nativos)\n3 Segurança (privacidade)   4 Rede (análise, em breve)   5 Histórico (execuções)\nTab e Shift+Tab trocam de seção dentro da área. ? ajuda, q sai."
+)
+
 // Textos do comando diagnostico.
 const (
 	DiagShort = "Diagnostica a máquina (só leitura): hardware, discos, bateria, temperatura e erros"

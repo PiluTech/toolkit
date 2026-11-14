@@ -34,6 +34,9 @@ type LogTab struct {
 	logWarn  string
 	lastH    int
 	question string // pergunta [s/N] pendente (reinício, interromper)
+
+	// nomes na raiz de áreas (SetNames); vazios = "Log" e "aba Log" (modo legado)
+	name, shortName, where string
 }
 
 // NewLogTab cria a aba. logPath aparece no estado vazio ("Logs anteriores: <pasta>").
@@ -41,11 +44,27 @@ func NewLogTab(th Theme, logPath string) *LogTab {
 	return &LogTab{theme: th, follow: true, logPath: textsafe.Line(logPath)}
 }
 
+// SetNames dá à seção o nome do modo áreas (Execuções, Exec) e diz onde achar os detalhes ("Histórico"), que a faixa de
+// resultado das outras seções cita. Sem chamar, a aba é "Log" e a faixa diz "aba Log".
+func (t *LogTab) SetNames(title, short, where string) {
+	t.name, t.shortName, t.where = textsafe.Line(title), textsafe.Line(short), textsafe.Line(where)
+}
+
 // Title implementa Tab.
-func (t *LogTab) Title() string { return "Log" }
+func (t *LogTab) Title() string {
+	if t.name != "" {
+		return t.name
+	}
+	return "Log"
+}
 
 // Short implementa Tab.
-func (t *LogTab) Short() string { return "Log" }
+func (t *LogTab) Short() string {
+	if t.shortName != "" {
+		return t.shortName
+	}
+	return "Log"
+}
 
 // Init implementa Tab.
 func (t *LogTab) Init() tea.Cmd { return nil }
@@ -117,7 +136,11 @@ func (t *LogTab) Outcome() *Result {
 	if len(reboot) > 0 {
 		r.Lines = append(r.Lines, "Aguardando reinício: "+strings.Join(reboot, ", "))
 	}
-	r.Lines = append(r.Lines, "Detalhes: aba Log")
+	where := t.where
+	if where == "" {
+		where = "aba Log"
+	}
+	r.Lines = append(r.Lines, "Detalhes: "+where)
 	return r
 }
 

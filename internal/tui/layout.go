@@ -22,7 +22,11 @@ import (
 //	H       barra de teclas
 func (m *Model) screen() string {
 	strip := m.strip()
-	bodyH := m.h - 5 - len(strip)
+	head := []string{m.header(), m.rule(0)}
+	if m.areaMode {
+		head = m.areaRows()
+	}
+	bodyH := m.h - 3 - len(head) - len(strip)
 	var body string
 	reviewMore := 0
 	switch {
@@ -42,7 +46,7 @@ func (m *Model) screen() string {
 	lines := fit(strings.Split(strings.TrimRight(body, "\n"), "\n"), m.w, bodyH)
 
 	rows := make([]string, 0, m.h)
-	rows = append(rows, m.header(), m.rule(0))
+	rows = append(rows, head...)
 	rows = append(rows, strip...)
 	rows = append(rows, lines...)
 	more := reviewMore
@@ -199,6 +203,9 @@ func (m *Model) keyBar() string {
 		tail = []KeyHint{{"q", "sair"}}
 	case m.mode == modeRun:
 		hints = []KeyHint{{"Tab", "abas (leitura)"}, {"↑↓", "itens"}, {"f", "seguir o fim"}}
+		if m.areaMode {
+			hints = []KeyHint{{"0-" + itoa(len(m.areas)-1), "áreas (leitura)"}, {"Tab", "seções"}, {"↑↓", "itens"}, {"f", "seguir o fim"}}
+		}
 		tail = []KeyHint{{"q", "interromper"}}
 	default:
 		hints = m.tabs[m.active].Keys()
@@ -250,6 +257,18 @@ func (m *Model) helpBody() string {
 	rows := [][2]string{
 		{"Tab / Shift+Tab", "próxima aba / anterior"},
 		{"1 a 6", "Apps, Receitas, Diagnóstico, Log, Privacidade, Apps nativos"},
+	}
+	if m.areaMode {
+		titles := make([]string, len(m.areas))
+		for i, a := range m.areas {
+			titles[i] = a.Title
+		}
+		rows = [][2]string{
+			{"Tab Shift+Tab", "seções da área (não sai dela)"},
+			{"0 a " + itoa(len(m.areas)-1), strings.Join(titles, ", ")},
+		}
+	}
+	rows = append(rows, [][2]string{
 		{"↑ ↓  j k", "mover o cursor ou rolar"},
 		{"g / G  PgUp / PgDn", "início, fim, página"},
 		{"→ l  ← h", "foco nas etapas / volta à lista (Receitas, Diagnóstico)"},
@@ -262,7 +281,7 @@ func (m *Model) helpBody() string {
 		{"u", "notas da versão nova (quando há)"},
 		{"Esc", "volta um nível: modal, busca, Revisão"},
 		{"q  Ctrl+C", "sair (durante a execução pergunta antes)"},
-	}
+	}...)
 	var b strings.Builder
 	b.WriteString(" " + m.theme.Title().Render(titleCase(m.theme, "Teclas")) + "\n\n")
 	for _, r := range rows {

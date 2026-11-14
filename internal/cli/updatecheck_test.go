@@ -266,7 +266,7 @@ func TestTUIGetsBannerFromCache(t *testing.T) {
 	var got tui.Options
 	e.deps.Interactive = func() bool { return true }
 	e.deps.TUI = TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return "xterm" },
-		Run: func(_ context.Context, o tui.Options, _ ...tui.Tab) error { got = o; return nil }}
+		Run: func(_ context.Context, o tui.Options, _ ...tui.AreaDef) error { got = o; return nil }}
 	_, errOut, code := e.run(t)
 	if code != 0 {
 		t.Fatal(errOut)
@@ -295,7 +295,7 @@ func TestTUIReceivesLateResultThroughChannel(t *testing.T) {
 	var latestAtStart string
 	e.deps.Interactive = func() bool { return true }
 	e.deps.TUI = TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return "xterm" },
-		Run: func(_ context.Context, o tui.Options, _ ...tui.Tab) error {
+		Run: func(_ context.Context, o tui.Options, _ ...tui.AreaDef) error {
 			latestAtStart = o.Latest
 			close(release) // só agora a consulta termina
 			select {
@@ -322,7 +322,7 @@ func TestTUIUpdateRequestedRunsUpdate(t *testing.T) {
 	e.deps.Update.APIBase = "https://127.0.0.1.invalid/x"
 	e.deps.Update.Exe = func() (string, error) { return filepath.Join(t.TempDir(), "toolkit"), nil }
 	e.deps.TUI = TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return "xterm" },
-		Run: func(context.Context, tui.Options, ...tui.Tab) error { return tui.ErrUpdateRequested }}
+		Run: func(context.Context, tui.Options, ...tui.AreaDef) error { return tui.ErrUpdateRequested }}
 	_, errOut, code := e.run(t)
 	if code != 1 || !strings.Contains(errOut, "erro:") {
 		t.Fatalf("Atualizar deve rodar o toolkit update (que aqui falha sem rede): code=%d %q", code, errOut)
