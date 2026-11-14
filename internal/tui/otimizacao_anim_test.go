@@ -428,3 +428,45 @@ func TestGoldenOtimizacaoAnimacoes(t *testing.T) {
 		golden(t, fmt.Sprintf("otimizacao_anim_ok_%dx%d", sz[0], sz[1]), sized(goldenOpts(), sz[0], sz[1], tab).render())
 	}
 }
+
+// Lupa #82: Load falhou -> a/d armavam a confirmação SEM tela (a tela de erro a escondia) e s/y/Enter aplicavam o plano
+// invisível. Modelo REAL: nenhuma tecla pode chamar Apply/Undo com a tela de erro; depois de c (releitura boa) e plano
+// visível o fluxo normal funciona e aplica o ID exibido.
+func TestAnimLoadFalhouNuncaAplicaPlanoInvisivel(t *testing.T) {
+	be := &fakeAnim{info: animSample(), loadErr: errors.New("registro ilegível"),
+		plan: AnimPlan{Text: animPlanText, Pending: 1}, undoPlan: AnimPlan{Text: animPlanText, Pending: 1},
+		applyRes: AnimResult{Applied: 1}, undoRes: AnimResult{Applied: 1}}
+	tab := newAnimTab(t, be)
+	m := NewWithAreas(Options{Mono: true, NoMotion: true}, []AreaDef{{Key: "maquina", Title: "Máquina", Short: "Máq", Tabs: []Tab{tab}}})
+	rresize(m, 100, 30)
+	rkey(m, "m")
+	if !strings.Contains(rscreen(m), "registro ilegível") {
+		t.Fatalf("devia mostrar o erro:\n%s", rscreen(m))
+	}
+	for _, k := range []string{"a", "d", "p"} {
+		rkey(m, k)
+		for _, c := range []string{"s", "y", "S", "Y", "tab", "enter", "s"} {
+			rkey(m, c)
+		}
+		if be.applies != 0 || be.undos != 0 || len(be.applyIDs) != 0 {
+			t.Fatalf("tecla %q + confirmação aplicou com a tela de erro: applies=%d undos=%d", k, be.applies, be.undos)
+		}
+		if tab.a.asking || tab.Capturing() {
+			t.Fatalf("tecla %q armou a confirmação sem tela utilizável", k)
+		}
+		if !strings.Contains(rscreen(m), "registro ilegível") {
+			t.Fatalf("a tela de erro devia continuar:\n%s", rscreen(m))
+		}
+	}
+	be.loadErr = nil
+	rkey(m, "c")
+	rkey(m, "a")
+	if !tab.Capturing() || !strings.Contains(strings.ToLower(rscreen(m)), "reduzir as animações") || !strings.Contains(rscreen(m), `"1" -> "0"`) {
+		t.Fatalf("a confirmação devia estar visível com o plano:\n%s", rscreen(m))
+	}
+	shown := be.lastID
+	rkey(m, "s")
+	if be.applies != 1 || len(be.applyIDs) != 1 || be.applyIDs[0] != shown {
+		t.Fatalf("devia aplicar o plano exibido %q: %v applies=%d", shown, be.applyIDs, be.applies)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -110,7 +111,16 @@ func runAnimApply(ctx context.Context, out io.Writer, deps Deps, f animFlags) er
 	if ok, err := privConfirm(ctx, out, deps, f.yes, msg.AnimConfirmApply); !ok || err != nil {
 		return err
 	}
-	res, err := animacoes.Apply(ctx, e.sys, e.store, plan, e.now())
+	// Depois da confirmação e ANTES de qualquer backup ou escrita: recalcula e exige o MESMO plano que foi mostrado
+	// (outro processo pode ter mudado o valor durante a pergunta; o backup guardaria o "original" errado).
+	fresh, err := animacoes.Build(ctx, e.sys, e.lang)
+	if err != nil {
+		return cleanErr(err)
+	}
+	if fresh.Format(e.lang) != plan.Format(e.lang) || fresh.Pending() != plan.Pending() {
+		return errors.New(msg.AnimStateChanged)
+	}
+	res, err := animacoes.Apply(ctx, e.sys, e.store, fresh, e.now())
 	if err != nil {
 		if res != nil && len(res.Applied) > 0 {
 			_, _ = fmt.Fprintf(out, msg.AnimAppliedPart+"\n", len(res.Applied), printable(res.BackupPath))
@@ -147,7 +157,18 @@ func runAnimUndo(ctx context.Context, out io.Writer, deps Deps, f animFlags) err
 	if ok, err := privConfirm(ctx, out, deps, f.yes, msg.AnimConfirmUndo); !ok || err != nil {
 		return err
 	}
-	res, err := animacoes.ApplyUndo(ctx, e.sys, e.store, plan, bk)
+	// Reconfere backup (mesmo conteúdo) e estado atual (mesmo plano) antes de restaurar qualquer coisa.
+	fresh, freshBk, err := animacoes.BuildUndo(ctx, e.sys, e.store, e.lang)
+	if err != nil {
+		if errors.Is(err, animacoes.ErrNoBackup) {
+			return errors.New(msg.AnimStateChanged)
+		}
+		return cleanErr(err)
+	}
+	if formatAnimUndo(fresh) != formatAnimUndo(plan) || fresh.Pending() != plan.Pending() || !reflect.DeepEqual(freshBk, bk) {
+		return errors.New(msg.AnimStateChanged)
+	}
+	res, err := animacoes.ApplyUndo(ctx, e.sys, e.store, fresh, freshBk)
 	if err != nil {
 		if res != nil && len(res.Applied) > 0 {
 			_, _ = fmt.Fprintf(out, msg.AnimRestoredPart+"\n", len(res.Applied))

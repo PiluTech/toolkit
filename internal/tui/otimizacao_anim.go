@@ -182,6 +182,10 @@ func (t *OptimizeTab) animUpdate(msg tea.Msg) (tea.Cmd, bool) {
 
 func (t *OptimizeTab) animOnPlan(m animPlanMsg) {
 	a := &t.a
+	if !t.animUsable() {
+		a.asking, a.view, a.conf = false, false, nil // sem tela utilizável o plano não vira confirmação
+		return
+	}
 	a.scroll, a.asking = 0, false
 	if m.err != nil {
 		a.view = false
@@ -304,6 +308,17 @@ func (t *OptimizeTab) animKey(k string) tea.Cmd {
 	if a.loading || a.busy != busyNone {
 		return nil
 	}
+	if !t.animUsable() {
+		// Carregando, com erro, vazio ou não suportado: nada que arme confirmação ou aplique. Só reler (c) e voltar (m).
+		a.asking, a.view, a.conf = false, false, nil
+		switch k {
+		case "m":
+			t.part = partGargalos
+		case "c":
+			return t.animLoadCmd()
+		}
+		return nil
+	}
 	if a.asking {
 		switch a.conf.Update(k) {
 		case ConfirmAccept:
@@ -381,6 +396,10 @@ func (t *OptimizeTab) animPlanCmd(kind privKind) tea.Cmd {
 
 func (t *OptimizeTab) animConfirmed() tea.Cmd {
 	a := &t.a
+	if !t.animUsable() || !a.asking || a.conf == nil {
+		a.asking, a.view, a.conf = false, false, nil
+		return nil
+	}
 	a.asking, a.conf, a.busy, a.notice, a.res = false, nil, busyApply, "", nil
 	be, ctx, kind, id := a.be, t.ctx, a.kind, a.plan.ID
 	return tea.Batch(func() tea.Msg {

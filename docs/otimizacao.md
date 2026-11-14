@@ -140,6 +140,11 @@ que aponta para HKLM, outra chave, outro valor ou tipo desconhecido, ou backup d
 Reaplicar não sobrescreve o original. Desfazer restaura exatamente (tipo preservado; só apaga o que não existia) e remove o
 backup; se algo falha no meio, o que não foi restaurado fica no backup.
 
+**Revalidação depois da confirmação (CLI).** Depois do `[s/N]` (e também com `--yes`, logo antes de aplicar) e ANTES de qualquer
+backup ou escrita, o comando recalcula o plano e exige o MESMO texto e as mesmas pendências do que foi mostrado; no desfazer
+reconfere também o backup (mesmo conteúdo). Divergência (outro processo mexeu no valor durante a pergunta) =
+`o estado mudou desde o plano mostrado; nada foi alterado; veja o plano de novo`, zero mutações e backup intacto.
+
 **Leitura do registro.** Pelo mesmo `reg.exe` da privacidade (caminho absoluto, `ReadOnlyRunner` para ler e `MutatingRunner` para
 escrever, ausência de valor **provada**, nunca "exit 1 = ausente"), mas o System das animações expõe só o registro e recusa
 qualquer chave que não comece com `HKCU\` antes de executar um comando (`ErrSoHKCU`). Nunca há `Elevate` e nunca administrador.
@@ -151,7 +156,8 @@ reinicia o Explorer (só avisa em texto). Reduzir animação melhora a sensaçã
 (só leitura), `a` aplicar… e `d` desfazer… abrem a confirmação única (foco em Cancelar, backup e como desfazer na tela), `c` lê de
 novo, `m` volta aos gargalos. O plano mostrado tem ID de uso único: a confirmação aplica só o plano exibido e só se o sistema (ou o
 backup) continua igual; `Esc` cancela a preparação; o resultado vira faixa (`x` fecha); releitura com erro depois de mudar não diz
-"nada foi alterado" nem promete backup.
+"nada foi alterado" nem promete backup. Sem estado utilizável (carregando, erro de leitura) as teclas `a`/`d`/`p` e a
+confirmação são recusadas: nunca há plano armado fora da tela (só `c` e `m`).
 
 ### A VERIFICAR (animações)
 

@@ -209,6 +209,7 @@ const (
 	AnimAppliedPart  = "Aplicadas antes da falha: %d mudança(s). O backup em %s guarda os valores originais; `toolkit otimizacao animacoes desfazer` restaura."
 	AnimRestored     = "Restaurado: %d item(ns). O backup foi removido."
 	AnimRestoredPart = "Restaurados antes da falha: %d item(ns); o que sobrou continua no backup."
+	AnimStateChanged = "o estado mudou desde o plano mostrado; nada foi alterado; veja o plano de novo"
 	AnimNoBackup     = "Não há backup de animações: nada a desfazer."
 	AnimUndoNothing  = "O backup existe, mas tudo já está como antes: nada a restaurar (o backup foi removido)."
 	AnimUndoHeader   = "O que será restaurado (valor atual -> original):"
