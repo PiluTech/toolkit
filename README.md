@@ -68,6 +68,7 @@ toolkit diagnostico              # saúde da máquina, só leitura: o que está 
 toolkit rede                    # análise da rede, só leitura: IPs, Wi-Fi, DNS, portas em escuta, firewall (docs/rede.md)
 toolkit rede ip --servico-ip URL # IP público, SÓ sob pedido, com serviço que você informa e confirmação (sem serviço padrão)
 toolkit rede portal --servico-portal URL  # portal cativo, SÓ sob pedido (mesmas regras)
+toolkit otimizacao              # Windows: o que pesa na máquina (CPU, memória, disco, inicialização), só leitura (docs/otimizacao.md)
 toolkit resume                  # chamado sozinho depois do reboot; pode ser rodado à mão
 ```
 

@@ -1,0 +1,16 @@
+  0 Iníc  1 Inst [2 Máq › Otim] 3 Seg  4 Rede  5 Hist v0.1.0
+────────────────────────────────────────────────────────────
+ Otimização do Windows — gargalos (só leitura)
+
+ Resultado: 1 problema(s), 3 atenção.
+
+ ✗ problema: Pouco espaço livre no disco do sistema: C:
+   (Disco Fake) — 40 B livres de 1000 B (limiar de atenção
+   10%; de problema 5%)
+     O que fazer: Libere espaço (lixeira, downloads, caches
+   e arquivos grandes) ou mova dados para outro disco.
+ ! atenção: CPU com uso alto — média 91%, pico 99% (amostra
+   de 3 leituras; limiar 80%); mais pesados agora: chrome
+────────────────────────────────────────── ↓ mais 73 linhas
+ Otimização — só leitura, nada é alterado; c lê de novo
+ ↑↓ rolar  c ler de novo  ? ajuda  q sair

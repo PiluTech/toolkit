@@ -198,6 +198,7 @@ func tuiAreas(ctx context.Context, deps Deps, rd RecipeDeps, th tui.Theme, admin
 		{Key: "maquina", Title: msg.TUIAreaMaquina, Short: msg.TUIAreaMaquinaShort, Tabs: []tui.Tab{
 			newDiagTab(ctx, deps, rd, th),
 			newAppsNativosTab(ctx, deps, th),
+			newOtimizacaoTab(ctx, deps, th),
 		}},
 		{Key: "seguranca", Title: msg.TUIAreaSeguranca, Short: msg.TUIAreaSegurancaShort, Tabs: []tui.Tab{
 			newPrivacyTab(ctx, deps, th),

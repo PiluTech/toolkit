@@ -119,44 +119,48 @@ const (
 
 // Áreas e seções da TUI (nomes inteiros e curtos; os curtos valem abaixo de 78 colunas).
 const (
-	TUIAreaInicio          = "Início"
-	TUIAreaInicioShort     = "Iníc"
-	TUIAreaInstalar        = "Instalar"
-	TUIAreaInstalarShort   = "Inst"
-	TUIAreaMaquina         = "Máquina"
-	TUIAreaMaquinaShort    = "Máq"
-	TUIAreaSeguranca       = "Segurança"
-	TUIAreaSegurancaShort  = "Seg"
-	TUIAreaRede            = "Rede"
-	TUIAreaRedeShort       = "Rede"
-	TUIAreaHistorico       = "Histórico"
-	TUIAreaHistoricoShort  = "Hist"
-	TUISecaoAnalise        = "Análise"
-	TUISecaoAnaliseShort   = "Anál"
-	TUISecaoExecucoes      = "Execuções"
-	TUISecaoExecucoesShort = "Exec"
-	TUIDetalhesHistorico   = "área Histórico (5)"
-	TUIInicioPergunta      = "O que você quer fazer?"
+	TUIAreaInicio           = "Início"
+	TUIAreaInicioShort      = "Iníc"
+	TUIAreaInstalar         = "Instalar"
+	TUIAreaInstalarShort    = "Inst"
+	TUIAreaMaquina          = "Máquina"
+	TUIAreaMaquinaShort     = "Máq"
+	TUIAreaSeguranca        = "Segurança"
+	TUIAreaSegurancaShort   = "Seg"
+	TUIAreaRede             = "Rede"
+	TUIAreaRedeShort        = "Rede"
+	TUIAreaHistorico        = "Histórico"
+	TUIAreaHistoricoShort   = "Hist"
+	TUISecaoAnalise         = "Análise"
+	TUISecaoAnaliseShort    = "Anál"
+	TUISecaoOtimizacao      = "Otimização"
+	TUISecaoOtimizacaoShort = "Otim"
+	TUISecaoExecucoes       = "Execuções"
+	TUISecaoExecucoesShort  = "Exec"
+	TUIDetalhesHistorico    = "área Histórico (5)"
+	TUIInicioPergunta       = "O que você quer fazer?"
 )
 
 // Início da TUI: um objetivo por linha (título, uma frase didática e, quando vale, uma etiqueta de estado ou requisito).
 const (
-	TUIInicioApps          = "Instalar programas"
-	TUIInicioAppsDesc      = "Escolha os programas do catálogo e instale todos de uma vez."
-	TUIInicioReceitas      = "Preparar a máquina com uma receita"
-	TUIInicioReceitasDesc  = "Uma receita faz vários passos em sequência e continua após reiniciar."
-	TUIInicioSaude         = "Ver a saúde da máquina"
-	TUIInicioSaudeDesc     = "Diagnóstico só de leitura: hardware, série, UUID, MAC e o que está ruim."
-	TUIInicioNativos       = "Remover apps nativos do Windows"
-	TUIInicioNativosDesc   = "Remove só os apps do Windows que você escolher, depois de ver o plano."
-	TUIInicioPrivacidade   = "Proteger a privacidade do Windows"
-	TUIInicioPrivDesc      = "Ajustes de privacidade, um por um, com confirmação e como desfazer."
-	TUIInicioRede          = "Analisar a rede"
-	TUIInicioRedeDesc      = "IPs, Wi-Fi, DNS e portas da máquina."
-	TUIInicioHistorico     = "Ver o que já rodou"
-	TUIInicioHistoricoDesc = "O que já rodou e o que falhou, com o registro de cada execução."
-	TUIInicioTagSoWindows  = "! só Windows"
-	TUIInicioTagAdmin      = "! pede administrador para alguns itens"
+	TUIInicioApps           = "Instalar programas"
+	TUIInicioAppsDesc       = "Escolha os programas do catálogo e instale todos de uma vez."
+	TUIInicioReceitas       = "Preparar a máquina com uma receita"
+	TUIInicioReceitasDesc   = "Uma receita faz vários passos em sequência e continua após reiniciar."
+	TUIInicioSaude          = "Ver a saúde da máquina"
+	TUIInicioSaudeDesc      = "Diagnóstico só de leitura: hardware, série, UUID, MAC e o que está ruim."
+	TUIInicioNativos        = "Remover apps nativos do Windows"
+	TUIInicioNativosDesc    = "Remove só os apps do Windows que você escolher, depois de ver o plano."
+	TUIInicioOtimizacao     = "Deixar o Windows mais leve"
+	TUIInicioOtimizacaoDesc = "Lê o que pesa na máquina (CPU, memória, disco, inicialização) e diz o que fazer; só leitura."
+	TUIInicioPrivacidade    = "Proteger a privacidade do Windows"
+	TUIInicioPrivDesc       = "Ajustes de privacidade, um por um, com confirmação e como desfazer."
+	TUIInicioRede           = "Analisar a rede"
+	TUIInicioRedeDesc       = "IPs, Wi-Fi, DNS e portas da máquina."
+	TUIInicioHistorico      = "Ver o que já rodou"
+	TUIInicioHistoricoDesc  = "O que já rodou e o que falhou, com o registro de cada execução."
+	TUIInicioTagSoWindows   = "! só Windows"
+	TUIInicioTagAdmin       = "! pede administrador para alguns itens"
 )
 
 // Textos do comando diagnostico.
@@ -204,6 +208,20 @@ const (
 	RedeQueryReading   = "Lendo as portas e o firewall locais (só leitura) para cruzar com o IP público…"
 
 	RedePrivacy = "Aviso: esta saída contém dados da rede local (IPs, MACs, nomes de rede). Nada foi enviado a ninguém; guarde e compartilhe com cuidado."
+)
+
+// Textos do comando otimizacao (só Windows; leitura de gargalos).
+const (
+	OtimShort = "Lê os gargalos do Windows (só leitura): CPU, memória, disco, inicialização, serviços e boot"
+	OtimLong  = "Lê o que pesa no Windows SEM alterar nada e sem administrador: uso de CPU e memória (com os processos que mais usam), disco do sistema (tipo, espaço livre, fila e latência), itens de inicialização, serviços automáticos e o tempo do último boot (evento 100 do log Diagnostics-Performance; sem o evento o resultado é \"sem dado\", nunca \"boot rápido\"). Mostra um resumo com o que está ruim e o que fazer, em texto: o toolkit não encerra processos, não desliga itens de inicialização e não altera serviços. Os limiares estão em docs/otimizacao.md. Só existe no Windows."
+
+	FlagOtimFull   = "mostra também o relatório completo (todos os dados lidos)"
+	FlagOtimJSON   = "saída em JSON (resumo e dados lidos)"
+	FlagOtimReport = "grava o resumo e o relatório completo neste arquivo novo (permissão 0600; não sobrescreve)"
+
+	OtimOnlyWindows = "o comando otimizacao só existe no Windows (este sistema é %s); nada foi alterado"
+	OtimReading     = "Lendo os gargalos do Windows (só leitura; leva alguns segundos)…"
+	OtimHint        = "Para ver todos os dados lidos: toolkit otimizacao --completo (ou --relatorio arquivo.txt)."
 )
 
 // Textos do comando privacidade (só Windows).

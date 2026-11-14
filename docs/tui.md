@@ -21,7 +21,7 @@ saída. Em CI (`CI`, `GITHUB_ACTIONS`, `TF_BUILD` e semelhantes ligadas; vazio, 
 ## Áreas e seções (fase 3 do redesign, variante A)
 
 A raiz tem **áreas**, cada uma com **seções** (as abas): `0 Início` (objetivos que levam às outras áreas, abaixo), `1 Instalar` (Apps, Receitas), `2 Máquina`
-(Diagnóstico, Apps nativos), `3 Segurança` (Privacidade), `4 Rede` (Análise: a leitura da rede, só leitura; veja "Rede › Análise" abaixo) e `5 Histórico` (Execuções, o Log). Tudo continua numa lista PLANA de seções (`Model.tabs`):
+(Diagnóstico, Apps nativos, Otimização), `3 Segurança` (Privacidade), `4 Rede` (Análise: a leitura da rede, só leitura; veja "Rede › Análise" abaixo) e `5 Histórico` (Execuções, o Log). Tudo continua numa lista PLANA de seções (`Model.tabs`):
 execução, seleção, `Reloader`, resultados e origens seguem por índice plano; `Model.areas` só agrupa os índices.
 `NewWithAreas(o, []AreaDef)` monta o modo áreas (é o que `toolkit` abre, via `tui.RunAreas`); `New(o, tabs...)` é o modo
 legado (uma área por aba, números 1 a N, Tab percorre todas, sem a linha 2) e segue valendo para os testes.
@@ -36,23 +36,23 @@ legado (uma área por aba, números 1 a N, Tab percorre todas, sem a linha 2) e 
 
 Seção interativa (`internal/tui/inicio_tab.go`, montada em `internal/cli/tui_inicio.go`): uma lista por OBJETIVO, cada um com
 título, uma frase didática (quebra na largura, nunca leva reticências) e, quando vale, uma etiqueta de estado ou requisito
-(símbolo + palavra, nunca só cor). Os sete objetivos: Instalar programas (1 Apps), Preparar a máquina com uma receita (1
+(símbolo + palavra, nunca só cor). Os oito objetivos: Instalar programas (1 Apps), Preparar a máquina com uma receita (1
 Receitas), Ver a saúde da máquina (2 Diagnóstico), Remover apps nativos do Windows (2 Apps nativos; `! só Windows` fora do
-Windows), Proteger a privacidade do Windows (3 Privacidade; `! só Windows` fora do Windows, `! pede administrador para alguns
+Windows), Deixar o Windows mais leve (2 Otimização; `! só Windows` fora do Windows; só promete a leitura de gargalos), Proteger a privacidade do Windows (3 Privacidade; `! só Windows` fora do Windows, `! pede administrador para alguns
 itens` no Windows sem administrador), Analisar a rede (4 Análise) e Ver o que já rodou (5 Execuções). As etiquetas
 usam só o que o cli já sabe (GOOS e `Options.IsAdmin`): nada é lido do sistema. A etiqueta vai à direita do título quando cabe,
 senão numa linha própria. Com folga há uma linha em branco entre os itens (120x40); em 80x24 a lista compacta e cabe inteira.
 Abaixo disso rola, mantendo o item do cursor inteiro na tela, e a régua mostra `↓ mais N linhas`.
 
-- `↑↓`/`jk` movem (`g`/`G` vão ao primeiro/último), `Enter` abre a área e a seção do item, `1` a `7` vão direto ao item. A linha de
+- `↑↓`/`jk` movem (`g`/`G` vão ao primeiro/último), `Enter` abre a área e a seção do item, `1` a `8` vão direto ao item. A linha de
   estado diz para onde o Enter leva (`Enter abre 2 Máquina › Diagnóstico`). O Enter abre mesmo a seção que não existe no SO
   (ela explica o motivo).
 - Contrato: a seção implementa `KeyClaimer` (`Claims(key)`): com a raiz em navegação normal (sem Revisão, execução, modal nem
-  pergunta) Enter e `1`..`7` vão a ela ANTES da Revisão e da troca de área; em qualquer outro modo valem as regras da raiz (em
+  pergunta) Enter e `1`..`8` vão a ela ANTES da Revisão e da troca de área; em qualquer outro modo valem as regras da raiz (em
   execução `3` continua sendo a área Segurança, só leitura). Para navegar ela devolve `tui.GoToMsg{Area, Section}` e a RAIZ decide
   (`Model.goTo`): ignora o pedido durante Revisão, execução, modal, pergunta `[s/N]` ou seção que captura teclas
   (confirmação aberta); área inexistente é ignorada e seção inexistente abre a área na última seção visitada. O contrato `Tab`
-  não mudou. Dentro do Início, `0` fica no Início e `8`/`9` não fazem nada; as demais áreas se abrem pelo Enter ou pelo número do item.
+  não mudou. Dentro do Início, `0` fica no Início e `9` não faz nada; as demais áreas se abrem pelo Enter ou pelo número do item.
 - Teste integrado (Lupa): com `PrivacyTab` e `NativeAppsTab` reais e backends falsos, uma confirmação aberta não é abandonada por
   `0`..`5`, Tab, Shift+Tab, setas nem `GoToMsg`, nada é aplicado antes do `s`, o ID aplicado é o do plano exibido, e depois de
   cancelar Tab e os números voltam a funcionar.
@@ -196,11 +196,11 @@ Toda tela que não é a lista normal tem UMA forma, de cima para baixo: **títul
 
 | Função | Título | Frase | Onde aparece |
 |---|---|---|---|
-| `StateLoading(th, w, h, what, frame, hints...)` | `\| Carregando` (spinner de 4 quadros); com `--no-motion` `… Carregando` fixo | `Lendo <what>…`; `hints` entram como linhas sem número (ex.: `Esc cancela.`) | Apps (catálogo), Receitas e Diagnóstico, Máquina (com `Esc cancela.`), Privacidade, Apps nativos |
+| `StateLoading(th, w, h, what, frame, hints...)` | `\| Carregando` (spinner de 4 quadros); com `--no-motion` `… Carregando` fixo | `Lendo <what>…`; `hints` entram como linhas sem número (ex.: `Esc cancela.`) | Apps (catálogo), Receitas e Diagnóstico, Máquina e Otimização (com `Esc cancela.`), Privacidade, Apps nativos |
 | `StateError(th, w, h, what, err, steps...)` | `✗ Erro` | `Não deu para ler <what>.` + `Motivo: <err>` (o erro pode ter várias linhas; vem escapado) | idem; Máquina leva `1. Tente de novo (c).`; Apps leva `1. Corrija o arquivo ou rode sem --catalog.` |
 | `StateNeedsAdmin(th, w, h, what, steps...)` | `! Precisa de administrador` | `<What>: precisa de administrador e este terminal não é. O toolkit nunca eleva sozinho.` | passos por sistema em `AdminSteps(goos, cmd)`: Windows `Botão direito no Terminal > Executar como administrador`, Linux/macOS `sudo toolkit <cmd>`. Nenhuma aba substitui o corpo por ele hoje (o administrador só barra a ação, que mostra a faixa de resultado com as mesmas linhas: `adminResultLines`) |
-| `StateUnsupported(th, w, h, what, reason, osName)` | `i Não disponível neste sistema` | `<What>: só existe no Windows (este sistema é <SO>).` + o motivo por sistema | Privacidade e Apps nativos fora do Windows |
-| `StateEmpty(th, w, h, what, steps...)` | `i Nada por aqui` | a frase inteira (ex.: `Nenhuma receita para este sistema.`) + o que fazer | Apps sem instalador, Receitas e Diagnóstico vazios, Máquina ainda não lida, Histórico/Execuções (`Nada rodou nesta sessão.`) |
+| `StateUnsupported(th, w, h, what, reason, osName)` | `i Não disponível neste sistema` | `<What>: só existe no Windows (este sistema é <SO>).` + o motivo por sistema | Privacidade, Apps nativos e Otimização fora do Windows |
+| `StateEmpty(th, w, h, what, steps...)` | `i Nada por aqui` | a frase inteira (ex.: `Nenhuma receita para este sistema.`) + o que fazer | Apps sem instalador, Receitas e Diagnóstico vazios, Máquina e Otimização ainda não lidas, Otimização cancelada (`Leitura cancelada. Nada foi alterado.`), Histórico/Execuções (`Nada rodou nesta sessão.`) |
 | `StateSoon(th, w, h, what, steps...)` | `i Ainda não existe nesta versão` | a explicação | uma seção que ainda não exista (`InfoTab`; hoje nenhuma) |
 | `StateTooSmall(th, w, h, needW, needH)` | `i Terminal pequeno` | `A interface precisa de 60×16 e este tem LxA.` | raiz, abaixo do mínimo; `q` e Ctrl+C continuam saindo |
 
@@ -244,6 +244,7 @@ texto passa por `textsafe`; o corpo da resposta nunca aparece. Goldens: `rede_co
 | Receitas | `\| Lendo receitas e estado…` | "Nenhuma receita para este sistema." | "Não deu para ler o estado em <caminho>. Rode: toolkit recipe status". Receita falha: etapa, saída e "toolkit recipe reset <id> libera nova tentativa" |
 | Diagnóstico | spinner no item; relatório etapa a etapa | "Nenhum diagnóstico para este sistema." Nunca rodou: "Enter roda." | etapa com `✗`, código de saída e saída como veio. Ferramenta ausente: `- pulado: smartctl não está instalado` |
 | Rede › Análise | `\| Lendo a rede…` (Esc cancela); consulta: `\| Lendo o serviço consultado…` (Esc cancela) | "A rede ainda não foi lida. Tecle c ..." (nada roda ao abrir); cancelada: "A leitura da rede foi cancelada."; sem serviço: faixa "nenhum serviço configurado" | "Não deu para ler a rede." com o motivo, "Tente de novo (c)." e "Nada foi alterado." |
+| Otimização (`internal/tui/otimizacao_tab.go`) | `\| Lendo os gargalos do Windows…` com `Esc cancela.`; NÃO lê ao abrir, só com `c` ou Enter | `i Nada por aqui`: "Os gargalos desta máquina ainda não foram lidos." + `1. Tecle c para ler`; cancelada: "Leitura cancelada. Nada foi alterado." | `✗ Erro`, `Tente de novo (c)`, `Nada foi alterado.`. Fora do Windows: `só existe no Windows (este sistema é <SO>)` sem chamar o backend |
 | Log | itens e log ao vivo | "Nada rodou nesta sessão. Marque apps ou receitas e tecle Enter. Logs anteriores: <pasta>" | "! Não deu para gravar o log em arquivo; a execução continua e o log fica só na tela." |
 | Revisão | `\| Lendo o estado do sistema…`; só Voltar até o plano chegar | "Nada a fazer: tudo já está instalado." Só Voltar | item não planejável: lista os erros, "Nada foi executado", só Voltar. Sem credencial do sudo: aviso com `sudo -v`, Executar continua disponível |
 
@@ -274,7 +275,7 @@ Ações por sentido (a mesma letra em todas as seções):
 | a | aplicar… (abre confirmação) | Privacidade |
 | d | desfazer… (abre confirmação) | Privacidade |
 | p | ver plano (só leitura) | Privacidade, Apps nativos |
-| c | ler de novo (recarrega) | Diagnóstico, visão Máquina |
+| c | ler de novo (recarrega; em Otimização é também a primeira leitura) | Diagnóstico, visão Máquina; Otimização |
 | r | remover… (abre confirmação) | Apps nativos |
 | m | alterna o escopo ou a visão: `só usuário` (Privacidade), `todos os usuários` (Apps nativos, exige administrador), `máquina` / `receitas` (Diagnóstico) | Privacidade, Apps nativos, Diagnóstico |
 | i | como reinstalar (só texto; nada é executado) | Apps nativos |
