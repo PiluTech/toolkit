@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -61,13 +61,15 @@ func (f linFS) deps(r exec.Runner) Deps {
 		Glob: func(pat string) ([]string, error) {
 			set := map[string]bool{}
 			for p := range f {
-				for q := p; q != "/" && q != "."; q = filepath.Dir(q) {
+				// caminhos do sysfs são POSIX em QUALQUER SO (no Windows o Dir do pacote do SO nunca devolve "/" e o laço não
+				// terminava: o teste travava 10 minutos); o laço também é limitado
+				for q, n := p, 0; q != "/" && q != "." && n < 64; q, n = path.Dir(q), n+1 {
 					set[q] = true
 				}
 			}
 			var out []string
 			for p := range set {
-				if ok, _ := filepath.Match(pat, p); ok {
+				if ok, _ := path.Match(pat, p); ok {
 					out = append(out, p)
 				}
 			}

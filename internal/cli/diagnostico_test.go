@@ -127,8 +127,10 @@ func TestDiagnosticoRelatorioArquivoNovoMascaradoENaoSobrescreve(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "Relatório completo salvo em "+path) {
-		t.Errorf("saída: %s", out)
+	// o caminho da confirmação sai MASCARADO (no runner do Windows o temp fica em C:\Users\<usuário>\..., que vira
+	// [usuário]): a expectativa usa a mesma máscara, não o caminho cru. O relatório "FAILING" é a fonte FALSA injetada.
+	if want := "Relatório completo salvo em " + diagnostico.MaskText(path, []string{"paulo", "NOTEBOOK-DO-PAULO"}); !strings.Contains(out, want) {
+		t.Errorf("saída sem %q:\n%s", want, out)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -243,5 +245,32 @@ func TestDiagnosticoJSONPreservaChavesETiposEMascaraValores(t *testing.T) {
 	msg, _ := ev["Message"].(string)
 	if !strings.Contains(msg, "serial: [***]") || !strings.Contains(msg, `C:\Users\[usuário]\AppData\x.dll`) {
 		t.Errorf("valores decodificados mascarados: %q", msg)
+	}
+}
+
+// Regressão do CI do Windows: o caminho do relatório numa pasta de usuário (C:\Users\NOME, /Users/NOME, /home/NOME)
+// aparece mascarado na confirmação, em qualquer SO, e o arquivo é gravado no caminho REAL.
+func TestDiagnosticoRelatorioEmPastaDeUsuarioConfirmaCaminhoMascarado(t *testing.T) {
+	for _, home := range []string{"Users", "home"} {
+		dir := filepath.Join(t.TempDir(), home, "ana")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(dir, "rel.txt")
+		deps := diagDeps(t, nil)
+		deps.Diag.Names = func() []string { return nil }
+		out, _, err := runDiag(t, deps, "--relatorio", path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(out, "ana") && strings.Contains(out, "salvo em") && strings.Contains(strings.SplitN(out, "salvo em ", 2)[1], "ana") {
+			t.Errorf("%s: o nome na pasta pessoal sai mascarado: %s", home, out)
+		}
+		if !strings.Contains(out, "[usuário]") {
+			t.Errorf("%s: esperava [usuário] no caminho: %s", home, out)
+		}
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("%s: o arquivo é gravado no caminho real: %v", home, err)
+		}
 	}
 }

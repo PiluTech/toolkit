@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
+	"path"
 	"regexp"
 	"sort"
 	"strconv"
@@ -552,9 +552,9 @@ func linTemps(d Deps, r *Report) {
 		if !ok {
 			continue
 		}
-		name, _ := linRead(d, filepath.Dir(p)+"/type")
+		name, _ := linRead(d, path.Dir(p)+"/type")
 		if name == "" {
-			name = filepath.Base(filepath.Dir(p))
+			name = path.Base(path.Dir(p))
 		}
 		temps = append(temps, Temp{Sensor: name, Celsius: c})
 	}
@@ -564,7 +564,7 @@ func linTemps(d Deps, r *Report) {
 			if !ok {
 				continue
 			}
-			base := strings.TrimSuffix(filepath.Base(p), "_input")
+			base := strings.TrimSuffix(path.Base(p), "_input")
 			label, _ := linRead(d, h.dir+"/"+base+"_label")
 			if label == "" {
 				label = base
@@ -650,7 +650,7 @@ func linGPU(ctx context.Context, d Deps, r *Report) {
 	var gpus []GPU
 	for _, p := range linGlob(d, "/sys/class/drm/card*/device/vendor") {
 		ven, ok1 := linRead(d, p)
-		dev, ok2 := linRead(d, filepath.Dir(p)+"/device")
+		dev, ok2 := linRead(d, path.Dir(p)+"/device")
 		if !ok1 || !ok2 {
 			continue
 		}
