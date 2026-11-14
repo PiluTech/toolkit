@@ -596,3 +596,97 @@ func TestFilaDoDiscoSemLeituraValida(t *testing.T) {
 		}
 	}
 }
+
+// ---- intervalos desiguais e inválidos no meio (Lupa #79) ----
+
+// Intervalos de 3 s a fila 1 e 1 s a fila 3: a média é PONDERADA pelo tempo (1,5), não a média simples das médias (2,0,
+// que alertaria à toa); o pico é a maior média de um intervalo (3).
+func TestFilaDoDiscoMediaPonderadaPeloTempo(t *testing.T) {
+	perf := queueRawJSON([2]string{"0", "1000000000"}, [2]string{"30000000", "1030000000"}, [2]string{"60000000", "1040000000"})
+	avg, peak := queueOf(t, perf)
+	if avg == nil || math.Abs(*avg-1.5) > 1e-9 || peak == nil || math.Abs(*peak-3) > 1e-9 {
+		t.Fatalf("fila média/pico = %v / %v, quer 1,5 / 3", avg, peak)
+	}
+	if queueFires(t, perf) {
+		t.Error("média ponderada 1,5 (< 2) não devia alertar")
+	}
+}
+
+// Intervalo inválido SÓ no meio (b->c) invalida a medida inteira: nunca uma média parcial só com a->b ou a->c.
+func TestFilaDoDiscoIntervaloInvalidoNoMeio(t *testing.T) {
+	for name, perf := range map[string]string{
+		"tempo parado no meio":    queueRawJSON([2]string{"0", "1000000000"}, [2]string{"30000000", "1010000000"}, [2]string{"90000000", "1010000000"}, [2]string{"120000000", "1030000000"}),
+		"tempo voltou no meio":    queueRawJSON([2]string{"0", "1000000000"}, [2]string{"30000000", "1020000000"}, [2]string{"60000000", "1010000000"}, [2]string{"90000000", "1040000000"}),
+		"contador voltou no meio": queueRawJSON([2]string{"0", "1000000000"}, [2]string{"90000000", "1010000000"}, [2]string{"30000000", "1020000000"}, [2]string{"120000000", "1030000000"}),
+	} {
+		avg, peak := queueOf(t, perf)
+		if avg != nil || peak != nil {
+			t.Errorf("%s: a medida inteira tem de ser sem leitura, veio %v / %v", name, avg, peak)
+		}
+	}
+}
+
+// Fronteiras: dois intervalos válidos iguais, intervalo com dq=0 (fila 0 é leitura válida, não ausência) e dt mínimo (1).
+func TestFilaDoDiscoFronteiras(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		perf      string
+		avg, peak float64
+	}{
+		{"dois iguais", queueRawJSON([2]string{"0", "1000000000"}, [2]string{"20000000", "1010000000"}, [2]string{"40000000", "1020000000"}), 2, 2},
+		{"dq zero", queueRawJSON([2]string{"5", "1000000000"}, [2]string{"5", "1010000000"}), 0, 0},
+		{"dq zero no meio", queueRawJSON([2]string{"0", "1000000000"}, [2]string{"0", "1010000000"}, [2]string{"20000000", "1020000000"}), 1, 2},
+		{"dt mínimo", queueRawJSON([2]string{"0", "1000000000"}, [2]string{"3", "1000000001"}), 3, 3},
+	} {
+		avg, peak := queueOf(t, c.perf)
+		if avg == nil || peak == nil || math.Abs(*avg-c.avg) > 1e-9 || math.Abs(*peak-c.peak) > 1e-9 {
+			t.Errorf("%s: fila média/pico = %v / %v, quer %v / %v", c.name, avg, peak, c.avg, c.peak)
+		}
+	}
+}
+
+// Latência: intervalos de 100 transferências a 10 ms e 300 a 30 ms: a média é PONDERADA pelas transferências (25 ms), não
+// a média simples (20 ms).
+func TestLatenciaMediaPonderadaPelasTransferencias(t *testing.T) {
+	perf := perfRawJSON([3]string{"1000000000000", "1000", "10000000"}, [3]string{"1000010000000", "1100", "10000000"}, [3]string{"1000100000000", "1400", "10000000"})
+	lat := latencyOf(t, perf)
+	if lat == nil || math.Abs(*lat-25) > 1e-6 {
+		t.Fatalf("latência = %v, quer 25 ms", lat)
+	}
+}
+
+// Intervalo inválido SÓ no meio (contador que volta e sobe de novo, base parada ou frequência que muda) = sem leitura: a
+// primeira e a última amostra sozinhas dariam um valor plausível e enganoso.
+func TestLatenciaIntervaloInvalidoNoMeio(t *testing.T) {
+	for name, perf := range map[string]string{
+		"contador voltou":  perfRawJSON([3]string{"1000000000000", "1000", "10000000"}, [3]string{"1000900000000", "1100", "10000000"}, [3]string{"1000300000000", "1200", "10000000"}),
+		"base parada":      perfRawJSON([3]string{"1000000000000", "1000", "10000000"}, [3]string{"1000100000000", "1100", "10000000"}, [3]string{"1000200000000", "1100", "10000000"}, [3]string{"1000300000000", "1200", "10000000"}),
+		"base voltou":      perfRawJSON([3]string{"1000000000000", "1000", "10000000"}, [3]string{"1000100000000", "1300", "10000000"}, [3]string{"1000200000000", "1100", "10000000"}, [3]string{"1000300000000", "1200", "10000000"}),
+		"frequência zero":  perfRawJSON([3]string{"1000000000000", "1000", "10000000"}, [3]string{"1000100000000", "1100", "0"}, [3]string{"1000300000000", "1200", "10000000"}),
+		"frequência mudou": perfRawJSON([3]string{"1000000000000", "1000", "10000000"}, [3]string{"1000100000000", "1100", "5000000"}, [3]string{"1000300000000", "1200", "10000000"}),
+	} {
+		if lat := latencyOf(t, perf); lat != nil {
+			t.Errorf("%s: devia ser sem leitura, veio %.3f ms", name, *lat)
+		}
+	}
+}
+
+// Fronteiras da latência: dois intervalos válidos iguais, contador parado (dn=0 com base crescendo = 0 ms, leitura válida) e
+// o menor avanço de base (1).
+func TestLatenciaFronteiras(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		perf string
+		want float64
+	}{
+		{"dois iguais", perfRawJSON([3]string{"1000000000000", "1000", "10000000"}, [3]string{"1000010000000", "1100", "10000000"}, [3]string{"1000020000000", "1200", "10000000"}), 10},
+		{"dn zero", perfRawJSON([3]string{"1000000000000", "1000", "10000000"}, [3]string{"1000000000000", "1100", "10000000"}), 0},
+		{"intervalo ocioso no meio", perfRawJSON([3]string{"1000000000000", "1000", "10000000"}, [3]string{"1000000000000", "1000", "10000000"}, [3]string{"1000010000000", "1100", "10000000"}), 10},
+		{"base mínima", perfRawJSON([3]string{"1000000000000", "1000", "10000000"}, [3]string{"1000010000000", "1001", "10000000"}), 1000},
+	} {
+		lat := latencyOf(t, c.perf)
+		if lat == nil || math.Abs(*lat-c.want) > 1e-6 {
+			t.Errorf("%s: latência = %v, quer %v ms", c.name, lat, c.want)
+		}
+	}
+}

@@ -67,8 +67,8 @@ memória e de espaço livre são os mesmos do [diagnóstico](diagnostico.md): as
 | Arquivo de paginação muito usado | em uso `>= 80%` do alocado | info |
 | Disco do sistema é HDD | tipo lido igual a `HDD` (SSD e desconhecido não geram) | atenção |
 | Pouco espaço livre no disco do sistema | livre `< 10%` do tamanho (atenção) e `< 5%` (problema); livre desconhecido não gera | atenção / problema |
-| Fila alta no disco | fila média `>= 2`, calculada pelos contadores BRUTOS: `(q1-q0)/(t1-t0)` com `AvgDiskQueueLength` (PERF_COUNTER_100NS_QUEUELEN_TYPE) e `Timestamp_Sys100NS`; o valor formatado do CIM é inteiro e truncaria (1,9 viraria 1). Amostra única, tempo parado ou contador que voltou = sem leitura (nunca 0) | atenção |
-| Disco lento para responder | latência média `>= 25 ms` | atenção |
+| Fila alta no disco | fila média `>= 2`, calculada pelos contadores BRUTOS: `(q1-q0)/(t1-t0)` com `AvgDiskQueueLength` (PERF_COUNTER_100NS_QUEUELEN_TYPE) e `Timestamp_Sys100NS`; o valor formatado do CIM é inteiro e truncaria (1,9 viraria 1). Amostra única, tempo parado ou contador que voltou = sem leitura (nunca 0). A média é PONDERADA pelo tempo (delta total da integral / delta total do tempo, não a média simples dos intervalos) e UM intervalo inválido, mesmo só no meio, invalida a medida inteira (nada de média parcial) | atenção |
+| Disco lento para responder | latência média `>= 25 ms`, ponderada pelas transferências (delta total dos contadores / delta total das bases); cada intervalo é validado (contador e base monotônicos, frequência > 0 e constante) e um inválido no meio invalida a medida inteira | atenção |
 | Muitos itens registrados para iniciar | mais de 10 | info |
 | Muitos serviços automáticos fora da pasta do Windows | mais de 25 | info |
 | Serviço automático parado com erro | qualquer um (informativo) | info |
