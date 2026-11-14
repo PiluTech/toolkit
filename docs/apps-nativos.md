@@ -51,6 +51,12 @@ NÃO existe desfazer automático confiável: o pacote some do disco. `toolkit ap
 
 Reinstalar pode exigir a Microsoft Store e uma conta.
 
+## Na TUI (aba "Apps nativos")
+
+A 6ª aba (`6`, curta "Nativos") usa o mesmo núcleo do comando (mesmo catálogo, plano, backup e regras). Lista o catálogo com o estado (instalado ou ausente) e o perfil de cada app (basico ou completo). Teclas: `espaço` marca/desmarca o app sob o cursor, `b` marca o perfil básico, `c` o completo, `u` liga/desliga "todos os usuários" (exige administrador: sem ele a aba avisa e não liga; o toolkit nunca eleva sozinho), `p` mostra o plano (só leitura), `r` mostra o plano e pergunta `[s/N]` na própria aba (só `s` ou `y` confirmam; qualquer outra tecla cancela), `i` mostra "como reinstalar" lido do backup (só texto, nada é executado). O resultado (quantos foram removidos, onde está o backup, como reinstalar) fica na tela e na linha de status.
+
+Garantias do backend da TUI: o plano é de USO ÚNICO com ID opaco (a confirmação aplica só o plano mostrado, descarta os demais e recusa com `ErrNatStalePlan` se o sistema ou a seleção mudou); `Esc` durante a preparação do plano cancela e uma resposta tardia nunca abre a confirmação; leitura e plano rodam em `tea.Cmd` assíncrono; todo texto externo passa por `textsafe`. Fora do Windows a aba diz que os apps nativos só existem no Windows (no macOS os apps do sistema ficam em volume protegido; no Linux esta versão não remove pacotes da distribuição) e nenhuma tecla muda nada.
+
 ## Limites
 
 - Sem desfazer automático (veja acima).

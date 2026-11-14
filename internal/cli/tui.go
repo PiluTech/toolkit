@@ -182,6 +182,7 @@ func openTUI(cmd *cobra.Command, deps Deps, rd RecipeDeps, notifier *updateNotif
 		newDiagTab(ctx, deps, rd, th),
 		tui.NewLogTab(th, ""),
 		newPrivacyTab(ctx, deps, th),
+		newAppsNativosTab(ctx, deps, th),
 	}
 	err := deps.TUI.run(ctx, opts, tabs...)
 	if errors.Is(err, tui.ErrUpdateRequested) {
