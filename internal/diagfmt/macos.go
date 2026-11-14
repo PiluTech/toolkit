@@ -2,6 +2,7 @@ package diagfmt
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"regexp"
 	"strconv"
@@ -206,6 +207,137 @@ func macParentBSD(bsd string) string {
 	return ""
 }
 
+// macPhysicalOfVolume devolve os discos FÍSICOS (disk0, disk6...) de um volume pelo nome BSD: o contêiner APFS
+// (disk3) mapeia para os discos do mapa (disk0s2 -> disk0); sem entrada no mapa o disco inteiro do volume (disk6) é o
+// próprio disco físico. Vazio = identidade desconhecida (bsd_name ausente ou fora do formato).
+func macPhysicalOfVolume(bsd string, apfs map[string][]string) []string {
+	parent := macParentBSD(bsd)
+	if parent == "" {
+		return nil
+	}
+	if stores, ok := apfs[parent]; ok && len(stores) > 0 {
+		return stores
+	}
+	return []string{parent}
+}
+
+// macAPFSPhysical lê o plist de "diskutil apfs list -plist" e devolve contêiner -> discos físicos
+// ({"disk3": ["disk0"]}). Qualquer falha de leitura devolve mapa vazio (sem prova, nada se junta).
+func macAPFSPhysical(text string) map[string][]string {
+	out := map[string][]string{}
+	if strings.TrimSpace(text) == "" {
+		return out
+	}
+	root, err := macParsePlist(text)
+	if err != nil {
+		return out
+	}
+	dict, _ := root.(map[string]any)
+	ctrs, _ := dict["Containers"].([]any)
+	for _, c := range ctrs {
+		co, _ := c.(map[string]any)
+		ref, _ := co["ContainerReference"].(string)
+		if macBSDRe.FindString(ref) == "" {
+			continue
+		}
+		seen := map[string]bool{}
+		add := func(store any) {
+			if id, _ := store.(string); id != "" {
+				if parent := macParentBSD(id); parent != "" && !seen[parent] {
+					seen[parent] = true
+					out[ref] = append(out[ref], parent)
+				}
+			}
+		}
+		stores, _ := co["PhysicalStores"].([]any)
+		for _, st := range stores {
+			so, _ := st.(map[string]any)
+			add(so["DeviceIdentifier"])
+		}
+		add(co["DesignatedPhysicalStore"])
+	}
+	return out
+}
+
+// macParsePlist lê um plist XML mínimo (dict, array, string, integer, real, true, false, data, date) numa árvore de
+// map[string]any, []any e valores simples. Só o que o diskutil emite; qualquer coisa fora disso é erro.
+func macParsePlist(text string) (any, error) {
+	dec := xml.NewDecoder(strings.NewReader(text))
+	dec.Strict = false
+	dec.Entity = xml.HTMLEntity
+	var parse func(start xml.StartElement) (any, error)
+	parse = func(start xml.StartElement) (any, error) {
+		switch start.Name.Local {
+		case "dict":
+			m := map[string]any{}
+			key := ""
+			for {
+				tok, err := dec.Token()
+				if err != nil {
+					return nil, err
+				}
+				switch t := tok.(type) {
+				case xml.StartElement:
+					if t.Name.Local == "key" {
+						var k string
+						if err := dec.DecodeElement(&k, &t); err != nil {
+							return nil, err
+						}
+						key = k
+						continue
+					}
+					v, err := parse(t)
+					if err != nil {
+						return nil, err
+					}
+					m[key] = v
+				case xml.EndElement:
+					return m, nil
+				}
+			}
+		case "array":
+			arr := []any{}
+			for {
+				tok, err := dec.Token()
+				if err != nil {
+					return nil, err
+				}
+				switch t := tok.(type) {
+				case xml.StartElement:
+					v, err := parse(t)
+					if err != nil {
+						return nil, err
+					}
+					arr = append(arr, v)
+				case xml.EndElement:
+					return arr, nil
+				}
+			}
+		case "true":
+			_ = dec.Skip()
+			return true, nil
+		case "false":
+			_ = dec.Skip()
+			return false, nil
+		default: // string, integer, real, date, data
+			var s string
+			if err := dec.DecodeElement(&s, &start); err != nil {
+				return nil, err
+			}
+			return s, nil
+		}
+	}
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+		if st, ok := tok.(xml.StartElement); ok && st.Name.Local != "plist" {
+			return parse(st)
+		}
+	}
+}
+
 // macMerge completa dst com o que src sabe do mesmo disco.
 func macMerge(dst *macDisk, src macDisk) {
 	if dst.name == "" {
@@ -245,8 +377,15 @@ func macSmart(s string, l Lang) string {
 }
 
 func macDisks(raw string, l Lang) (string, error) {
+	// A receita emite "### profiler" (JSON do system_profiler) e "### apfs" (diskutil apfs list -plist: contêiner ->
+	// disco físico). Sem seções marcadas a entrada inteira é o JSON do profiler (formato antigo) e não há mapa APFS.
+	jsonText, apfsText := raw, ""
+	if sec := macSections(raw); sec["profiler"] != "" {
+		jsonText, apfsText = sec["profiler"], sec["apfs"]
+	}
+	apfs := macAPFSPhysical(apfsText)
 	var doc map[string]any
-	if json.Unmarshal([]byte(raw), &doc) != nil || doc == nil {
+	if json.Unmarshal([]byte(jsonText), &doc) != nil || doc == nil {
 		return "", errMacDisks
 	}
 	// Identidade do disco = o nome BSD (disk0). NVMe e SATA trazem um item por disco físico, com o bsd_name: a mesma
@@ -295,10 +434,13 @@ func macDisks(raw string, l Lang) (string, error) {
 			}
 		}
 	}
-	// Storage: os volumes trazem o physical_drive, sem bsd_name do disco (o do volume é de um contêiner APFS, não do
-	// disco). Une-se ao disco NVMe/SATA quando o MODELO acha exatamente um; com mais de um do mesmo modelo não dá para
-	// saber de qual é o volume e a visão é ignorada (os discos já estão na lista, cada um com o seu status); sem
-	// nenhum (disco externo, por exemplo) entra como disco próprio, uma vez por modelo+protocolo.
+	// Storage: os volumes trazem o physical_drive, mas SEM o disco físico: o bsd_name do volume é de uma partição
+	// (disk6s2) ou de um volume de contêiner APFS (disk3s5, do contêiner disk3). Só se junta a visão do Storage a um
+	// disco NVMe/SATA com identidade FÍSICA comprovada: o disco inteiro do volume (disk6) ou, para contêiner APFS, o
+	// disco físico do contêiner pelo mapa do "diskutil apfs list" (disk3 -> disk0s2 -> disk0) tem de ser o bsd_name
+	// do disco primário. "Há um disco do mesmo modelo" NÃO prova nada (um externo igual ao interno é outro disco).
+	// Sem prova o volume vira disco próprio, identificado pelo disco físico (um por disco, não um por volume); sem
+	// bsd_name fica sozinho.
 	var storageOnly []*macDisk
 	storageKey := map[string]*macDisk{}
 	vols, _ := doc["SPStorageDataType"].([]any)
@@ -312,34 +454,30 @@ func macDisks(raw string, l Lang) (string, error) {
 		if d.name == "" {
 			continue
 		}
-		var cands []*macDisk
-		for _, p := range prim {
-			if p.name == d.name {
-				cands = append(cands, p)
+		phys := macPhysicalOfVolume(macStr(vo["bsd_name"]), apfs)
+		var target *macDisk
+		for _, id := range phys {
+			if p := byBSD[id]; p != nil {
+				target = p
+				break
 			}
 		}
-		switch {
-		case len(cands) == 1:
-			macMerge(cands[0], d)
-		case len(cands) > 1:
-			// ambíguo: ignora
-		default:
-			// Identidade = disco PAI do volume (disk6s2 e disk6s1 são do disk6). Modelo e protocolo NUNCA fundem: dois
-			// discos externos iguais (disk6 e disk7) são dois. Sem bsd_name não há identidade e o volume fica sozinho.
-			parent := macParentBSD(macStr(vo["bsd_name"]))
-			d.bsd = parent
-			if parent != "" {
-				if ex := storageKey[parent]; ex != nil {
-					macMerge(ex, d)
-					break
-				}
-			}
-			p := d
-			if parent != "" {
-				storageKey[parent] = &p
-			}
-			storageOnly = append(storageOnly, &p)
+		if target != nil {
+			macMerge(target, d)
+			continue
 		}
+		key := strings.Join(phys, "+")
+		if key != "" {
+			if ex := storageKey[key]; ex != nil {
+				macMerge(ex, d)
+				continue
+			}
+		}
+		p := d
+		if key != "" {
+			storageKey[key] = &p
+		}
+		storageOnly = append(storageOnly, &p)
 	}
 	disks := make([]macDisk, 0, len(prim)+len(storageOnly))
 	for _, p := range append(prim, storageOnly...) {

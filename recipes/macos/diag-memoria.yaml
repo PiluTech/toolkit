@@ -18,7 +18,12 @@ steps:
   - id: discos
     name: Discos
     render: macos-disks
-    run: { sh: "system_profiler SPNVMeDataType SPSerialATADataType SPStorageDataType -json" }
+    run:
+      sh: |
+        echo "### profiler"
+        system_profiler SPNVMeDataType SPSerialATADataType SPStorageDataType -json
+        printf '\n### apfs\n'
+        diskutil apfs list -plist
   - id: espaco
     name: Espaço usado
     run: { sh: "df -h" }

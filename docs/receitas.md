@@ -224,9 +224,13 @@ provado de 16 dígitos, código de 4 mais 12 zeros, é descartado; `8010` nunca 
 (DSP0134, Type 17: 20 é DDR2 FB-DIMM, 21 a 23 são reservados) e, só quando ele vem 0, do `MemoryType` legado do WMI (20 é DDR):
 são tabelas diferentes e não se misturam. No macOS o disco é identificado pelo nome BSD (`disk0`): a mesma identidade em
 duas seções do `system_profiler` vira um disco (vale o pior status SMART) e dois discos do mesmo modelo continuam dois;
-a visão de volumes (Storage) só completa o disco quando o modelo é único. Disco que só o Storage conhece (externo) é
-identificado pelo disco PAI do volume (`disk6s1` e `disk6s2` são do `disk6`; `disk6` e `disk7` são dois): modelo e
-protocolo nunca fundem discos, e sem `bsd_name` o volume fica sozinho. As receitas continuam só de leitura e sem
+a visão de volumes (Storage) só se junta a um disco NVMe/SATA com identidade FÍSICA comprovada: o disco inteiro do volume
+(`disk0s2` é do `disk0`) ou, para volume de contêiner APFS (`disk3s5`, do contêiner `disk3`), o disco físico do contêiner
+pelo mapa do `diskutil apfs list -plist` (a receita emite as seções `### profiler` e `### apfs`: `disk3` -> `disk0s2` ->
+`disk0`). Ter o MESMO MODELO nunca prova nada (um externo igual ao interno é outro disco). Sem prova o volume vira disco
+próprio, um por disco físico (`disk6s1` e `disk6s2` são do `disk6`; `disk6` e `disk7` são dois), e sem `bsd_name` fica
+sozinho; sem o mapa APFS (comando ausente ou ilegível) um volume de contêiner não se junta a ninguém e o disco interno pode
+aparecer também como disco do Storage. As receitas continuam só de leitura e sem
 administrador. Cada etapa do Log da TUI sai como `✓ Memória` (no lugar de `etapa modulos: done`).
 
 Testes: `internal/diagfmt/*_test.go` (saídas falsas: código JEDEC desconhecido, slot vazio, 2+ módulos, formatos truncados,

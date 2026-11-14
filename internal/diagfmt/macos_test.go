@@ -1,6 +1,7 @@
 package diagfmt
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -109,10 +110,26 @@ func TestMacErros(t *testing.T) {
 	}
 }
 
-const macDisksNVMe = `{"SPNVMeDataType":[{"_name":"Apple SSD Controller","_items":[
- {"_name":"APPLE SSD AP0512Z","device_model":"APPLE SSD AP0512Z","size":"500,28 GB","size_in_bytes":500277792768,"smart_status":"Verified","volumes":[{"_name":"X","size_in_bytes":1}]}]}],
+// macAPFSPlist é um "diskutil apfs list -plist" mínimo: contêiner -> disco físico (store), na forma real.
+func macAPFSPlist(pairs ...string) string {
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Containers</key><array>`)
+	for i := 0; i+1 < len(pairs); i += 2 {
+		b.WriteString(`<dict><key>APFSContainerUUID</key><string>11111111-2222-3333-4444-555555555555</string><key>ContainerReference</key><string>` + pairs[i] + `</string><key>DesignatedPhysicalStore</key><string>` + pairs[i+1] + `</string><key>PhysicalStores</key><array><dict><key>DeviceIdentifier</key><string>` + pairs[i+1] + `</string><key>Size</key><integer>494384795648</integer></dict></array><key>Volumes</key><array><dict><key>DeviceIdentifier</key><string>` + pairs[i] + `s1</string></dict></array></dict>`)
+	}
+	b.WriteString(`</array></dict></plist>`)
+	return b.String()
+}
+
+// macSec monta a entrada da receita: seções "### profiler" (JSON) e "### apfs" (plist).
+func macSec(profiler, apfs string) string {
+	return "### profiler\n" + profiler + "\n### apfs\n" + apfs + "\n"
+}
+
+var macDisksNVMe = macSec(`{"SPNVMeDataType":[{"_name":"Apple SSD Controller","_items":[
+ {"_name":"APPLE SSD AP0512Z","device_model":"APPLE SSD AP0512Z","bsd_name":"disk0","size":"500,28 GB","size_in_bytes":500277792768,"smart_status":"Verified","volumes":[{"_name":"X","size_in_bytes":1}]}]}],
  "SPSerialATADataType":[],
- "SPStorageDataType":[{"_name":"Data","physical_drive":{"device_name":"APPLE SSD AP0512Z","medium_type":"ssd","smart_status":"Verified","protocol":"Apple Fabric"}}]}`
+ "SPStorageDataType":[{"_name":"Data","bsd_name":"disk3s5","physical_drive":{"device_name":"APPLE SSD AP0512Z","medium_type":"ssd","smart_status":"Verified","protocol":"Apple Fabric"}}]}`, macAPFSPlist("disk3", "disk0s2"))
 
 func TestMacDisks(t *testing.T) {
 	cases := []struct {
@@ -165,60 +182,87 @@ func TestMacDisks(t *testing.T) {
 	}
 }
 
-// Lupa #56: a identidade do disco é o nome BSD. Dois discos do MESMO modelo continuam dois (com SMART diferente);
-// o mesmo disco em duas seções vira um só, com o pior status conhecido; volumes do Storage completam o disco único do
-// modelo e são ignorados quando há mais de um disco desse modelo.
-func TestMacDisksIdentidadePeloNomeBSD(t *testing.T) {
+// Lupa #56: a identidade do disco é FÍSICA (nome BSD do disco). Dois discos do MESMO modelo continuam dois; o mesmo
+// dispositivo visto em duas seções, ou o volume de contêiner APFS do disco (disk3s5 -> contêiner disk3 -> disk0s2 ->
+// disk0), vira um só; um externo do mesmo modelo NUNCA é fundido ao interno só por ter o modelo igual.
+func TestMacDisksIdentidadeFisicaComprovada(t *testing.T) {
 	nvme := func(items ...string) string {
 		return `"SPNVMeDataType":[{"_name":"ctrl","_items":[` + strings.Join(items, ",") + `]}]`
 	}
 	item := func(bsd, smart string) string {
 		return `{"_name":"SSD X1","device_model":"SSD X1","bsd_name":"` + bsd + `","size_in_bytes":500277792768,"smart_status":"` + smart + `","device_serial":"SN-` + bsd + `"}`
 	}
-	// 1. dois iguais, SMART diferente: duas linhas
-	raw := `{` + nvme(item("disk0", "Verified"), item("disk1", "Failing")) + `}`
-	got, err := macDisksFor(raw)
-	if err != nil {
-		t.Fatal(err)
+	vol := func(bsd, smart string) string {
+		return `{"_name":"V","bsd_name":"` + bsd + `","physical_drive":{"device_name":"SSD X1","medium_type":"ssd","protocol":"USB","smart_status":"` + smart + `"}}`
 	}
-	if strings.Count(got, "Disco: SSD X1") != 2 || !strings.Contains(got, "verificado") || !strings.Contains(got, "com problema") || strings.Contains(got, "SN-") {
+	storage := func(vols ...string) string { return `"SPStorageDataType":[` + strings.Join(vols, ",") + `]` }
+	count := func(got string) int { return strings.Count(got, "Disco: ") }
+
+	// 1. dois iguais, SMART diferente: duas linhas
+	got, _ := macDisksFor(`{` + nvme(item("disk0", "Verified"), item("disk1", "Failing")) + `}`)
+	if count(got) != 2 || !strings.Contains(got, "verificado") || !strings.Contains(got, "com problema") || strings.Contains(got, "SN-") {
 		t.Errorf("dois discos do mesmo modelo continuam dois, cada um com o seu SMART:\n%s", got)
 	}
-	// 2. o mesmo disco (disk0) em NVMe e em SATA, status diferente: um só, com o pior
-	raw = `{` + nvme(item("disk0", "Verified")) + `,"SPSerialATADataType":[{"_name":"c","_items":[{"_name":"SSD X1","device_model":"SSD X1","bsd_name":"disk0","size_in_bytes":500277792768,"smart_status":"Failing","spsata_medium_type":"Solid State"}]}]}`
-	got, _ = macDisksFor(raw)
-	if strings.Count(got, "Disco: ") != 1 || !strings.Contains(got, "com problema") || strings.Contains(got, "verificado") {
-		t.Errorf("o mesmo disco em duas seções vira um e o pior status vence:\n%s", got)
+	// 2. Lupa: primário disk0 (Verified) + externo USB só-Storage disk6s2 do MESMO modelo (Not Supported): DOIS discos,
+	//    cada um com o seu SMART (o externo não some e o SMART não vai para o errado)
+	got, _ = macDisksFor(`{` + nvme(item("disk0", "Verified")) + `,` + storage(vol("disk6s2", "Not Supported")) + `}`)
+	if count(got) != 2 || !strings.Contains(got, "verificado") || !strings.Contains(got, "não suportado") {
+		t.Errorf("primário + externo do mesmo modelo são dois discos:\n%s", got)
 	}
-	// 3. Storage com um único disco do modelo: completa (sem duplicar); dois do modelo: ignora, sem trocar o SMART
-	vol := `{"_name":"Data","bsd_name":"disk3s5","physical_drive":{"device_name":"SSD X1","medium_type":"ssd","protocol":"Apple Fabric","smart_status":"Verified"}}`
-	raw = `{` + nvme(item("disk0", "")) + `,"SPStorageDataType":[` + vol + `,` + vol + `]}`
-	got, _ = macDisksFor(raw)
-	if strings.Count(got, "Disco: ") != 1 || !strings.Contains(got, "verificado") {
-		t.Errorf("Storage completa o único disco do modelo:\n%s", got)
+	for _, line := range strings.Split(got, "\n") {
+		if strings.Contains(line, "USB") || strings.Contains(line, "500 GB") && strings.Contains(line, "não suportado") {
+			t.Errorf("o SMART do externo não pode ir para o primário: %q", line)
+		}
 	}
-	raw = `{` + nvme(item("disk0", "Failing"), item("disk1", "Verified")) + `,"SPStorageDataType":[` + vol + `]}`
-	got, _ = macDisksFor(raw)
-	if strings.Count(got, "Disco: ") != 2 || !strings.Contains(got, "com problema") || !strings.Contains(got, "verificado") {
-		t.Errorf("com dois discos do modelo a visão do Storage é ambígua e não mexe em nenhum:\n%s", got)
+	// o mesmo, com o externo em contêiner APFS (disk8 -> disk6s1): continua distinto do interno
+	got, _ = macDisksFor(macSec(`{`+nvme(item("disk0", "Verified"))+`,`+storage(vol("disk8s1", "Not Supported"))+`}`, macAPFSPlist("disk8", "disk6s1", "disk3", "disk0s2")))
+	if count(got) != 2 || !strings.Contains(got, "não suportado") {
+		t.Errorf("externo APFS (disk8 -> disk6) é outro disco:\n%s", got)
 	}
-	// 4. disco que só o Storage conhece (externo): uma linha, mesmo com vários volumes; Disk Image não conta
-	ext := `{"_name":"Backup","bsd_name":"disk6s2","physical_drive":{"device_name":"Elements 2TB","medium_type":"hdd","protocol":"USB","smart_status":"Not Supported"}}`
-	img := `{"_name":"Sim","bsd_name":"disk5s1","physical_drive":{"device_name":"Disk Image","protocol":"Disk Image"}}`
-	raw = `{` + nvme(item("disk0", "Verified")) + `,"SPStorageDataType":[` + ext + `,` + ext + `,` + img + `]}`
-	got, _ = macDisksFor(raw)
-	if strings.Count(got, "Disco: ") != 2 || !strings.Contains(got, "Elements 2TB · HDD") || strings.Contains(got, "Disk Image") {
-		t.Errorf("disco externo uma vez, imagem de disco fora:\n%s", got)
+	// 3. CONTROLE: a mesma visão do dispositivo junta. (a) o volume do contêiner APFS do interno (disk3s5 -> disk3 ->
+	//    disk0s2 -> disk0) completa o disco0 com o SMART do Storage
+	got, _ = macDisksFor(macSec(`{`+nvme(item("disk0", ""))+`,`+storage(vol("disk3s5", "Verified"))+`}`, macAPFSPlist("disk3", "disk0s2")))
+	if count(got) != 1 || !strings.Contains(got, "verificado") {
+		t.Errorf("volume de contêiner APFS do disk0 é o próprio disk0:\n%s", got)
 	}
-	// 5. sem bsd_name nunca funde: dois itens iguais ficam dois
+	//    (b) volume em partição direta do disco (disk0s2 -> disk0)
+	got, _ = macDisksFor(`{` + nvme(item("disk0", "")) + `,` + storage(vol("disk0s2", "Verified")) + `}`)
+	if count(got) != 1 || !strings.Contains(got, "verificado") {
+		t.Errorf("volume em partição do disk0 é o próprio disk0:\n%s", got)
+	}
+	//    (c) o mesmo bsd_name em NVMe e SATA: um só, com o pior status
+	got, _ = macDisksFor(`{` + nvme(item("disk0", "Verified")) + `,"SPSerialATADataType":[{"_name":"c","_items":[{"_name":"SSD X1","device_model":"SSD X1","bsd_name":"disk0","size_in_bytes":500277792768,"smart_status":"Failing","spsata_medium_type":"Solid State"}]}]}`)
+	if count(got) != 1 || !strings.Contains(got, "com problema") || strings.Contains(got, "verificado") {
+		t.Errorf("o mesmo dispositivo em duas seções vira um e o pior status vence:\n%s", got)
+	}
+	// 4. sem prova nada se junta: volume de contêiner SEM mapa APFS, e primário sem bsd_name
+	got, _ = macDisksFor(`{` + nvme(item("disk0", "Verified")) + `,` + storage(vol("disk3s5", "Verified")) + `}`)
+	if count(got) != 2 {
+		t.Errorf("sem o mapa APFS não há prova de que disk3s5 é do disk0: não funde:\n%s", got)
+	}
 	noBSD := `{"_name":"SSD X1","device_model":"SSD X1","size_in_bytes":500277792768,"smart_status":"Verified"}`
-	got, _ = macDisksFor(`{` + nvme(noBSD, noBSD) + `}`)
-	if strings.Count(got, "Disco: ") != 2 {
-		t.Errorf("sem bsd_name não há fusão:\n%s", got)
+	got, _ = macDisksFor(`{` + nvme(noBSD, noBSD) + `,` + storage(vol("disk6s2", "Verified")) + `}`)
+	if count(got) != 3 {
+		t.Errorf("sem bsd_name no primário nada funde:\n%s", got)
+	}
+	// 5. mapa APFS ilegível = sem prova (e nunca erro)
+	got, err := macDisksFor("### profiler\n{" + nvme(item("disk0", "Verified")) + "," + storage(vol("disk3s5", "Verified")) + "}\n### apfs\n<plist><dict><key>Containers</key><array><dict>")
+	if err != nil || count(got) != 2 {
+		t.Errorf("plist truncado: sem prova, sem erro (%v):\n%s", err, got)
 	}
 }
 
-func macDisksFor(raw string) (string, error) { return Render("macos-disks", raw, PT) }
+func TestMacAPFSPhysicalMap(t *testing.T) {
+	m := macAPFSPhysical(macAPFSPlist("disk3", "disk0s2", "disk8", "disk6s1"))
+	if fmt.Sprint(m["disk3"]) != "[disk0]" || fmt.Sprint(m["disk8"]) != "[disk6]" || len(m) != 2 {
+		t.Errorf("mapa: %v", m)
+	}
+	for _, bad := range []string{"", "lixo", "<plist><dict>", "<plist><dict><key>Containers</key><string>x</string></dict></plist>"} {
+		if m := macAPFSPhysical(bad); len(m) != 0 {
+			t.Errorf("%q deveria dar mapa vazio: %v", bad, m)
+		}
+	}
+}
 
 // Lupa #56 (rodada 3): a identidade de um disco só do Storage é o disco PAI do volume (bsd_name), nunca modelo+protocolo.
 func TestMacDisksStorageSoIdentidadePeloDiscoPai(t *testing.T) {
@@ -257,3 +301,5 @@ func TestMacDisksStorageSoIdentidadePeloDiscoPai(t *testing.T) {
 		}
 	}
 }
+
+func macDisksFor(raw string) (string, error) { return Render("macos-disks", raw, PT) }
