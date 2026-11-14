@@ -189,7 +189,7 @@ func TestPrivacyTabAdminSemAvisoQuandoAdmin(t *testing.T) {
 func TestPrivacyTabForaDoWindowsSemTeclasDeMudanca(t *testing.T) {
 	be := &fakePriv{info: PrivInfo{Supported: false, OS: "linux"}}
 	tab := privTab(t, be)
-	if v := tab.View(80, 14); !strings.Contains(v, "A privacidade só existe no Windows") || !strings.Contains(v, "linux") {
+	if v := tab.View(80, 14); !strings.Contains(v, "A privacidade: só existe no Windows") || !strings.Contains(v, "este sistema é Linux") {
 		t.Fatalf("view: %q", v)
 	}
 	if len(tab.Keys()) != 0 {
@@ -204,7 +204,7 @@ func TestPrivacyTabForaDoWindowsSemTeclasDeMudanca(t *testing.T) {
 func TestPrivacyTabErroDeLeitura(t *testing.T) {
 	tab := privTab(t, &fakePriv{loadErr: errors.New("powershell falhou\x1b[31m")})
 	v := tab.View(80, 14)
-	if !strings.Contains(v, "erro:") || strings.Contains(v, "\x1b[31m") {
+	if !strings.Contains(v, "✗ Erro") || !strings.Contains(v, "Motivo: powershell falhou") || strings.Contains(v, "\x1b[31m") {
 		t.Errorf("view: %q", v)
 	}
 	pkey(tab, "a")
@@ -496,7 +496,7 @@ func TestPrivacyTabPlanoAtrasadoEhIgnorado(t *testing.T) {
 
 func TestPrivacyTabUsaSpinnerSemMovimento(t *testing.T) {
 	tab := NewPrivacyTab(context.Background(), &fakePriv{}, Theme{Mono: true, NoMotion: true})
-	if !strings.Contains(tab.View(80, 14), SymBusy) {
+	if !strings.Contains(tab.View(80, 14), SymLoad+" Carregando") {
 		t.Error("com movimento reduzido o símbolo é fixo")
 	}
 	if tab.theme.Tick() != nil {

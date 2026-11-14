@@ -2,7 +2,9 @@
 ────────────────────────────────────────────────────────────────────────────────
  ✗ falhou  Precisa de administrador                                  [x] fechar
    Nada foi alterado.
-   Abra o terminal como administrador e tente de novo.
+   1. Feche o toolkit (q).
+   2. Botão direito no Terminal > Executar como administrador.
+   3. Rode toolkit de novo. O toolkit nunca eleva sozinho.
 ────────────────────────────────────────────────────────────────────────────────
  PRIVACIDADE DO WINDOWS · edição pro · administrador: sim
  > basico        só o que é do usuário · não exige administrador
@@ -10,8 +12,6 @@
 ─ Ajustes do perfil basico ─────────────────────────────────────────────────────
  ✓ aplicado       ID de publicidade desligado
  ○ pendente       Sugestões no menu Iniciar desligadas
-
-
 
 
 

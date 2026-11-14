@@ -163,7 +163,7 @@ func TestDiagTabLendoErroERecarregar(t *testing.T) {
 	}
 	settle(t, d, cmd)
 	v := d.View(80, 10)
-	if !strings.Contains(v, "não deu para ler a máquina") || strings.Contains(v, "\x1b") {
+	if !strings.Contains(v, "✗ Erro") || !strings.Contains(v, "Não deu para ler a máquina.") || !strings.Contains(v, "1. Tente de novo (c).") || strings.Contains(v, "\x1b") {
 		t.Fatalf("estado de erro:\n%q", v)
 	}
 	fm.err, fm.rep = nil, machineReport()

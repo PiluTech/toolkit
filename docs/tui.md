@@ -154,7 +154,7 @@ Três regras: cor SÓ no símbolo (✓ ✗ ! ○ [x], o spinner), nunca na palav
 nada depende de negrito, reverso ou cor para ser entendido. Com `NO_COLOR` (`Options.Mono`) **nenhuma**
 sequência de estilo sai e o layout é idêntico ao colorido (teste `TestMonoHasNoStyleAndSameLayoutAsColor`).
 
-**Reduzir movimento:** `TOOLKIT_REDUCE_MOTION=1` ou `--no-motion` (no `toolkit` e no `toolkit tui`): o spinner vira o símbolo fixo `~` (sempre com a palavra `executando`, `verificando` ou `em andamento`) e nenhum quadro é agendado, então a tela só muda quando o estado muda (nada é redesenhado a cada 100 ms). Sem a opção o spinner é um caractere de 4 quadros a 10 por segundo.
+**Reduzir movimento:** `TOOLKIT_REDUCE_MOTION=1` ou `--no-motion` (no `toolkit` e no `toolkit tui`): o spinner vira o símbolo fixo `~` nos itens (sempre com a palavra `executando`, `verificando` ou `em andamento`) e, no estado Carregando, o `…` fixo com a palavra `Carregando` e nenhum quadro é agendado, então a tela só muda quando o estado muda (nada é redesenhado a cada 100 ms). Sem a opção o spinner é um caractere de 4 quadros a 10 por segundo.
 
 Símbolos (sempre com a palavra do estado): `✓` instalado/feito (`✓ instalado (fora do Homebrew)` quando o app já veio de fora do gerenciador, como o .dmg no macOS; em coluna estreita vira `✓ instalado (fora)`), `✗` falhou, `!` aviso/aguardando
 reinício, `○` pendente/não instalado/na fila, `-` pulado/sem instalador, `| / - \` verificando/executando,
@@ -163,6 +163,22 @@ atrás de `--ascii`: depois.
 
 Bordas: réguas `─`; só os modais têm caixa (`lipgloss.NormalBorder()`, até 46 de largura). Movimento: só o
 spinner (4 quadros, 100 ms). Troca de aba, modal e cursor são instantâneos; o log entra em lotes de 50 ms.
+
+## Estados padronizados (fase 5 do redesign, `internal/tui/stateview.go`)
+
+Toda tela que não é a lista normal tem UMA forma, de cima para baixo: **título** (símbolo e palavra na frente), **uma frase** do que houve, **passos** numerados (`1. ...`) e, no erro e na recusa, a linha **`Nada foi alterado.`**. Cada função devolve exatamente `h` linhas de até `w` colunas, quebra nos espaços (nunca corta com `…`), passa todo texto de fora por `textsafe` e, com pouca altura, abandona primeiro o que vale menos: título, frase, 1ª linha do motivo, `Nada foi alterado.`, passos, resto do motivo, linha em branco. Cor só no símbolo; em Mono só símbolo e palavra.
+
+| Função | Título | Frase | Onde aparece |
+|---|---|---|---|
+| `StateLoading(th, w, h, what, frame, hints...)` | `\| Carregando` (spinner de 4 quadros); com `--no-motion` `… Carregando` fixo | `Lendo <what>…`; `hints` entram como linhas sem número (ex.: `Esc cancela.`) | Apps (catálogo), Receitas e Diagnóstico, Máquina (com `Esc cancela.`), Privacidade, Apps nativos |
+| `StateError(th, w, h, what, err, steps...)` | `✗ Erro` | `Não deu para ler <what>.` + `Motivo: <err>` (o erro pode ter várias linhas; vem escapado) | idem; Máquina leva `1. Tente de novo (c).`; Apps leva `1. Corrija o arquivo ou rode sem --catalog.` |
+| `StateNeedsAdmin(th, w, h, what, steps...)` | `! Precisa de administrador` | `<What>: precisa de administrador e este terminal não é. O toolkit nunca eleva sozinho.` | passos por sistema em `AdminSteps(goos, cmd)`: Windows `Botão direito no Terminal > Executar como administrador`, Linux/macOS `sudo toolkit <cmd>`. Nenhuma aba substitui o corpo por ele hoje (o administrador só barra a ação, que mostra a faixa de resultado com as mesmas linhas: `adminResultLines`) |
+| `StateUnsupported(th, w, h, what, reason, osName)` | `i Não disponível neste sistema` | `<What>: só existe no Windows (este sistema é <SO>).` + o motivo por sistema | Privacidade e Apps nativos fora do Windows |
+| `StateEmpty(th, w, h, what, steps...)` | `i Nada por aqui` | a frase inteira (ex.: `Nenhuma receita para este sistema.`) + o que fazer | Apps sem instalador, Receitas e Diagnóstico vazios, Máquina ainda não lida, Histórico/Execuções (`Nada rodou nesta sessão.`) |
+| `StateSoon(th, w, h, what, steps...)` | `i Ainda não existe nesta versão` | a explicação | Rede/Análise (`InfoTab`) |
+| `StateTooSmall(th, w, h, needW, needH)` | `i Terminal pequeno` | `A interface precisa de 60×16 e este tem LxA.` | raiz, abaixo do mínimo; `q` e Ctrl+C continuam saindo |
+
+O vazio de uma BUSCA (`Nada com "xyz". Esc limpa a busca.`) e os estados por item (`✗ não deu para verificar`, spinner por linha) continuam inline na lista: a lista já é navegável. A faixa de resultado (fase 2) e a confirmação (fase 1) não mudaram.
 
 ## Estados por aba
 
@@ -206,7 +222,7 @@ spinner (4 quadros, 100 ms). Troca de aba, modal e cursor são instantâneos; o 
 | 80 ou mais | layout completo; acima de 80 só o nome e as linhas de comando crescem |
 | 70 a 79 | some a coluna VIA (vai para a linha de estado); o nome encolhe até 12 |
 | 60 a 69 | abas `2 Rec` e `3 Diag`; VERSÃO junta ao nome (`Python 3.12`) ou ao estado (`✓ 2.43.0 → latest`); faixa `↑ v0.2.0 (u)`; barra de teclas só com mover, marcar, buscar, ajuda, sair |
-| < 60 colunas ou < 16 linhas | tela única com o aviso "Terminal pequeno: a interface precisa de 60×16 e esta janela tem LxA." / "Aumente a janela ou use os comandos sem a interface: toolkit --help" / "q sair" (L×A = tamanho atual); cada linha quebra na largura da janela e, se faltar altura, o "q sair" sobrevive; `q` funciona, a execução em andamento continua e redimensionar volta à interface normal |
+| < 60 colunas ou < 16 linhas | tela única no estado padronizado `i Terminal pequeno` / "A interface precisa de 60×16 e este tem LxA." / "1. Aumente a janela." "2. Ou rode toolkit list / toolkit install ... sem a interface." / "q sair" (L×A = tamanho atual); cada linha quebra na largura da janela e, se faltar altura, o "q sair" sobrevive e o resto cede por prioridade; `q` funciona, a execução em andamento continua e redimensionar volta à interface normal |
 | altura | só o corpo encolhe; listas rolam com `↓ mais N` |
 | redimensionar | recalcula a cada `WindowSizeMsg`, mantém o cursor visível e o log no fim se estiver seguindo; comandos quebram com recuo de 5 e nunca são cortados |
 

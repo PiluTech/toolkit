@@ -203,7 +203,7 @@ func tuiAreas(ctx context.Context, deps Deps, rd RecipeDeps, th tui.Theme, admin
 			newPrivacyTab(ctx, deps, th),
 		}},
 		{Key: "rede", Title: msg.TUIAreaRede, Short: msg.TUIAreaRedeShort, Tabs: []tui.Tab{
-			tui.NewInfoTab(msg.TUISecaoAnalise, msg.TUISecaoAnaliseShort, msg.TUIAnaliseText),
+			tui.NewInfoTab(th, msg.TUISecaoAnalise, msg.TUISecaoAnaliseShort, msg.TUIAnaliseText),
 		}},
 		{Key: "historico", Title: msg.TUIAreaHistorico, Short: msg.TUIAreaHistoricoShort, Tabs: []tui.Tab{
 			execs,

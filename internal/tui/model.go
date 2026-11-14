@@ -109,7 +109,7 @@ func (m *Model) SetExec(ctx context.Context, p Planner, r Runner) {
 // New monta a raiz com as abas dadas (a ordem é a da barra: 1 Apps, 2 Receitas, 3 Diagnóstico, 4 Log).
 func New(o Options, tabs ...Tab) *Model {
 	if len(tabs) == 0 {
-		tabs = DefaultTabs()
+		tabs = DefaultTabs(Theme{Mono: o.Mono, Dark: true, NoMotion: o.NoMotion})
 	}
 	// tema escuro até a detecção do terminal chegar
 	return &Model{opts: o, theme: Theme{Mono: o.Mono, Dark: true, NoMotion: o.NoMotion}, tabs: tabs, areas: legacyAreas(tabs), lastSec: make([]int, len(tabs)), w: 80, h: 24, results: map[int]*Result{}}

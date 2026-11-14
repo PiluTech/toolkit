@@ -498,7 +498,7 @@ func TestAppsEmptyAndErrorStates(t *testing.T) {
 	tab = newApps(be2)
 	tab.Update(tab.loadCmd()())
 	v := plain(tab.View(80, 19))
-	for _, want := range []string{"erro:", "cat.yaml:3:5", "cat.yaml:9:1", "rode sem --catalog"} {
+	for _, want := range []string{"✗ Erro", "Não deu para ler o catálogo.", "cat.yaml:3:5", "cat.yaml:9:1", "1. Corrija o arquivo ou rode sem --catalog.", "Nada foi alterado."} {
 		if !strings.Contains(v, want) {
 			t.Fatalf("faltou %q:\n%s", want, v)
 		}
