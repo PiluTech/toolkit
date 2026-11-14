@@ -1,4 +1,4 @@
- toolkit  [1 Privacidade]                                                v0.1.0 
+ toolkit  [1 Privacidade]                                                v0.1.0
 ────────────────────────────────────────────────────────────────────────────────
  APLICAR O PERFIL RECOMENDADO?
  Muda 3 ajuste(s) de privacidade do Windows.
@@ -17,8 +17,8 @@
    ! HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection\AllowTelemetry: não
      definido -> 0
  Serviço de telemetria [exige administrador]
-   ! serviço DiagTrack: em execução -> desativado
- >[ Cancelar ]<    [ Aplicar ] 
+ ↓ mais 1 linha
+ >[ Cancelar ]<    [ Aplicar ]
 ────────────────────────────────────────────────────────────────────────────────
- Tab muda o botão · Enter ativa · s confirma · Esc cancela                      
+ Tab muda o botão · Enter ativa · s confirma · Esc cancela
  Tab botão  Enter ativa  s confirma  Esc cancela  ↑↓ rolar  ? ajuda  q sair

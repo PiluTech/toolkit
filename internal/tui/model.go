@@ -158,6 +158,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.review.frame++
 		}
 	case tea.KeyPressMsg:
+		if m.w < MinWidth || m.h < MinHeight {
+			// Terminal pequeno demais: a tela só mostra o aviso, então nenhuma tecla pode agir sobre o que está oculto (uma
+			// confirmação aberta nunca aceita às cegas). Só Ctrl+C (sair) e Esc (cancelar, que é seguro) passam.
+			k := msg.String()
+			quit := k == "q" && m.modal == modalNone && !m.tabs[m.active].Capturing() // sair continua possível (não é confirmação)
+			if k != "ctrl+c" && k != "esc" && !quit {
+				return m, nil
+			}
+		}
 		if next, cmd, handled := m.execKey(msg.String()); handled {
 			return next, cmd
 		}

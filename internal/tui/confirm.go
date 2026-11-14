@@ -214,54 +214,45 @@ func (c *Confirm) planLines(th Theme, w int) []string {
 	return out
 }
 
-// View desenha exatamente h linhas de no máximo w colunas: cabeçalho, plano rolável e, por último, os botões
-// (sempre visíveis; com altura mínima o que sobra do cabeçalho é cortado do fim).
+// View desenha exatamente h linhas de no máximo w colunas: a EVIDÊNCIA (cabeçalho + plano) como UMA lista rolável e, por
+// último, os botões (sempre visíveis). Cabeçalho e plano rolam juntos: em qualquer altura suportada toda linha da evidência
+// é alcançável (nunca fica área rolável vazia).
 func (c *Confirm) View(th Theme, w, h int) []string {
-	head := c.headLines(th, w)
 	btn := c.buttonLines(th, w)
-	plan := c.planLines(th, w)
-	c.total = len(plan)
+	evidence := c.headLines(th, w)
+	if plan := c.planLines(th, w); len(plan) > 0 {
+		if len(evidence) > 0 {
+			evidence = append(evidence, "")
+		}
+		evidence = append(evidence, plan...)
+	}
+	c.total = len(evidence)
 
 	if len(btn) >= h { // altura ínfima: só os botões que cabem
+		c.room = 1
 		return fitLines(btn, h)
 	}
 	space := h - len(btn)
-	if len(head) > space-1 && space > 1 { // deixa ao menos uma linha para o plano
-		head = head[:space-1]
-	} else if len(head) >= space {
-		head = head[:space]
+	if len(evidence) <= space-0 && len(evidence)+1+len(btn) <= h { // tudo cabe: os botões logo depois
+		out := append(append([]string{}, evidence...), "")
+		c.room, c.scroll = max(space, 1), 0
+		return fitLines(append(out, btn...), h)
 	}
-	room := max(space-len(head), 0)
-	if len(plan) > 0 && room > 0 && len(head) > 0 {
-		room-- // linha em branco entre o cabeçalho e o plano
-	}
-	more := len(plan) > room
-	body := room
-	if more && room > 1 {
-		body = room - 1 // uma linha para o indicador "↓ mais N linhas"
+	body := space
+	if space > 1 {
+		body = space - 1 // uma linha para o indicador "↓ mais N linhas"
 	}
 	c.room = max(body, 1)
-	c.scroll = max(min(c.scroll, max(len(plan)-body, 0)), 0)
-
-	out := append([]string{}, head...)
-	if len(plan) > 0 && room > 0 {
-		if len(head) > 0 {
-			out = append(out, "")
+	c.scroll = max(min(c.scroll, max(len(evidence)-body, 0)), 0)
+	end := min(c.scroll+body, len(evidence))
+	out := append([]string{}, evidence[c.scroll:end]...)
+	if space > 1 {
+		left := len(evidence) - end
+		ind := " " + SymMore + " mais " + plural(left, "linha", "linhas")
+		if left == 0 {
+			ind = " " + SymUpdate + " fim (PgUp volta)"
 		}
-		end := min(c.scroll+body, len(plan))
-		out = append(out, plan[c.scroll:end]...)
-		if more && room > 1 {
-			left := len(plan) - end
-			ind := " " + SymMore + " mais " + plural(left, "linha", "linhas")
-			if left == 0 {
-				ind = " " + SymUpdate + " fim do plano (PgUp volta)"
-			}
-			out = append(out, th.Muted().Render(ind))
-		}
-	}
-	if !more && len(out)+1+len(btn) <= h { // tudo cabe: os botões vêm logo depois do plano
-		out = append(out, "")
-		return fitLines(append(out, btn...), h)
+		out = append(out, th.Muted().Render(ind))
 	}
 	for len(out) < space {
 		out = append(out, "")
