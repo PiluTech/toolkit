@@ -120,7 +120,7 @@ const (
 // Textos do comando diagnostico.
 const (
 	DiagShort = "Diagnostica a máquina (só leitura): hardware, discos, bateria, temperatura e erros"
-	DiagLong  = "Lê o estado de saúde da máquina SEM alterar nada e SEM pedir administrador: hardware, discos com SMART, bateria, temperatura, GPU e os erros e falhas recentes do sistema (Windows: Eventos, Confiabilidade e telas azuis; macOS: relatórios de falha e log de erros; Linux: journalctl e dmesg). Mostra um resumo do que está ruim e do que fazer. O que exigir administrador (SMART no Linux, temperatura no macOS) aparece como \"não lido\" com a instrução. As informações aparecem como o sistema as informa: nada é mascarado."
+	DiagLong  = "Lê o estado de saúde da máquina SEM alterar nada (funciona sem administrador): hardware, discos com SMART, bateria, temperatura, GPU e os erros e falhas recentes do sistema (Windows: Eventos, Confiabilidade e telas azuis; macOS: relatórios de falha e log de erros; Linux: journalctl e dmesg). Mostra um resumo do que está ruim e do que fazer. Rodando como administrador (sudo no Linux e macOS; terminal como administrador no Windows) ele lê mais: SMART no Linux, temperatura no macOS. Sem administrador, o resumo diz o que você ganharia. O toolkit nunca pede senha nem eleva sozinho. As informações aparecem como o sistema as informa: nada é mascarado."
 
 	FlagDiagFull   = "mostra também o relatório completo (todos os dados lidos)"
 	FlagDiagJSON   = "saída em JSON (resumo e dados lidos)"

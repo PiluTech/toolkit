@@ -13,17 +13,19 @@ import (
 )
 
 const (
-	macTProfHW = `{"SPHardwareDataType":[{"_name":"hardware_overview","chip_type":"Apple M4","machine_name":"MacBook Air","number_processors":"proc 10:4:6:0","physical_memory":"24 GB"}]}`
-	macTDisks  = `{"SPNVMeDataType":[{"_items":[{"_name":"APPLE SSD AP0512Z","device_model":"APPLE SSD AP0512Z","size_in_bytes":500277792768,"smart_status":"Verified"}],"_name":"Apple SSD Controller"}],
+	macTProfHW = `{"SPHardwareDataType":[{"_name":"hardware_overview","chip_type":"Apple M4","machine_name":"MacBook Air","number_processors":"proc 10:4:6:0","physical_memory":"24 GB","platform_UUID":"00000000-0000-4000-8000-000000000001","serial_number":"SN-FAKE-0001"}]}`
+	macTDisks  = `{"SPNVMeDataType":[{"_items":[{"_name":"APPLE SSD AP0512Z","device_model":"APPLE SSD AP0512Z","device_serial":"DSN-FAKE-0001","size_in_bytes":500277792768,"smart_status":"Verified"}],"_name":"Apple SSD Controller"}],
 "SPStorageDataType":[
 {"_name":"Data","free_space_in_bytes":20580208640,"size_in_bytes":494384795648,"physical_drive":{"device_name":"APPLE SSD AP0512Z","medium_type":"ssd","protocol":"Apple Fabric","smart_status":"Verified"}},
 {"_name":"Macintosh HD","free_space_in_bytes":20000000000,"physical_drive":{"device_name":"APPLE SSD AP0512Z","medium_type":"ssd"}},
 {"_name":"Sim","free_space_in_bytes":457043968,"physical_drive":{"device_name":"Disk Image","medium_type":"ssd"}}]}`
 	macTPower = `{"SPPowerDataType":[{"_name":"spbattery_information","sppower_battery_charge_info":{"sppower_battery_fully_charged":"FALSE","sppower_battery_is_charging":"TRUE","sppower_battery_state_of_charge":63},
 "sppower_battery_health_info":{"sppower_battery_cycle_count":171,"sppower_battery_health":"Good","sppower_battery_health_maximum_capacity":"97%"}},{"_name":"sppower_information"}]}`
-	macTGPU = `{"SPDisplaysDataType":[{"_name":"Apple M4","sppci_model":"Apple M4"},{"sppci_model":"AMD Radeon Pro 5500M","spdisplays_vram":"8 GB"}]}`
-	macTVM  = "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:   4719.\nPages active:   393500.\nPages wired down:   282668.\nPages occupied by compressor:   483589.\n"
-	macTLog = `Timestamp               Ty Process[PID:TID]
+	macTGPU   = `{"SPDisplaysDataType":[{"_name":"Apple M4","sppci_model":"Apple M4"},{"sppci_model":"AMD Radeon Pro 5500M","spdisplays_vram":"8 GB"}]}`
+	macTPorts = "Hardware Port: Wi-Fi\nDevice: en0\nEthernet Address: 02:00:00:00:00:01\n\nHardware Port: Thunderbolt Bridge\nDevice: bridge0\nEthernet Address: N/A\n\nHardware Port: Ethernet Adapter (en3)\nDevice: en3\nEthernet Address: 02:00:00:00:00:02\n\nVLAN Configuration\n===============\n"
+	macTPM    = "*** SMC sensors ***\n\nCPU die temperature: 45.12 C\nGPU die temperature: 41.00 C\nFan: 1200 rpm\n"
+	macTVM    = "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:   4719.\nPages active:   393500.\nPages wired down:   282668.\nPages occupied by compressor:   483589.\n"
+	macTLog   = `Timestamp               Ty Process[PID:TID]
 2026-11-13 22:38:26.734 E  Chrome Helper[45034:304a23e] [com.apple.corevideo:] CVDisplayLink error -6670 at /Users/joe/x
 2026-11-13 22:39:26.734 E  Chrome Helper[45035:304a23f] [com.apple.corevideo:] CVDisplayLink error -6671 at /Users/ann/x
 2026-11-13 22:40:00.000 E  kernel[0:f6d] (IOSurface) task: 0x1 not found
@@ -49,15 +51,17 @@ func macFake(t *testing.T, s macScript) *exectest.FakeRunner {
 
 func macFull() macScript {
 	return macScript{
-		"/usr/sbin/sysctl -n hw.model":                       "Mac16,12\n",
-		"/usr/sbin/sysctl -n machdep.cpu.brand_string":       "!",
-		"/usr/sbin/sysctl -n hw.physicalcpu":                 "10\n",
-		"/usr/sbin/sysctl -n hw.logicalcpu":                  "10\n",
-		"/usr/sbin/sysctl -n kern.boottime":                  "{ sec = 1794268850, usec = 110507 } Mon\n",
-		"/usr/sbin/system_profiler SPHardwareDataType -json": macTProfHW,
-		"/usr/sbin/sysctl -n hw.memsize":                     "25769803776\n",
-		"/usr/bin/vm_stat":                                   macTVM,
-		"/usr/sbin/sysctl -n vm.swapusage":                   "total = 11264.00M  used = 10320.00M  free = 943.56M  (encrypted)\n",
+		"/usr/sbin/sysctl -n hw.model":                                                         "Mac16,12\n",
+		"/usr/sbin/sysctl -n machdep.cpu.brand_string":                                         "!",
+		"/usr/sbin/sysctl -n hw.physicalcpu":                                                   "10\n",
+		"/usr/sbin/sysctl -n hw.logicalcpu":                                                    "10\n",
+		"/usr/sbin/sysctl -n kern.boottime":                                                    "{ sec = 1794268850, usec = 110507 } Mon\n",
+		"/usr/sbin/system_profiler SPHardwareDataType -json":                                   macTProfHW,
+		"/usr/sbin/sysctl -n hw.memsize":                                                       "25769803776\n",
+		"/usr/sbin/scutil --get ComputerName":                                                  "HOST-FAKE\n",
+		"/usr/sbin/networksetup -listallhardwareports":                                         macTPorts,
+		"/usr/bin/vm_stat":                                                                     macTVM,
+		"/usr/sbin/sysctl -n vm.swapusage":                                                     "total = 11264.00M  used = 10320.00M  free = 943.56M  (encrypted)\n",
 		"/usr/sbin/system_profiler SPNVMeDataType SPSerialATADataType SPStorageDataType -json": macTDisks,
 		"/usr/sbin/system_profiler SPPowerDataType -json":                                      macTPower,
 		"/usr/sbin/system_profiler SPDisplaysDataType -json":                                   macTGPU,
@@ -146,7 +150,16 @@ func TestMacCaminhoFeliz(t *testing.T) {
 	if e.Source != "Chrome Helper" || e.Count != 1 || !strings.Contains(e.Message, "/Users/ann/x") || !e.When.Equal(time.Date(2026, 11, 13, 22, 39, 26, 0, time.UTC)) {
 		t.Fatalf("evento 1: %+v", e)
 	}
-	if !macSkipped(r, "temperatura") || len(r.Skipped) != 1 || !strings.Contains(r.Skipped[0].Reason, "sudo powermetrics --samplers smc -n 1") {
+	if h.Serial != "SN-FAKE-0001" || h.UUID != "00000000-0000-4000-8000-000000000001" || h.Hostname != "HOST-FAKE" {
+		t.Fatalf("identificação: %+v", h)
+	}
+	if dk.Serial != "DSN-FAKE-0001" {
+		t.Fatalf("serial do disco: %+v", dk)
+	}
+	if len(r.NICs) != 2 || r.NICs[0] != (NIC{"Wi-Fi", "02:00:00:00:00:01"}) || r.NICs[1] != (NIC{"Ethernet Adapter (en3)", "02:00:00:00:00:02"}) {
+		t.Fatalf("NICs: %+v", r.NICs)
+	}
+	if !macSkipped(r, "temperatura") || len(r.Skipped) != 1 || !r.Skipped[0].NeedsAdmin || !strings.Contains(r.Skipped[0].Reason, "sudo toolkit diagnostico") {
 		t.Fatalf("skipped: %+v", r.Skipped)
 	}
 	// falhas: Notes (13/11), Safari (12/11), panic (11/11), Kernel .ips (10/11), NoDate (zero); Old fora dos 30 dias.
@@ -312,16 +325,82 @@ func TestMacIdiomaEN(t *testing.T) {
 	d.Lang = diagfmt.EN
 	r := &Report{}
 	collectDarwin(context.Background(), d, r)
-	if r.Battery.Status != "charging" || !strings.Contains(r.Skipped[0].Reason, "administrator") {
+	if r.Battery.Status != "charging" || !strings.Contains(r.Skipped[0].Reason, "sudo toolkit diagnostico") {
 		t.Fatalf("%+v %+v", r.Battery, r.Skipped)
 	}
 }
 
-func TestMacNaoVazaIdentificadores(t *testing.T) {
+func TestMacIdentificadoresAparecemEValoresVaziosCaem(t *testing.T) {
 	s := macFull()
-	s["/usr/sbin/system_profiler SPHardwareDataType -json"] = `{"SPHardwareDataType":[{"chip_type":"Apple M4","serial_number":"SERIAL123","platform_UUID":"UUID-XYZ","provisioning_UDID":"UDID"}]}`
-	r, _ := macCollect(t, s)
-	if strings.Contains(strings.Join([]string{r.Hardware.CPU, r.Hardware.Model, r.Hardware.Vendor}, "|"), "SERIAL") {
+	s["/usr/sbin/system_profiler SPHardwareDataType -json"] = `{"SPHardwareDataType":[{"chip_type":"Apple M4","serial_number":"0000000000","platform_UUID":"00000000-0000-0000-0000-000000000000"}]}`
+	s["/usr/sbin/scutil --get ComputerName"] = "!"
+	f := macFake(t, s)
+	f.On("/bin/hostname", exectest.Exit(0, "host-fake.local\n"))
+	r := &Report{}
+	collectDarwin(context.Background(), macDeps(f), r)
+	if r.Hardware.Serial != "" || r.Hardware.UUID != "" || r.Hardware.Hostname != "host-fake.local" {
 		t.Fatalf("%+v", r.Hardware)
+	}
+}
+
+func TestMacRedeFalhaViraSkipped(t *testing.T) {
+	s := macFull()
+	s["/usr/sbin/networksetup -listallhardwareports"] = "!"
+	r, _ := macCollect(t, s)
+	if !macSkipped(r, "rede") || len(r.NICs) != 0 || r.Hardware.Model == "" {
+		t.Fatalf("%+v", r.Skipped)
+	}
+}
+
+func macAdminDeps(f exec.Runner) Deps {
+	d := macDeps(f)
+	d.Admin = true
+	return d
+}
+
+func TestMacAdminTemperatura(t *testing.T) {
+	s := macFull()
+	s["/usr/bin/powermetrics --samplers smc -n 1 -i 1000"] = macTPM
+	f := macFake(t, s)
+	r := &Report{}
+	collectDarwin(context.Background(), macAdminDeps(f), r)
+	if len(r.Temps) != 2 || r.Temps[0].Sensor != "CPU die temperature" || r.Temps[0].Celsius != 45.12 || r.Temps[1].Celsius != 41 {
+		t.Fatalf("temps: %+v", r.Temps)
+	}
+	if macSkipped(r, "temperatura") {
+		t.Fatalf("%+v", r.Skipped)
+	}
+	for _, c := range f.Calls() {
+		if c.Elevate || !c.ReadOnly {
+			t.Fatalf("comando não é de leitura: %+v", c)
+		}
+	}
+}
+
+func TestMacAdminSemSensores(t *testing.T) {
+	s := macFull()
+	s["/usr/bin/powermetrics --samplers smc -n 1 -i 1000"] = "!"
+	s["/usr/bin/powermetrics --samplers thermal -n 1 -i 1000"] = "Current pressure level: Nominal\n"
+	f := macFake(t, s)
+	r := &Report{}
+	collectDarwin(context.Background(), macAdminDeps(f), r)
+	if len(r.Temps) != 0 || !macSkipped(r, "temperatura") {
+		t.Fatalf("%+v %+v", r.Temps, r.Skipped)
+	}
+	for _, k := range r.Skipped {
+		if k.Area == "temperatura" && (k.NeedsAdmin || !strings.Contains(k.Reason, "sensores") || !strings.Contains(k.Reason, "Nominal")) {
+			t.Fatalf("%+v", k)
+		}
+	}
+}
+
+func TestMacAdminSemSensoresEThermalFalha(t *testing.T) {
+	s := macFull()
+	s["/usr/bin/powermetrics --samplers smc -n 1 -i 1000"] = "sem nada\n"
+	s["/usr/bin/powermetrics --samplers thermal -n 1 -i 1000"] = "!"
+	r := &Report{}
+	collectDarwin(context.Background(), macAdminDeps(macFake(t, s)), r)
+	if len(r.Temps) != 0 || !macSkipped(r, "temperatura") {
+		t.Fatalf("%+v", r.Skipped)
 	}
 }

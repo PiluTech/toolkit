@@ -43,6 +43,7 @@ func TestAnalyzeCadaRegraComAcao(t *testing.T) {
 		{"desgaste 95", Report{Disks: []Disk{{Name: "D1", WearPct: ip(95)}}}, "disco", SevBad, "desgastado"},
 		{"realocados", Report{Disks: []Disk{{Name: "D1", ReallocatedSectors: ip(3)}}}, "disco", SevWarn, "realocados"},
 		{"realocados muitos", Report{Disks: []Disk{{Name: "D1", ReallocatedSectors: ip(500)}}}, "disco", SevBad, "realocados"},
+		{"erros de leitura não corrigidos", Report{Disks: []Disk{{Name: "D1", ReadErrorsUncorrected: ip(2)}}}, "disco", SevWarn, "Erros de leitura não corrigidos"},
 		{"pouco espaço", Report{Disks: []Disk{{Name: "D1", SizeBytes: 1000, FreeBytes: 80}}}, "disco", SevWarn, "Pouco espaço"},
 		{"quase sem espaço", Report{Disks: []Disk{{Name: "D1", SizeBytes: 1000, FreeBytes: 30}}}, "disco", SevBad, "Pouco espaço"},
 		{"disco quente", Report{Disks: []Disk{{Name: "D1", TempC: fp(70)}}}, "temperatura", SevWarn, "Disco quente"},

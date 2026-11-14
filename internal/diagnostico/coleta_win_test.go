@@ -15,9 +15,9 @@ import (
 var winNow = time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
 
 const (
-	winHWJSON   = `{"cs":{"Manufacturer":"Acme","Model":"Laptop 1","TotalPhysicalMemory":17179869184},"cpu":[{"Name":"Chip X 3.0GHz","Cores":8,"Threads":16}],"bios":"F.20","uptimeSec":93784}`
+	winHWJSON   = `{"cs":{"Manufacturer":"Acme","Model":"Laptop 1","Name":"HOST-FAKE","TotalPhysicalMemory":17179869184},"serial":"SN-FAKE-0001","uuid":"00000000-0000-4000-8000-000000000001","cpu":[{"Name":"Chip X 3.0GHz","Cores":8,"Threads":16}],"bios":"F.20","uptimeSec":93784}`
 	winMemJSON  = `{"total":16777216,"free":4194304,"swap":[{"Alloc":2048,"Used":512}]}`
-	winDiskJSON = `{"disks":[{"Id":"0","Name":"SSD One","Media":"SSD","Bus":"NVMe","Health":"Healthy","Size":512110190592},{"Id":"1","Name":"Disk Two","Media":"HDD","Bus":"SATA","Health":"Warning","Size":1000204886016}],"parts":[{"Disk":0,"Letter":"C"},{"Disk":1,"Letter":"D"}],"vols":[{"Letter":"C","Free":100000000000},{"Letter":"D","Free":500000000000}]}`
+	winDiskJSON = `{"disks":[{"Id":"0","Serial":"DSN-FAKE-0001","Name":"SSD One","Media":"SSD","Bus":"NVMe","Health":"Healthy","Size":512110190592},{"Id":"1","Serial":"  ","Name":"Disk Two","Media":"HDD","Bus":"SATA","Health":"Warning","Size":1000204886016}],"parts":[{"Disk":0,"Letter":"C"},{"Disk":1,"Letter":"D"}],"vols":[{"Letter":"C","Free":100000000000},{"Letter":"D","Free":500000000000}]}`
 	winSmartOK  = `[{"Id":"0","Temp":41,"Wear":12,"Hours":1234},{"Id":"1","Temp":35,"Wear":null,"Hours":"99"}]`
 	winBatJSON  = `{"present":true,"charge":80,"status":6,"design":50000,"full":40000}`
 	winTempJSON = `[{"Idx":0,"Dk":3181}]`
@@ -32,6 +32,8 @@ const (
 		`{"T":"2026-11-11T08:00:00Z","P":"Application Error","I":1000,"L":2,"M":"Faulting application name: foo.exe, version: 1.0\nFaulting module path: C:\\Users\\bob\\AppData\\foo.dll"},` +
 		`{"T":"2026-11-09T08:00:00Z","P":"Application Error","I":1000,"L":2,"M":"Faulting application path: C:\\Users\\bob\\Apps\\bar.exe"}]`
 	winStabJSON = `{"idx":"8.5"}`
+	winNICJSON  = `[{"Name":"Ethernet","Mac":"02-00-00-00-00-01"},{"Name":"Wi-Fi","Mac":"02:00:00:00:00:02"}]`
+	winSmartAdm = `[{"Id":"0","ReadErr":3,"ReadUnc":2},{"Id":"1","ReadErr":null,"ReadUnc":null}]`
 )
 
 type winScripts map[string]string
@@ -40,7 +42,7 @@ func winAll() winScripts {
 	return winScripts{
 		winScriptHW: winHWJSON, winScriptMem: winMemJSON, winScriptDisks: winDiskJSON, winScriptSmart: winSmartOK,
 		winScriptBattery: winBatJSON, winScriptTemp: winTempJSON, winScriptGPU: winGPUJSON,
-		winScriptEvents: winEvtJSON, winScriptCrashes: winCrashJSON, winScriptStability: winStabJSON,
+		winScriptEvents: winEvtJSON, winScriptCrashes: winCrashJSON, winScriptStability: winStabJSON, winScriptNICs: winNICJSON,
 	}
 }
 
@@ -55,8 +57,27 @@ func winRun(t *testing.T, s winScripts, lang diagfmt.Lang) (*Report, *exectest.F
 
 func winRunWith(t *testing.T, f *exectest.FakeRunner, lang diagfmt.Lang) (r *Report, _ *exectest.FakeRunner) {
 	t.Helper()
-	r = &Report{OS: "windows"}
-	d := Deps{Runner: f, Lang: lang, Now: func() time.Time { return winNow }}
+	return winRunDeps(t, f, Deps{Lang: lang})
+}
+
+// winRunAdmin roda com Deps.Admin=true; o script do SMART de administrador entra no roteiro.
+func winRunAdmin(t *testing.T, s winScripts, lang diagfmt.Lang) (*Report, *exectest.FakeRunner) {
+	t.Helper()
+	f := exectest.New(t)
+	if _, ok := s[winScriptSmartAdmin]; !ok {
+		s[winScriptSmartAdmin] = winSmartAdm
+	}
+	for sc, out := range s {
+		f.On(psCmd(sc, time.Minute).String(), exectest.Exit(0, out))
+	}
+	return winRunDeps(t, f, Deps{Lang: lang, Admin: true})
+}
+
+func winRunDeps(t *testing.T, f *exectest.FakeRunner, d Deps) (r *Report, _ *exectest.FakeRunner) {
+	t.Helper()
+	r = &Report{OS: "windows", Admin: d.Admin}
+	d.Runner = f
+	d.Now = func() time.Time { return winNow }
 	collectWindows(context.Background(), d, r)
 	for _, c := range f.Calls() {
 		if c.Elevate || !c.ReadOnly {
@@ -80,11 +101,12 @@ func TestWinCaminhoFeliz(t *testing.T) {
 	if len(r.Skipped) != 0 {
 		t.Fatalf("skipped inesperado: %+v", r.Skipped)
 	}
-	if len(f.Calls()) != 10 {
+	if len(f.Calls()) != 11 {
 		t.Errorf("comandos: %d", len(f.Calls()))
 	}
 	h := r.Hardware
-	if h.Vendor != "Acme" || h.Model != "Laptop 1" || h.CPU != "Chip X 3.0GHz" || h.Cores != 8 || h.Threads != 16 || h.Firmware != "F.20" || h.Uptime != 93784*time.Second {
+	if h.Vendor != "Acme" || h.Model != "Laptop 1" || h.CPU != "Chip X 3.0GHz" || h.Cores != 8 || h.Threads != 16 || h.Firmware != "F.20" || h.Uptime != 93784*time.Second ||
+		h.Serial != "SN-FAKE-0001" || h.UUID != "00000000-0000-4000-8000-000000000001" || h.Hostname != "HOST-FAKE" {
 		t.Errorf("hardware: %+v", h)
 	}
 	m := r.Memory
@@ -103,6 +125,12 @@ func TestWinCaminhoFeliz(t *testing.T) {
 	}
 	if d1.Health != HealthWarn || d1.Medium != "HDD" || d1.FreeBytes != 500000000000 || d1.WearPct != nil || d1.PowerOnHours == nil || *d1.PowerOnHours != 99 {
 		t.Errorf("disco 1: %+v", d1)
+	}
+	if d0.Serial != "DSN-FAKE-0001" || d1.Serial != "" {
+		t.Errorf("série dos discos: %q %q", d0.Serial, d1.Serial)
+	}
+	if len(r.NICs) != 2 || r.NICs[0] != (NIC{Name: "Ethernet", MAC: "02-00-00-00-00-01"}) || r.NICs[1].MAC != "02:00:00:00:00:02" {
+		t.Errorf("nics: %+v", r.NICs)
 	}
 	b := r.Battery
 	if b == nil || b.Percent == nil || *b.Percent != 80 || b.Status != "carregando" || b.HealthPct == nil || *b.HealthPct != 80 {
@@ -188,7 +216,7 @@ func TestWinTop30PorContagem(t *testing.T) {
 func TestWinAreaFalhandoIsolada(t *testing.T) {
 	areas := map[string]string{
 		"hardware": winScriptHW, "memoria": winScriptMem, "discos": winScriptDisks, "bateria": winScriptBattery,
-		"gpu": winScriptGPU, "eventos": winScriptEvents, "falhas": winScriptCrashes, "estabilidade": winScriptStability,
+		"rede": winScriptNICs, "gpu": winScriptGPU, "eventos": winScriptEvents, "falhas": winScriptCrashes, "estabilidade": winScriptStability,
 	}
 	for area, sc := range areas {
 		t.Run(area, func(t *testing.T) {
@@ -378,12 +406,146 @@ func TestWinScriptsSaoASCIIEComSilencio(t *testing.T) {
 	}
 }
 
-func TestWinNaoUsaDadosPessoais(t *testing.T) {
-	for sc := range winAll() {
-		for _, bad := range []string{"SerialNumber", "UUID", "MACAddress", "UserName", "CSName", "DNSHostName"} {
-			if strings.Contains(sc, bad) {
-				t.Errorf("script lê %s", bad)
+func TestWinLeSerieUUIDMACEHostname(t *testing.T) {
+	want := map[string][]string{
+		winScriptHW:    {"Win32_BIOS", "SerialNumber", "Win32_ComputerSystemProduct", "UUID", "Name"},
+		winScriptDisks: {"SerialNumber"},
+		winScriptNICs:  {"Get-NetAdapter -Physical", "MacAddress"},
+	}
+	for sc, parts := range want {
+		for _, p := range parts {
+			if !strings.Contains(sc, p) {
+				t.Errorf("script não lê %q: %s", p, sc)
 			}
+		}
+	}
+}
+
+func TestWinSerieJunkViraVazio(t *testing.T) {
+	for _, junk := range []string{"", "  ", "To Be Filled By O.E.M.", "to be filled by o.e.m.", "Default string", "0", "00000000", "0000-0000", "00000000-0000-0000-0000-000000000000"} {
+		s := winAll()
+		s[winScriptHW] = `{"cs":{"Manufacturer":"A","Name":"H"},"serial":"` + junk + `","uuid":"` + junk + `"}`
+		r, _ := winRun(t, s, diagfmt.PT)
+		if r.Hardware.Serial != "" || r.Hardware.UUID != "" || r.Hardware.Hostname != "H" {
+			t.Errorf("%q: %+v", junk, r.Hardware)
+		}
+		s = winAll()
+		s[winScriptDisks] = `{"disks":[{"Id":"0","Name":"D","Serial":"` + junk + `","Size":1}]}`
+		r, _ = winRun(t, s, diagfmt.PT)
+		if len(r.Disks) != 1 || r.Disks[0].Serial != "" {
+			t.Errorf("disco %q: %+v", junk, r.Disks)
+		}
+	}
+}
+
+func TestWinNICsObjetoUnicoEVazio(t *testing.T) {
+	s := winAll()
+	s[winScriptNICs] = `{"Name":"Eth","Mac":"02-00-00-00-00-09"}`
+	r, _ := winRun(t, s, diagfmt.PT)
+	if len(r.NICs) != 1 || r.NICs[0].MAC != "02-00-00-00-00-09" {
+		t.Errorf("%+v", r.NICs)
+	}
+	s[winScriptNICs] = `[]`
+	r, _ = winRun(t, s, diagfmt.PT)
+	if len(r.NICs) != 0 || len(r.Skipped) != 0 {
+		t.Errorf("sem placas é válido: %+v %+v", r.NICs, r.Skipped)
+	}
+}
+
+func TestWinSmartETemperaturaSemAdminPedemAdmin(t *testing.T) {
+	s := winAll()
+	s[winScriptSmart] = ""
+	s[winScriptTemp] = ""
+	for _, lang := range []diagfmt.Lang{diagfmt.PT, diagfmt.EN, diagfmt.ES} {
+		r, f := winRun(t, s, lang)
+		for _, area := range []string{"smart", "temperatura"} {
+			sk, ok := winSkipped(r, area)
+			if !ok || !sk.NeedsAdmin || sk.Reason == "" {
+				t.Errorf("%s: %+v", area, sk)
+			}
+		}
+		for _, c := range f.Calls() {
+			if c.String() == psCmd(winScriptSmartAdmin, time.Minute).String() {
+				t.Error("o script de admin não roda sem admin")
+			}
+		}
+	}
+	r, _ := winRun(t, s, diagfmt.PT)
+	if sk, _ := winSkipped(r, "smart"); !strings.Contains(sk.Reason, "administrador") {
+		t.Errorf("instrução: %q", sk.Reason)
+	}
+}
+
+func TestWinComAdminSemDadoNaoPedeAdmin(t *testing.T) {
+	s := winAll()
+	s[winScriptSmart] = ""
+	s[winScriptTemp] = ""
+	r, _ := winRunAdmin(t, s, diagfmt.PT)
+	for _, area := range []string{"smart", "temperatura"} {
+		sk, ok := winSkipped(r, area)
+		if !ok || sk.NeedsAdmin || !strings.Contains(sk.Reason, "não expõe") {
+			t.Errorf("%s: %+v", area, sk)
+		}
+	}
+}
+
+func TestWinAdminGuardaErrosDeLeituraSemSomarENuncaComoSetoresRealocados(t *testing.T) {
+	r, f := winRunAdmin(t, winAll(), diagfmt.PT)
+	if len(r.Skipped) != 0 {
+		t.Fatalf("skipped: %+v", r.Skipped)
+	}
+	if len(f.Calls()) != 12 {
+		t.Errorf("comandos: %d", len(f.Calls()))
+	}
+	d0 := r.Disks[0]
+	if d0.ReadErrors == nil || *d0.ReadErrors != 3 || d0.ReadErrorsUncorrected == nil || *d0.ReadErrorsUncorrected != 2 {
+		t.Errorf("disco 0: total=%v nao corrigidos=%v", d0.ReadErrors, d0.ReadErrorsUncorrected)
+	}
+	for i, d := range r.Disks {
+		if d.ReallocatedSectors != nil {
+			t.Errorf("disco %d: ReallocatedSectors só vale para SMART real: %v", i, *d.ReallocatedSectors)
+		}
+	}
+	if d := r.Disks[1]; d.ReadErrors != nil || d.ReadErrorsUncorrected != nil {
+		t.Errorf("disco 1 sem dado: %+v", d)
+	}
+}
+
+// Regressão: Total=100 e Uncorrected=0 (o total já inclui os corrigidos) não pode virar "trocar o disco".
+func TestWinErrosDeLeituraCorrigidosNaoGeramSetoresRealocados(t *testing.T) {
+	s := winAll()
+	s[winScriptSmartAdmin] = `[{"Id":"0","ReadErr":100,"ReadUnc":0}]`
+	r, _ := winRunAdmin(t, s, diagfmt.PT)
+	for _, f := range Analyze(r, diagfmt.PT) {
+		if strings.Contains(strings.ToLower(f.Title), "realocados") || f.Severity >= SevBad {
+			if f.Area == "disco" {
+				t.Errorf("achado indevido: %+v", f)
+			}
+		}
+	}
+	if !strings.Contains(Full(r, diagfmt.PT), "erros de leitura") {
+		t.Error("o relatório completo deve mostrar os erros de leitura com rótulo próprio")
+	}
+}
+func TestWinAdminSemErrosDeLeituraNaoQuebra(t *testing.T) {
+	for _, out := range []string{"", "[]", "not json"} {
+		s := winAll()
+		s[winScriptSmartAdmin] = out
+		r, _ := winRunAdmin(t, s, diagfmt.PT)
+		if r.Disks[0].ReallocatedSectors != nil || r.Disks[0].ReadErrors != nil || r.Disks[0].TempC == nil {
+			t.Errorf("%q: %+v", out, r.Disks[0])
+		}
+	}
+}
+
+func TestWinScriptDeAdminSoLeitura(t *testing.T) {
+	sc := winScriptSmartAdmin
+	if !strings.Contains(sc, "ReadErrorsTotal") || !strings.Contains(sc, "ReadErrorsUncorrected") {
+		t.Errorf("%s", sc)
+	}
+	for _, c := range sc {
+		if c > 127 {
+			t.Fatalf("não ASCII: %q", c)
 		}
 	}
 }

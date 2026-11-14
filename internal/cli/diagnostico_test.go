@@ -373,3 +373,78 @@ func TestDiagnosticoJSONEscapaDELESuplementaresSemAlterarODado(t *testing.T) {
 		t.Errorf("evento alterado: %+v", doc.Report.Events)
 	}
 }
+
+// O comando detecta se roda como administrador/root (injetável) e passa a decisão ao coletor; o toolkit nunca eleva sozinho.
+func TestDiagnosticoPassaOEstadoDeAdminAoColetor(t *testing.T) {
+	for _, admin := range []bool{false, true} {
+		var got diagnostico.Deps
+		deps := diagDeps(t, nil)
+		deps.Diag.IsAdmin = func(context.Context, string, exec.Runner) bool { return admin }
+		deps.Diag.Collect = func(_ context.Context, _ string, d diagnostico.Deps) *diagnostico.Report {
+			got = d
+			return &diagnostico.Report{OS: "linux", Admin: d.Admin, Skipped: []diagnostico.Skipped{{Area: "smart", Reason: "exige root", NeedsAdmin: true}}}
+		}
+		out, _, err := runDiag(t, deps)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Admin != admin {
+			t.Errorf("admin=%v: o coletor recebeu Admin=%v", admin, got.Admin)
+		}
+		if gain := strings.Contains(out, "Com administrador o diagnóstico também lê: saúde SMART dos discos"); gain == admin {
+			t.Errorf("admin=%v: a linha do que se ganha com admin deve aparecer só sem admin (apareceu=%v):\n%s", admin, gain, out)
+		}
+	}
+}
+
+// blockRunner só devolve quando o contexto vence (simula o PowerShell pendurado).
+type blockRunner struct{ ctx chan struct{} }
+
+func (b blockRunner) Run(ctx context.Context, _ exec.Cmd) (exec.Result, error) {
+	<-ctx.Done()
+	close(b.ctx)
+	return exec.Result{}, ctx.Err()
+}
+func (blockRunner) LookPath(string) (string, error) { return "", nil }
+
+func TestDiagDetecaoDeAdminTemPrazoProprio(t *testing.T) {
+	old := diagAdminTimeout
+	diagAdminTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { diagAdminTimeout = old })
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	done := make(chan bool, 1)
+	go func() { done <- DiagDeps{}.admin(ctx, "windows", blockRunner{ctx: make(chan struct{})}) }()
+	select {
+	case got := <-done:
+		if got {
+			t.Error("falha de detecção = não admin")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a detecção de admin não respeitou prazo próprio")
+	}
+	if ctx.Err() != nil {
+		t.Errorf("o orçamento dos coletores não pode ser consumido: %v", ctx.Err())
+	}
+}
+
+func TestDiagColetoresRecebemOrcamentoIntegroAposDetecaoLenta(t *testing.T) {
+	old := diagAdminTimeout
+	diagAdminTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { diagAdminTimeout = old })
+	var ctxErr error
+	var admin bool
+	deps := diagDeps(t, nil)
+	deps.GOOS = "windows"
+	deps.NewRunner = func() exec.Runner { return blockRunner{ctx: make(chan struct{})} }
+	deps.Diag.Collect = func(ctx context.Context, _ string, d diagnostico.Deps) *diagnostico.Report {
+		ctxErr, admin = ctx.Err(), d.Admin
+		return diagReport()
+	}
+	if _, _, err := runDiag(t, deps); err != nil {
+		t.Fatal(err)
+	}
+	if ctxErr != nil || admin {
+		t.Errorf("ctx=%v admin=%v", ctxErr, admin)
+	}
+}

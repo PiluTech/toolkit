@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path"
 	"regexp"
 	"sort"
@@ -38,6 +39,7 @@ var (
 // collectLinux preenche r com o estado da máquina (linux), só por leitura. Cada área é independente.
 func collectLinux(ctx context.Context, d Deps, r *Report) {
 	linArea(d, r, "hardware", func() { linHardware(d, r) })
+	linArea(d, r, "rede", func() { linNICs(d, r) })
 	linArea(d, r, "memoria", func() { linMemory(d, r) })
 	linArea(d, r, "discos", func() { linDisks(ctx, d, r) })
 	linArea(d, r, "bateria", func() { linBattery(d, r) })
@@ -61,6 +63,26 @@ func linArea(d Deps, r *Report, area string, fn func()) {
 
 func linSkip(d Deps, r *Report, area, pt, en, es string) {
 	r.Skipped = append(r.Skipped, Skipped{Area: area, Reason: diagfmt.T(d.Lang, pt, en, es)})
+}
+
+// linSkipAdmin é um Skipped que rodando como root seria lido (NeedsAdmin); o toolkit nunca eleva sozinho.
+func linSkipAdmin(d Deps, r *Report, area, pt, en, es string) {
+	r.Skipped = append(r.Skipped, Skipped{Area: area, Reason: diagfmt.T(d.Lang, pt, en, es), NeedsAdmin: true})
+}
+
+// linPlaceholders são os valores que o firmware deixa no lugar de um serial/UUID de verdade.
+var linPlaceholders = map[string]bool{
+	"not specified": true, "to be filled by o.e.m.": true, "default string": true, "none": true,
+	"not applicable": true, "system serial number": true, "unknown": true,
+}
+
+// linCleanID devolve "" para valor vazio, placeholder de firmware ou só zeros/separadores.
+func linCleanID(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" || linPlaceholders[strings.ToLower(s)] || strings.Trim(s, "0-:. ") == "" {
+		return ""
+	}
+	return s
 }
 
 // linRun acha a ferramenta no PATH (caminho absoluto) e a roda como leitura.
@@ -113,6 +135,10 @@ func linHardware(d Deps, r *Report) {
 	if v, ok := linRead(d, "/sys/class/dmi/id/bios_version"); ok {
 		h.Firmware, got = v, true
 	}
+	if v, ok := linRead(d, "/proc/sys/kernel/hostname"); ok && v != "" {
+		h.Hostname, got = v, true
+	}
+	linIdentifiers(d, r)
 	if b, err := d.readFile("/proc/cpuinfo"); err == nil {
 		linCPUInfo(string(b), h)
 		got = got || h.CPU != "" || h.Threads > 0
@@ -130,6 +156,61 @@ func linHardware(d Deps, r *Report) {
 			"não foi possível ler /sys/class/dmi/id, /proc/cpuinfo nem /proc/uptime; rode em um Linux com /proc e /sys montados",
 			"could not read /sys/class/dmi/id, /proc/cpuinfo or /proc/uptime; run on a Linux with /proc and /sys mounted",
 			"no se pudo leer /sys/class/dmi/id, /proc/cpuinfo ni /proc/uptime; ejecute en un Linux con /proc y /sys montados")
+	}
+}
+
+// linIdentifiers lê serial e UUID do DMI (só root os lê). Sem admin e com leitura negada = Skipped "identificadores".
+func linIdentifiers(d Deps, r *Report) {
+	h := &r.Hardware
+	denied := false
+	read := func(p string) string {
+		b, err := d.readFile(p)
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				denied = true
+			}
+			return ""
+		}
+		return linCleanID(string(b))
+	}
+	h.Serial = read("/sys/class/dmi/id/product_serial")
+	if h.Serial == "" {
+		h.Serial = read("/sys/class/dmi/id/board_serial")
+	}
+	h.UUID = read("/sys/class/dmi/id/product_uuid")
+	if denied && !d.Admin {
+		linSkipAdmin(d, r, "identificadores",
+			"o serial e o UUID da máquina só podem ser lidos por administrador; rode com sudo (sudo toolkit diagnostico)",
+			"the machine serial and UUID can only be read by an administrator; run with sudo (sudo toolkit diagnostico)",
+			"el número de serie y el UUID de la máquina solo los lee un administrador; ejecute con sudo (sudo toolkit diagnostico)")
+	}
+}
+
+// linVirtualNIC reconhece interfaces virtuais pelo nome (a checagem principal é a existência de /device).
+func linVirtualNIC(name string) bool {
+	if name == "lo" {
+		return true
+	}
+	for _, p := range []string{"docker", "veth", "br-", "virbr", "tun", "tap", "wg", "vmnet", "vboxnet", "bond", "dummy"} {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// linNICs lista as placas de rede físicas (/sys/class/net/<if>/device existe) com o MAC, por nome.
+func linNICs(d Deps, r *Report) {
+	for _, p := range linGlob(d, "/sys/class/net/*") {
+		name := path.Base(p)
+		if linVirtualNIC(name) || len(linGlob(d, p+"/device")) == 0 {
+			continue
+		}
+		mac, ok := linRead(d, p+"/address")
+		if !ok || linCleanID(mac) == "" {
+			continue
+		}
+		r.NICs = append(r.NICs, NIC{Name: name, MAC: strings.ToLower(mac)})
 	}
 }
 
@@ -337,7 +418,7 @@ func linDiskParent(part, disk string) bool {
 }
 
 func linDisks(ctx context.Context, d Deps, r *Report) {
-	out, err := linRun(ctx, d, 20*time.Second, "lsblk", "-b", "-d", "-J", "-o", "NAME,SIZE,TYPE,ROTA,MODEL,TRAN")
+	out, err := linRun(ctx, d, 20*time.Second, "lsblk", "-b", "-d", "-J", "-o", "NAME,SIZE,TYPE,ROTA,MODEL,TRAN,SERIAL")
 	if err != nil {
 		linSkip(d, r, "discos",
 			"não foi possível listar os discos (lsblk); instale o util-linux (por exemplo: sudo apt install util-linux)",
@@ -354,11 +435,7 @@ func linDisks(ctx context.Context, d Deps, r *Report) {
 		linSkip(d, r, "discos", "a saída do lsblk é inválida ou veio truncada", "the lsblk output is invalid or truncated", "la salida de lsblk es inválida o está truncada")
 		return
 	}
-	type diskDev struct {
-		dev  string
-		nvme bool
-	}
-	var devs []diskDev
+	var devs []linDiskDev
 	var disks []Disk
 	for _, m := range doc.Devs {
 		if linStr(m["type"]) != "disk" {
@@ -369,7 +446,7 @@ func linDisks(ctx context.Context, d Deps, r *Report) {
 			continue
 		}
 		size, _ := linNum(m["size"])
-		dk := Disk{Name: linStr(m["model"]), SizeBytes: size}
+		dk := Disk{Name: linStr(m["model"]), SizeBytes: size, Serial: linCleanID(linStr(m["serial"]))}
 		if dk.Name == "" {
 			dk.Name = name
 		}
@@ -395,11 +472,21 @@ func linDisks(ctx context.Context, d Deps, r *Report) {
 		default:
 			dk.Bus = strings.ToUpper(tran)
 		}
-		devs = append(devs, diskDev{dev: name, nvme: dk.Bus == "NVMe"})
+		devs = append(devs, linDiskDev{dev: name, nvme: dk.Bus == "NVMe"})
 		disks = append(disks, dk)
 	}
-	sort.SliceStable(disks, func(i, j int) bool { return devs[i].dev < devs[j].dev })
-	sort.SliceStable(devs, func(i, j int) bool { return devs[i].dev < devs[j].dev })
+	// ordena os PARES dispositivo+disco juntos: ordenar os dois slices em separado desalinha o índice usado pelo SMART e pelo df.
+	idx := make([]int, len(devs))
+	for i := range idx {
+		idx[i] = i
+	}
+	sort.SliceStable(idx, func(i, j int) bool { return devs[idx[i]].dev < devs[idx[j]].dev })
+	sortedDevs := make([]linDiskDev, len(devs))
+	sortedDisks := make([]Disk, len(disks))
+	for n, i := range idx {
+		sortedDevs[n], sortedDisks[n] = devs[i], disks[i]
+	}
+	devs, disks = sortedDevs, sortedDisks
 
 	// espaço livre: df agrupado pelo disco pai (0 = desconhecido)
 	if dfOut, err := linRun(ctx, d, 20*time.Second, "df", "-B1", "--output=source,avail,size"); err == nil {
@@ -453,23 +540,132 @@ func linDisks(ctx context.Context, d Deps, r *Report) {
 	r.Disks = disks
 
 	if len(disks) > 0 {
-		var cmds []string
-		for _, dv := range devs {
-			if dv.nvme {
-				cmds = append(cmds, "sudo nvme smart-log /dev/"+strings.TrimRight(dv.dev, "n0123456789")+"0")
+		if d.Admin {
+			linSmart(ctx, d, r, devs)
+		} else {
+			linSmartHint(d, r, devs)
+		}
+	}
+}
+
+type linDiskDev struct {
+	dev  string
+	nvme bool
+}
+
+// linSmartHint: sem admin o SMART não é lido; a instrução traz o comando manual e a opção de rodar o toolkit com sudo.
+func linSmartHint(d Deps, r *Report, devs []linDiskDev) {
+	var cmds []string
+	for _, dv := range devs {
+		if dv.nvme {
+			cmds = append(cmds, "sudo nvme smart-log /dev/"+strings.TrimRight(dv.dev, "n0123456789")+"0")
+		} else {
+			cmds = append(cmds, "sudo smartctl -H -A /dev/"+dv.dev)
+		}
+	}
+	cmds = linUniq(cmds)
+	if len(cmds) > 4 {
+		cmds = cmds[:4]
+	}
+	l := strings.Join(cmds, " ; ")
+	linSkipAdmin(d, r, "smart",
+		"o SMART exige administrador e não foi lido; rode com sudo (sudo toolkit diagnostico) ou: "+l,
+		"SMART needs administrator rights and was not read; run with sudo (sudo toolkit diagnostico) or: "+l,
+		"SMART requiere administrador y no se leyó; ejecute con sudo (sudo toolkit diagnostico) o: "+l)
+}
+
+type linSmartDoc struct {
+	SmartStatus *struct {
+		Passed *bool `json:"passed"`
+	} `json:"smart_status"`
+	PowerOnTime *struct {
+		Hours *float64 `json:"hours"`
+	} `json:"power_on_time"`
+	Temperature *struct {
+		Current *float64 `json:"current"`
+	} `json:"temperature"`
+	ATA *struct {
+		Table []struct {
+			ID  int `json:"id"`
+			Raw struct {
+				Value *float64 `json:"value"`
+			} `json:"raw"`
+		} `json:"table"`
+	} `json:"ata_smart_attributes"`
+	NVMe *struct {
+		PercentageUsed *float64 `json:"percentage_used"`
+		Temperature    *float64 `json:"temperature"`
+	} `json:"nvme_smart_health_information_log"`
+}
+
+// linSmart lê o SMART de cada disco com smartctl (só como root; comando de LEITURA, sem Elevate). O smartctl sai com bits de
+// status em exit != 0 mesmo com saída válida: usa-se a saída quando o JSON é válido.
+func linSmart(ctx context.Context, d Deps, r *Report, devs []linDiskDev) {
+	if d.Runner == nil {
+		return
+	}
+	if p, err := d.Runner.LookPath("smartctl"); err != nil || p == "" {
+		linSkip(d, r, "smart",
+			"o smartctl não está instalado; instale o smartmontools (por exemplo: sudo apt install smartmontools)",
+			"smartctl is not installed; install smartmontools (for example: sudo apt install smartmontools)",
+			"smartctl no está instalado; instale smartmontools (por ejemplo: sudo apt install smartmontools)")
+		return
+	}
+	read := 0
+	for i, dv := range devs {
+		out, _ := linRun(ctx, d, 30*time.Second, "smartctl", "--json=o", "-H", "-A", "/dev/"+dv.dev)
+		var doc linSmartDoc
+		if json.Unmarshal([]byte(out), &doc) != nil {
+			continue
+		}
+		dk := &r.Disks[i]
+		got := false
+		if doc.SmartStatus != nil && doc.SmartStatus.Passed != nil {
+			got = true
+			if *doc.SmartStatus.Passed {
+				dk.Health, dk.HealthRaw = HealthOK, "PASSED"
 			} else {
-				cmds = append(cmds, "sudo smartctl -H -A /dev/"+dv.dev)
+				dk.Health, dk.HealthRaw = HealthBad, "FAILED"
 			}
 		}
-		cmds = linUniq(cmds)
-		if len(cmds) > 4 {
-			cmds = cmds[:4]
+		if doc.PowerOnTime != nil && doc.PowerOnTime.Hours != nil && *doc.PowerOnTime.Hours >= 0 {
+			v := int(*doc.PowerOnTime.Hours)
+			dk.PowerOnHours, got = &v, true
 		}
-		l := strings.Join(cmds, " ; ")
+		temp := (*float64)(nil)
+		if doc.Temperature != nil {
+			temp = doc.Temperature.Current
+		}
+		if doc.NVMe != nil {
+			if doc.NVMe.PercentageUsed != nil {
+				v := int(*doc.NVMe.PercentageUsed)
+				dk.WearPct, got = &v, true
+			}
+			if temp == nil {
+				temp = doc.NVMe.Temperature
+			}
+		}
+		if doc.ATA != nil {
+			for _, a := range doc.ATA.Table {
+				if a.ID == 5 && a.Raw.Value != nil && *a.Raw.Value >= 0 {
+					v := int(*a.Raw.Value)
+					dk.ReallocatedSectors, got = &v, true
+				}
+			}
+		}
+		if temp != nil && dk.TempC == nil && *temp >= linMinTempC && *temp <= linMaxTempC {
+			v := *temp
+			dk.TempC = &v
+		}
+		if got {
+			read++
+		}
+	}
+	if read == 0 {
 		linSkip(d, r, "smart",
-			"o SMART exige administrador e não foi lido; rode: "+l,
-			"SMART needs administrator rights and was not read; run: "+l,
-			"SMART requiere administrador y no se leyó; ejecute: "+l)
+			"o smartctl não devolveu dados de SMART legíveis; confira o disco com: smartctl -H -A /dev/<disco>",
+			"smartctl returned no readable SMART data; check the disk with: smartctl -H -A /dev/<disk>",
+			"smartctl no devolvió datos SMART legibles; revise el disco con: smartctl -H -A /dev/<disco>")
 	}
 }
 

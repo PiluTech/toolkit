@@ -21,6 +21,9 @@ type Deps struct {
 	Glob     func(pattern string) ([]string, error) // nil = filepath.Glob
 	Now      func() time.Time                       // nil = time.Now
 	Lang     diagfmt.Lang
+	// Admin: o processo roda como administrador (Windows) ou root (Unix). Os coletores só leem a mais quando é verdade; as leituras
+	// continuam sendo de LEITURA (ReadOnly, sem Elevate): o toolkit nunca eleva sozinho, o usuário abre o terminal elevado.
+	Admin bool
 	// Home é a pasta pessoal do usuário (DiagnosticReports no macOS); vazio = os.UserHomeDir.
 	Home string
 }
@@ -96,7 +99,7 @@ func psCmd(script string, timeout time.Duration) exec.Cmd {
 
 // Collect lê o estado da máquina do SO indicado. Cada área é independente: uma que falha vira Skipped e a coleta segue.
 func Collect(ctx context.Context, goos string, d Deps) *Report {
-	r := &Report{OS: goos, Generated: d.now()}
+	r := &Report{OS: goos, Generated: d.now(), Admin: d.Admin}
 	switch goos {
 	case "windows":
 		collectWindows(ctx, d, r)
