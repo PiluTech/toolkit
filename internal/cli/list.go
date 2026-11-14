@@ -58,6 +58,8 @@ type Deps struct {
 	Diag DiagDeps
 	// Priv são os pontos injetáveis do `toolkit privacidade` (zero = o Windows real e o backup na pasta de estado).
 	Priv PrivDeps
+	// AppsNat são os pontos injetáveis do `toolkit apps-nativos` (zero = o Windows real e o backup por SID na pasta de estado).
+	AppsNat AppsNatDeps
 	// GitHubToken devolve o token da API de releases do GitHub (nil = variável GITHUB_TOKEN). Só vai ao api.github.com.
 	GitHubToken func() string
 	// Detector monta o detector de apps instalados FORA do gerenciador (.dmg no macOS, instalador no Windows,

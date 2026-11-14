@@ -174,3 +174,38 @@ const (
 	PrivAdminTag      = " [exige administrador]"
 	PrivMissing       = "Não existe nesta versão do Windows (ignorado): %s"
 )
+
+// Textos do comando apps-nativos (só Windows).
+const (
+	AppsNatShort = "Remove apps nativos opcionais do Windows (lista fechada; mostra o plano antes e guarda backup)"
+	AppsNatLong  = "Mostra o catálogo fechado de apps nativos (AppX/MSIX) que o toolkit sabe remover sem quebrar o Windows, com o estado de cada um (instalado ou ausente) e o perfil, SEM alterar nada. Para remover use `toolkit apps-nativos remover --perfil basico|completo` (ou --app id). Nunca remove a Microsoft Store, o winget, o WebView2, o Edge, componentes do sistema nem pacotes de framework."
+
+	AppsNatRemoveShort = "Remove apps nativos do catálogo (mostra o plano e pede confirmação)"
+	AppsNatRemoveLong  = "Calcula o plano (só os apps do catálogo que estão instalados), mostra o que será removido e pede confirmação [s/N] (sem terminal exige --yes). Por padrão remove só para o usuário atual, sem administrador; --todos-usuarios também remove dos outros usuários e do provisionamento (exige administrador). Antes de remover grava um backup com a identidade de cada app. NÃO existe desfazer automático: `toolkit apps-nativos reinstalar` só imprime como reinstalar."
+	AppsNatReinstShort = "Mostra como reinstalar os apps removidos (não executa nada)"
+	AppsNatReinstLong  = "Lê o backup do último `remover` e IMPRIME, sem executar nada, como reinstalar cada app (Microsoft Store ou provisionamento). Reinstalar pode exigir a Microsoft Store."
+
+	FlagAppsNatPerfil = "perfil: basico (conservador) ou completo (basico + o resto do catálogo)"
+	FlagAppsNatApp    = "id de um app do catálogo (pode repetir; veja `toolkit apps-nativos`)"
+	FlagAppsNatAll    = "remove também dos outros usuários e do provisionamento (exige administrador)"
+	FlagAppsNatDryRun = "só mostra o plano, sem mudar nada"
+	FlagAppsNatYes    = "não pergunta: remove direto depois de mostrar o plano"
+
+	AppsNatStateHeader   = "Apps nativos do catálogo (só leitura, nada foi alterado)"
+	AppsNatStateLine     = "  %-24s %-10s %-9s %s"
+	AppsNatStateHint     = "Para remover: toolkit apps-nativos remover --perfil basico|completo ou --app id (use --dry-run para só ver o plano). Para saber como reinstalar: toolkit apps-nativos reinstalar."
+	AppsNatNeedSelection = "informe o que remover: --perfil basico, --perfil completo ou --app id"
+	AppsNatBadPerfil     = "perfil %q desconhecido: use basico ou completo"
+	AppsNatBadApp        = "app %q não está no catálogo (veja `toolkit apps-nativos`)"
+	AppsNatNothingToDo   = "Nada a fazer: nenhum dos apps escolhidos está instalado."
+	AppsNatDryRunDone    = "--dry-run: nada foi alterado."
+	AppsNatNeedsAdmin    = "--todos-usuarios exige administrador e este terminal não é administrador: nada foi alterado. Abra o terminal como administrador (botão direito, \"Executar como administrador\") e rode de novo, ou tire --todos-usuarios para remover só do usuário atual. O toolkit nunca eleva sozinho"
+	AppsNatNeedsYes      = "sem terminal para confirmar: nada foi alterado; rode de novo com --yes (depois de conferir o plano com --dry-run)"
+	AppsNatConfirm       = "Remover estes apps? Não há desfazer automático; a identidade de cada um será guardada em backup."
+	AppsNatCancelled     = "Cancelado: nada foi alterado."
+	AppsNatRemoved       = "Removido: %d app(s). Backup em %s. Para saber como reinstalar: toolkit apps-nativos reinstalar."
+	AppsNatRemovedPart   = "Removidos antes da falha: %d app(s). O backup em %s guarda a identidade de cada um."
+	AppsNatNoBackup      = "Não há backup de apps removidos: nada a reinstalar."
+	AppsNatReinstHeader  = "Como reinstalar (nada é executado por este comando):"
+	AppsNatReinstWarn    = "Atenção: reinstalar pode exigir a Microsoft Store e uma conta; apps removidos do disco não voltam sozinhos."
+)
