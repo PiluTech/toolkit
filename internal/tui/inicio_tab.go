@@ -26,6 +26,9 @@ type InicioItem struct {
 	Title, Desc, Tag string
 	Area, Section    int
 	Dest             string
+	// Unavailable marca o objetivo que ainda não existe ("em breve"): Enter e a tecla do item NÃO navegam (nenhum GoTo) e a
+	// linha de estado diz que ainda não existe. É um campo explícito, nunca deduzido do texto da etiqueta.
+	Unavailable bool
 }
 
 // InicioTab é a seção Início: "O que você quer fazer?", uma lista de objetivos. Enter (ou o número) pede à raiz que
@@ -79,6 +82,9 @@ func (t *InicioTab) goTo(i int) tea.Cmd {
 		return nil
 	}
 	it := t.items[i]
+	if it.Unavailable {
+		return nil
+	}
 	return func() tea.Msg { return GoToMsg{Area: it.Area, Section: it.Section} }
 }
 
@@ -117,6 +123,9 @@ func (t *InicioTab) Keys() []KeyHint {
 func (t *InicioTab) Status() string {
 	if len(t.items) == 0 {
 		return ""
+	}
+	if it := t.items[t.cur]; it.Unavailable {
+		return textsafe.Line(it.Title) + ": ainda não existe nesta versão."
 	}
 	return "Enter abre " + textsafe.Line(t.items[t.cur].Dest)
 }

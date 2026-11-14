@@ -27,7 +27,7 @@ func newInicioTab(areas []tui.AreaDef, goos string, admin bool, th tui.Theme) tu
 	}
 	var items []tui.InicioItem
 	for _, g := range goals {
-		it := tui.InicioItem{Title: g.title, Desc: g.desc, Tag: inicioTag(g.section, goos, admin)}
+		it := tui.InicioItem{Title: g.title, Desc: g.desc, Tag: inicioTag(g.section, goos, admin), Unavailable: g.section == msg.TUISecaoAnalise}
 		for ai, a := range areas {
 			if a.Key != g.area {
 				continue

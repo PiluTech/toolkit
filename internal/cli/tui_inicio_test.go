@@ -64,6 +64,12 @@ func TestInicioRealApontaParaAsSecoesCertas(t *testing.T) {
 			t.Errorf("item %d: área %d, queria %d", i, items[i].Area, a)
 		}
 	}
+	// só "Analisar a rede" ainda não existe (campo explícito, não a etiqueta)
+	for i, it := range items {
+		if it.Unavailable != (i == 5) {
+			t.Errorf("item %d (%q): Unavailable=%v", i, it.Title, it.Unavailable)
+		}
+	}
 	if items[0].Title != "Instalar programas" || items[1].Title != "Preparar a máquina com uma receita" || items[2].Title != "Ver a saúde da máquina" {
 		t.Errorf("títulos: %q | %q | %q", items[0].Title, items[1].Title, items[2].Title)
 	}
