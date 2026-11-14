@@ -9,6 +9,7 @@ Ferramenta em Go para preparar máquinas Windows, Linux e macOS com um comando (
 - `docs/arquitetura.md`: pastas, interfaces Go, decisões técnicas e fontes (derivado da proposta, com as decisões aplicadas).
 - `docs/decisoes.md`: as 22 decisões sobre a proposta, uma por linha, com link para onde cada uma está detalhada.
 - `docs/catalogo.md`: formato do `catalog.yaml`, campos por provider, templates, exemplos.
+- `docs/diagnostico.md`: `toolkit diagnostico` (só leitura, sem admin): o que cada SO lê, regras e limiares do resumo "o que está ruim e o que fazer", máscara de dados sensíveis, `--completo`, `--json`, `--relatorio`. Código em `internal/diagnostico` (coleta_win/lin/mac, analise, relatorio, mascara) e `internal/cli/diagnostico.go`; coletores só pelo `exec.ReadOnlyRunner` e `Deps` injetáveis.
 - `docs/receitas.md`: formato das receitas, ciclo de reboot e retomada, exemplos e a seção do `diag-rede` (Linux e macOS, só leitura, com máscara de dado sensível, alvos por `TOOLKIT_DIAG_*` e idioma por `TOOLKIT_LANG`/`LANG`). Resumo legível dos diagnósticos: campo `render` (renderizadores em `internal/diagfmt`: windows/linux/macos memory e disks), tecla `d` na aba Diagnóstico e `recipe run --detalhes` mostram a saída original; Log da TUI com `✓ nome`.
 - `SECURITY.md`: como reportar e as regras garantidas (hash obrigatório etc.).
 - `CONTRIBUTING.md`: como adicionar um app ou receita.

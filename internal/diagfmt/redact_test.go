@@ -87,3 +87,20 @@ func TestRedactValidJSONIsRedactedByKeyAtAnyDepth(t *testing.T) {
 		}
 	}
 }
+
+// Mensagem de log com identificador no meio da frase.
+func TestRedactInlineIdentifierInsideASentence(t *testing.T) {
+	in := "- 2026-11-13 kernel ×2 [erro] falha no disco serial: SN-SECRETO-1, uuid=4F5E-AA e Serial Number: ABC123;"
+	out := Redact(in)
+	for _, bad := range []string{"SN-SECRETO-1", "4F5E-AA", "ABC123"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("%q sobrou: %s", bad, out)
+		}
+	}
+	if !strings.Contains(out, "falha no disco serial: [***]") {
+		t.Errorf("o resto da frase fica: %s", out)
+	}
+	if out := Redact("a série de testes terminou: ok"); out != "a série de testes terminou: ok" {
+		t.Errorf("texto comum não muda: %s", out)
+	}
+}

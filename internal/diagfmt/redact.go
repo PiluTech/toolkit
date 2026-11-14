@@ -25,11 +25,13 @@ var (
 	redactJSONish = regexp.MustCompile(`(?i)("(?:[^"\\\n]|\\.)*(?:` + idKeys + `)(?:[^"\\\n]|\\.)*"\s*:\s*)(?:"(?:[^"\\]|\\.)*(?:"|\\?\z)|[^,}\]\s][^,}\]\n]*)`)
 	// linhas "Chave: valor" ou "Chave = valor" (a chave não tem aspas nem chaves: o JSON é da regra de cima)
 	redactLine = regexp.MustCompile(`(?im)^([ \t]*[^\n:="{}\[\]]*(?:` + idKeys + `)[^\n:="{}\[\]]*[:=][ \t]*)\S.*$`)
-	redactUUID = regexp.MustCompile(`\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b`)
-	redactMAC  = regexp.MustCompile(`\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b`)
-	dashLine   = regexp.MustCompile(`^\s*-+(?:\s+-+)*\s*$`)
-	dashRun    = regexp.MustCompile(`-+`)
-	wordStart  = regexp.MustCompile(`\S+`)
+	// "serial: X", "uuid=X" no MEIO de uma frase (mensagem de log): o valor vira [***]
+	redactInline = regexp.MustCompile(`(?i)(\b(?:serial(?:[ _-]?(?:number|no\.?))?|uuid|guid|udid|ecid|wwn|imei|meid)\b\s*[:=]\s*)[^\s,;"')\]]+`)
+	redactUUID   = regexp.MustCompile(`\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b`)
+	redactMAC    = regexp.MustCompile(`\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b`)
+	dashLine     = regexp.MustCompile(`^\s*-+(?:\s+-+)*\s*$`)
+	dashRun      = regexp.MustCompile(`-+`)
+	wordStart    = regexp.MustCompile(`\S+`)
 )
 
 // Redact devolve s sem os identificadores da máquina.
@@ -44,6 +46,7 @@ func Redact(s string) string {
 }
 
 func redactTokens(s string) string {
+	s = redactInline.ReplaceAllString(s, `${1}`+redactedValue)
 	return redactMAC.ReplaceAllString(redactUUID.ReplaceAllString(s, redactedValue), redactedValue)
 }
 

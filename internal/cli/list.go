@@ -54,6 +54,8 @@ type Deps struct {
 	Update UpdateDeps
 	// UpdateCheck são os pontos injetáveis do aviso de versão nova (zero = ambiente real; build dev nunca consulta).
 	UpdateCheck UpdateCheckDeps
+	// Diag são os pontos injetáveis do `toolkit diagnostico` (zero = a máquina real, só leitura).
+	Diag DiagDeps
 	// GitHubToken devolve o token da API de releases do GitHub (nil = variável GITHUB_TOKEN). Só vai ao api.github.com.
 	GitHubToken func() string
 	// Detector monta o detector de apps instalados FORA do gerenciador (.dmg no macOS, instalador no Windows,
