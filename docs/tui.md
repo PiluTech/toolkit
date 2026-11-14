@@ -105,7 +105,7 @@ Cores ANSI por índice (nunca hexadecimal), claro/escuro escolhidos pela detecç
 | TabActive | aba ativa, botão em foco | — | — | negrito + reverso | colchetes; `>` antes do botão |
 | Title | categorias, títulos de bloco | — | — | negrito | MAIÚSCULAS |
 
-Três regras: cor só no símbolo e na palavra de estado, nunca na frase; nenhum fundo além do reverso;
+Três regras: cor SÓ no símbolo (✓ ✗ ! ○ [x], o spinner), nunca na palavra de estado nem na frase (a palavra sai na cor padrão do terminal: as 16 cores ANSI do usuário não chegam a 4,5:1 em vários temas, `docs/auditoria-a11y-l10n.md` A1; `Paint` em `theme.go`); nenhum fundo além do reverso;
 nada depende de negrito, reverso ou cor para ser entendido. Com `NO_COLOR` (`Options.Mono`) **nenhuma**
 sequência de estilo sai e o layout é idêntico ao colorido (teste `TestMonoHasNoStyleAndSameLayoutAsColor`).
 

@@ -275,7 +275,7 @@ func (t *LogTab) itemLine(i, w int) string {
 	return " " + cursor + " " + name + "  " + style.Render(cell(sym+" "+word, 26)) + "  " + t.theme.Muted().Render(dur)
 }
 
-func (t *LogTab) itemState(it logItem) (string, string, lipgloss.Style) {
+func (t *LogTab) itemState(it logItem) (string, string, Paint) {
 	switch it.status {
 	case ItemOK:
 		return SymOK, "ok", t.theme.OK()
@@ -292,5 +292,5 @@ func (t *LogTab) itemState(it logItem) (string, string, lipgloss.Style) {
 	case ItemNotRun:
 		return SymPending, "não executado", t.theme.Muted()
 	}
-	return SymPending, "na fila", lipgloss.NewStyle()
+	return SymPending, "na fila", Paint{}
 }

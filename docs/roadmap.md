@@ -62,7 +62,9 @@ foco leva `>`); modo sem cor (`NO_COLOR`) com layout idêntico e testado; cores 
 (o contraste segue o tema do usuário, claro ou escuro); o único movimento é um spinner de um caractere que muda
 10 vezes por segundo (abaixo do limiar de área do WCAG 2.3.1 para flash); com `TOOLKIT_REDUCE_MOTION=1` ou `--no-motion` ele vira um símbolo fixo
 e nenhum quadro é desenhado; funciona em 60x16 e redimensiona; erros dizem o que houve e o que fazer.
-Reduzir movimento (Fase 1): `TOOLKIT_REDUCE_MOTION=1` ou `--no-motion` (regra do `envOn`). Falta: teste automatizado de contraste para o par de cores escuro/claro dos tokens (medir, não estimar); verificar com leitor de tela (VoiceOver no
+Contraste (Fase 1): a cor vai só no símbolo e a palavra de estado sai na cor padrão do terminal (`theme_test.go` garante
+que nenhum token de texto leva cor e que todo estado tem símbolo e palavra). Reduzir movimento (Fase 1): `TOOLKIT_REDUCE_MOTION=1`
+ou `--no-motion` (regra do `envOn`). Falta: verificar com leitor de tela (VoiceOver no
 Terminal do macOS, NVDA no Windows Terminal) que a ordem de leitura da tela cheia faz sentido e que a linha de
 estado e as perguntas `[s/N]` são anunciadas; anúncio de mudança de aba e de fim de execução.
 
