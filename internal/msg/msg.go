@@ -153,7 +153,7 @@ const (
 	TUIInicioNativos        = "Remover apps nativos do Windows"
 	TUIInicioNativosDesc    = "Remove só os apps do Windows que você escolher, depois de ver o plano."
 	TUIInicioOtimizacao     = "Deixar o Windows mais leve"
-	TUIInicioOtimizacaoDesc = "Lê o que pesa na máquina (CPU, memória, disco, inicialização) e diz o que fazer; só leitura."
+	TUIInicioOtimizacaoDesc = "Lê o que pesa na máquina (CPU, memória, disco, inicialização) e diz o que fazer; e reduz as animações do usuário (experimental), com backup e desfazer."
 	TUIInicioPrivacidade    = "Proteger a privacidade do Windows"
 	TUIInicioPrivDesc       = "Ajustes de privacidade, um por um, com confirmação e como desfazer."
 	TUIInicioRede           = "Analisar a rede"
@@ -192,6 +192,26 @@ const (
 	OtimOnlyWindows = "o comando otimizacao só existe no Windows (este sistema é %s); nada foi alterado"
 	OtimReading     = "Lendo os gargalos do Windows (só leitura; leva alguns segundos)…"
 	OtimHint        = "Para ver todos os dados lidos: toolkit otimizacao --completo (ou --relatorio arquivo.txt)."
+)
+
+// Textos de `toolkit otimizacao animacoes` (só Windows; EXPERIMENTAL; só HKCU).
+const (
+	AnimShort     = "Reduz as animações de janela do Windows (EXPERIMENTAL; mostra o plano antes, guarda backup e desfaz)"
+	AnimLong      = "Mostra o plano (valor atual -> novo) e, depois da confirmação [s/N] (sem terminal exige --yes), reduz as animações de janela do usuário atual. FUNÇÃO EXPERIMENTAL: os valores ainda não foram confirmados numa máquina de teste. Só mexe no HKCU (sem administrador, sem serviços, tarefas ou HKLM); antes de mudar grava o valor original em backup. Algumas animações só valem depois de reabrir a sessão ou o Explorer (o toolkit não o reinicia). Para voltar: `toolkit otimizacao animacoes desfazer`."
+	AnimUndoShort = "Desfaz a redução de animações (restaura do backup)"
+	AnimUndoLong  = "Mostra o que será restaurado a partir do backup (tipo e conteúdo originais; apaga só o que não existia) e restaura depois da confirmação. Sem backup, não há o que desfazer."
+
+	AnimOnlyWindows  = "o comando otimizacao animacoes só existe no Windows (este sistema é %s); nada foi alterado"
+	AnimNothingToDo  = "Nada a fazer: as animações já estão como o plano manda."
+	AnimConfirmApply = "Aplicar estas mudanças (EXPERIMENTAL)? O valor original de cada item será guardado em backup."
+	AnimConfirmUndo  = "Restaurar estes itens do backup?"
+	AnimApplied      = "Aplicado: %d mudança(s). Backup em %s. Algumas animações só valem depois de reabrir a sessão ou o Explorer. Para desfazer: toolkit otimizacao animacoes desfazer."
+	AnimAppliedPart  = "Aplicadas antes da falha: %d mudança(s). O backup em %s guarda os valores originais; `toolkit otimizacao animacoes desfazer` restaura."
+	AnimRestored     = "Restaurado: %d item(ns). O backup foi removido."
+	AnimRestoredPart = "Restaurados antes da falha: %d item(ns); o que sobrou continua no backup."
+	AnimNoBackup     = "Não há backup de animações: nada a desfazer."
+	AnimUndoNothing  = "O backup existe, mas tudo já está como antes: nada a restaurar (o backup foi removido)."
+	AnimUndoHeader   = "O que será restaurado (valor atual -> original):"
 )
 
 // Textos do comando privacidade (só Windows).

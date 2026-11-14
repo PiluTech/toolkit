@@ -9,10 +9,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/PiluTech/toolkit/internal/animacoes"
 	"github.com/PiluTech/toolkit/internal/diagfmt"
 	"github.com/PiluTech/toolkit/internal/exec"
 	"github.com/PiluTech/toolkit/internal/msg"
 	"github.com/PiluTech/toolkit/internal/otimizacao"
+	"github.com/PiluTech/toolkit/internal/privacidade"
 	"github.com/PiluTech/toolkit/internal/textsafe"
 )
 
@@ -24,6 +26,10 @@ type OtimDeps struct {
 	// IsAdmin diz se o terminal é de administrador (nil = a mesma detecção do diagnóstico). Só muda a mensagem de uma leitura
 	// que o Windows negou: nada é elevado.
 	IsAdmin func(ctx context.Context, goos string, r exec.Runner) bool
+	// AnimSystem é o registro do usuário das animações (nil = animacoes.NewWindowsSystem sobre o Runner do Deps).
+	AnimSystem animacoes.System
+	// AnimStore guarda o backup das animações (nil = arquivo por usuário na pasta de estado do usuário).
+	AnimStore privacidade.Store
 }
 
 // otimTimeout é o prazo da leitura (comando e TUI).
@@ -66,6 +72,7 @@ func newOtimizacaoCmd(deps Deps) *cobra.Command {
 	c.Flags().BoolVar(&f.full, "completo", false, msg.FlagOtimFull)
 	c.Flags().BoolVar(&f.json, "json", false, msg.FlagOtimJSON)
 	c.Flags().StringVar(&f.report, "relatorio", "", msg.FlagOtimReport)
+	c.AddCommand(newAnimacoesCmd(deps))
 	return c
 }
 

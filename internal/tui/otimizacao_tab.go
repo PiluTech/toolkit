@@ -27,7 +27,8 @@ type otimLoadedMsg struct {
 // OptimizeTab é a seção Otimização da área Máquina: a leitura dos gargalos do Windows (CPU, memória, disco, inicialização,
 // serviços e boot) com o resumo "o que pesa e o que fazer" e, rolando, os dados lidos. SÓ LEITURA: nada é alterado e o
 // "o que fazer" é texto. Fora do Windows a seção só avisa "só existe no Windows". A leitura leva alguns segundos (amostra de
-// CPU), então NÃO começa sozinha: a pessoa pede com c, e Esc cancela. (As animações, parte B do plano, virão depois.)
+// CPU), então NÃO começa sozinha: a pessoa pede com c, e Esc cancela. Com o backend de animações (SetAnimations), a tecla m
+// alterna para a parte Animações (EXPERIMENTAL): plano, confirmação única, backup e desfazer (otimizacao_anim.go).
 type OptimizeTab struct {
 	be    OptimizeBackend
 	ctx   context.Context
@@ -49,6 +50,9 @@ type OptimizeTab struct {
 	frame     int
 	lastW     int
 	lastH     int
+
+	part otimPart // qual parte está na tela: gargalos (leitura) ou animações (plano, backup, desfazer)
+	a    animState
 }
 
 // NewOptimizeTab cria a seção. goos decide, sem chamar o backend, se ela existe neste sistema ("windows").
@@ -68,8 +72,8 @@ func (t *OptimizeTab) Short() string { return "Otim" }
 // Init implementa Tab: nada é lido ao abrir a TUI (a amostra de CPU concorreria com as outras leituras da abertura).
 func (t *OptimizeTab) Init() tea.Cmd { return nil }
 
-// Capturing implementa Tab: a seção nunca captura texto.
-func (t *OptimizeTab) Capturing() bool { return false }
+// Capturing implementa Tab: durante a confirmação e a aplicação das animações todas as teclas são da seção.
+func (t *OptimizeTab) Capturing() bool { return t.inAnim() && (t.a.asking || t.a.busy == busyApply) }
 
 // Selected implementa Tab: nada se marca aqui.
 func (t *OptimizeTab) Selected() int { return 0 }
@@ -106,6 +110,11 @@ func (t *OptimizeTab) stop() {
 
 // Update implementa Tab.
 func (t *OptimizeTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
+	if t.hasAnim() {
+		if cmd, ok := t.animUpdate(msg); ok {
+			return t, cmd
+		}
+	}
 	switch m := msg.(type) {
 	case otimLoadedMsg:
 		if m.gen != t.gen {
@@ -126,7 +135,7 @@ func (t *OptimizeTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		return t, nil
 	case tickMsg:
 		t.frame++
-		if t.loading {
+		if t.loading || (t.hasAnim() && (t.a.loading || t.a.busy != busyNone)) {
 			return t, t.theme.Tick()
 		}
 		return t, nil
@@ -134,7 +143,18 @@ func (t *OptimizeTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		if !t.supported() {
 			return t, nil
 		}
+		if t.inAnim() {
+			return t, t.animKey(m.String())
+		}
 		switch m.String() {
+		case "m":
+			if t.hasAnim() && !t.loading {
+				t.part = partAnim
+				t.a.notice = ""
+				if !t.a.loaded && !t.a.loading {
+					return t, t.animLoadCmd()
+				}
+			}
 		case "esc":
 			if t.loading {
 				t.stop()
@@ -195,6 +215,9 @@ func (t *OptimizeTab) render(rep *otimizacao.Report) []string {
 // View implementa Tab.
 func (t *OptimizeTab) View(w, h int) string {
 	t.lastW, t.lastH = w, h
+	if t.inAnim() {
+		return t.animView(w, h)
+	}
 	switch {
 	case !t.supported():
 		return strings.Join(StateUnsupported(t.theme, w, h, "a leitura de gargalos", "Os gargalos lidos aqui (serviços, itens de inicialização e o log de boot) são do Windows.", osName(t.goos)), "\n")
@@ -219,19 +242,36 @@ func (t *OptimizeTab) View(w, h int) string {
 
 // Keys implementa Tab.
 func (t *OptimizeTab) Keys() []KeyHint {
+	if t.inAnim() {
+		return t.animKeys()
+	}
+	var m []KeyHint
+	if t.hasAnim() {
+		m = []KeyHint{act("m").as("animações").Hint()}
+	}
 	switch {
 	case !t.supported():
 		return nil
 	case t.loading:
 		return []KeyHint{{"Esc", "cancelar"}}
 	case t.loaded:
-		return []KeyHint{{"↑↓", "rolar"}, act("c").Hint()}
+		return append([]KeyHint{{"↑↓", "rolar"}, act("c").Hint()}, m...)
 	}
-	return []KeyHint{act("c").Hint()}
+	return append([]KeyHint{act("c").Hint()}, m...)
 }
 
 // HelpKeys implementa SectionHelper: as teclas da seção, uma frase por tecla (legenda única em keys.go).
 func (t *OptimizeTab) HelpKeys() []KeyDef {
+	if t.inAnim() {
+		return t.animHelp()
+	}
+	if t.hasAnim() && !t.loading {
+		return append(t.gargalosHelp(), act("m").as("animações").says("abre a parte Animações (experimental): plano, backup e desfazer."))
+	}
+	return t.gargalosHelp()
+}
+
+func (t *OptimizeTab) gargalosHelp() []KeyDef {
 	switch {
 	case !t.supported():
 		return noActionsHelp(false)
@@ -248,6 +288,9 @@ func (t *OptimizeTab) HelpKeys() []KeyDef {
 
 // Status implementa Tab.
 func (t *OptimizeTab) Status() string {
+	if t.inAnim() {
+		return t.animStatus()
+	}
 	switch {
 	case !t.supported():
 		return "Otimização — só existe no Windows"
@@ -265,6 +308,9 @@ func (t *OptimizeTab) Status() string {
 
 // More implementa Tab.
 func (t *OptimizeTab) More() int {
+	if t.inAnim() {
+		return t.animMore()
+	}
 	if !t.supported() || t.loading || t.err != nil || !t.loaded {
 		return 0
 	}
@@ -274,6 +320,9 @@ func (t *OptimizeTab) More() int {
 // Detail implementa Detailer: com a leitura na tela, o painel mostra os LIMIARES usados e a lista do que o toolkit nunca faz
 // aqui (só o que a seção já tem; nada é repetido nem executado). Carregando, com erro, vazio ou fora do Windows: nada.
 func (t *OptimizeTab) Detail(w, h int) string {
+	if t.inAnim() {
+		return t.animDetail(w, h)
+	}
 	if !t.supported() || t.loading || t.err != nil || !t.loaded {
 		return ""
 	}

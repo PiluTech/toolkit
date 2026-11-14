@@ -24,6 +24,7 @@ func helpAreas(t *testing.T) []AreaDef {
 	nat := natTab(t, &fakeNat{info: natSample(true), plan: NatPlan{Text: "plano", Pending: 1}})
 	priv := privTab(t, &fakePriv{info: privSample(true), plan: PrivPlan{Text: "plano", Pending: 1, NeedsAdmin: true, IsAdmin: true}})
 	otim := newOtim(&fakeOtim{rep: otimReport()}, "windows")
+	otim.SetAnimations(&fakeAnim{info: animSample(), plan: AnimPlan{Text: animPlanText, Pending: 1}})
 	inicio := NewInicioTab(th, "Início", "Iníc", "O que você quer fazer?", []InicioItem{{Title: "Instalar apps", Desc: "d", Tag: "✓", Area: 1, Section: 0, Dest: "Apps"}})
 	rede := NewInfoTab(th, "Análise", "Anál", "A análise de rede ainda não existe.")
 	execs := NewLogTab(th, "")
@@ -139,6 +140,13 @@ func realKeyStates(t *testing.T) map[string][]KeyHint {
 	otim.loading, otim.loaded = false, true
 	add("otimizacao/lido", otim)
 	otim.loaded = false
+	akey(otim, "m")
+	add("otimizacao/animacoes", otim)
+	akey(otim, "p")
+	add("otimizacao/animacoes/plano", otim)
+	akey(otim, "esc", "a")
+	add("otimizacao/animacoes/confirma", otim)
+	akey(otim, "esc", "m")
 	foraWin := newOtim(&fakeOtim{}, "darwin")
 	add("otimizacao/foradowindows", foraWin)
 
