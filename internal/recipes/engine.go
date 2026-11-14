@@ -294,7 +294,7 @@ func (e *Engine) runAction(ctx context.Context, r *Recipe, st Step, a *Action, r
 }
 
 // render resume a saída crua da etapa (campo render): o resumo no idioma do usuário e, no modo detalhes, a saída
-// original logo depois. Se o resumo não puder ser feito, mostra a original com um aviso: o diagnóstico nunca some.
+// original logo depois. Se o resumo não puder ser feito, a etapa não falha: mostra o aviso (e a original no modo detalhes).
 func (e *Engine) render(st Step, raw string) string {
 	get := e.Getenv
 	if get == nil {
@@ -303,20 +303,18 @@ func (e *Engine) render(st Step, raw string) string {
 	l := diagfmt.LangFromEnv(get)
 	summary, err := diagfmt.Render(st.Render, raw, l)
 	if err != nil || strings.TrimSpace(summary) == "" {
-		// Sem --detalhes a saída crua NUNCA aparece (nem no fallback): ela pode trazer número de série e UUIDs.
-		notice := diagfmt.T(l, "(não deu para resumir esta saída; use --detalhes, ou a tecla d na TUI, para ver a original sem os identificadores da máquina)", "(could not summarize this output; use --detalhes, or the d key in the TUI, to see the original without the machine identifiers)", "(no se pudo resumir esta salida; use --detalhes, o la tecla d en la TUI, para ver la original sin los identificadores del equipo)")
+		notice := diagfmt.T(l, "(não deu para resumir esta saída; use --detalhes, ou a tecla d na TUI, para ver a original)", "(could not summarize this output; use --detalhes, or the d key in the TUI, to see the original)", "(no se pudo resumir esta salida; use --detalhes, o la tecla d en la TUI, para ver la original)")
 		if !e.Details {
 			return notice
 		}
-		return clean(notice + "\n" + diagfmt.Redact(raw))
+		return clean(notice + "\n" + raw)
 	}
-	// o resumo sai da entrada original: um nome de disco com UUID ou MAC não pode reaparecer nele
-	summary = diagfmt.Redact(clean(summary))
+	summary = clean(summary)
 	if !e.Details {
 		return summary
 	}
-	// os detalhes mostram a saída original SEM número de série, UUID, MAC e afins
-	return summary + "\n" + diagfmt.T(l, "-- Detalhes (saída original, sem os identificadores da máquina) --", "-- Details (original output, without the machine identifiers) --", "-- Detalles (salida original, sin los identificadores del equipo) --") + "\n" + diagfmt.Redact(raw)
+	// os detalhes mostram a saída original como ela veio (o toolkit não esconde nenhum dado do PC)
+	return summary + "\n" + diagfmt.T(l, "-- Detalhes (saída original) --", "-- Details (original output) --", "-- Detalles (salida original) --") + "\n" + raw
 }
 
 // clean tira controles (ESC etc.), deixa \n e \t e limita o tamanho: a saída vai para o terminal e o log.
@@ -426,10 +424,6 @@ func (e *Engine) execStep(ctx context.Context, r *Recipe, st Step) (StepReport, 
 	case st.Run != nil:
 		code, out, err := e.runAction(ctx, r, st, st.Run, false, false)
 		sr.Output = out
-		if st.Render != "" {
-			// etapa com resumo: nem a saída de uma falha sai com identificadores da máquina
-			sr.Output = diagfmt.Redact(out)
-		}
 		if err != nil {
 			return fail(0, "não executou: %v", err)
 		}

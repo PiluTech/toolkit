@@ -10,6 +10,7 @@ import (
 
 	"github.com/PiluTech/toolkit/internal/buildinfo"
 	"github.com/PiluTech/toolkit/internal/msg"
+	"github.com/PiluTech/toolkit/internal/textsafe"
 	"github.com/PiluTech/toolkit/internal/update"
 )
 
@@ -80,7 +81,7 @@ func ExecuteWith(ctx context.Context, out, errOut io.Writer, deps Deps, args []s
 	root.SetArgs(args)
 	code := 0
 	if err := root.ExecuteContext(ctx); err != nil {
-		_, _ = io.WriteString(errOut, "erro: "+err.Error()+"\n")
+		_, _ = io.WriteString(errOut, "erro: "+textsafe.Multiline(err.Error())+"\n")
 		code = 1
 	}
 	notifier.finish(errOut)

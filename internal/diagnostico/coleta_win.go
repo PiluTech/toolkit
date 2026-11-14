@@ -84,7 +84,6 @@ const (
 var (
 	errWinNoData = errors.New("sem dados")
 
-	winUserPath = regexp.MustCompile(`(?i)([A-Z]:\\Users\\|/Users/|/home/)[^\\/\s"']+`)
 	winBugcheck = regexp.MustCompile(`0x[0-9a-fA-F]{8}`)
 	winFaulting = regexp.MustCompile(`(?i)Faulting application name:\s*([^,\r\n]+)`)
 	winFaultPth = regexp.MustCompile(`(?i)Faulting application path:\s*([^\r\n]+)`)
@@ -258,7 +257,7 @@ func winTime(v any) (time.Time, bool) {
 	return t, err == nil
 }
 
-// winMessage deixa só a primeira linha não vazia, sem caminho de usuário nem caractere de controle, em até 200 letras.
+// winMessage deixa só a primeira linha não vazia, sem caractere de controle, em até 200 letras.
 func winMessage(s string) string {
 	line := ""
 	for _, l := range strings.FieldsFunc(s, func(r rune) bool { return r == '\n' || r == '\r' }) {
@@ -267,7 +266,6 @@ func winMessage(s string) string {
 			break
 		}
 	}
-	line = winUserPath.ReplaceAllString(line, "${1}<usuario>")
 	line = strings.Map(func(r rune) rune {
 		if r < 0x20 || r == 0x7f {
 			return ' '

@@ -491,7 +491,6 @@ var (
 	macProcRe = regexp.MustCompile(`^(.+?)\[\d+(?::[0-9a-fA-F]+)?\]\s*(.*)$`)
 	macHexRe  = regexp.MustCompile(`0x[0-9a-fA-F]+`)
 	macNumRe  = regexp.MustCompile(`\d+`)
-	macUserRe = regexp.MustCompile(`/Users/[^/\s]+`)
 )
 
 type macEvAgg struct {
@@ -527,7 +526,7 @@ func macEvents(ctx context.Context, d Deps, r *Report) error {
 		if proc == "" {
 			continue
 		}
-		msg = macClean(macUserRe.ReplaceAllString(msg, "~"), macMaxMessageLen)
+		msg = macClean(msg, macMaxMessageLen)
 		norm := macNumRe.ReplaceAllString(macHexRe.ReplaceAllString(msg, "#"), "#")
 		key := proc + "\x00" + norm
 		if g, ok := groups[key]; ok {

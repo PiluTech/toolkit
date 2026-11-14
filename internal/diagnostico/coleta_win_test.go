@@ -147,8 +147,8 @@ func TestWinEventoMensagemLimpaETruncada(t *testing.T) {
 	s[winScriptEvents] = `[{"T":"2026-11-12T10:00:00Z","P":"P","I":1,"L":2,"M":"C:\\Users\\bob\\x falhou /home/ana/y ` + long + `\nsegunda"}]`
 	r, _ := winRun(t, s, diagfmt.PT)
 	m := r.Events[0].Message
-	if strings.Contains(m, "bob") || strings.Contains(m, "ana") || strings.Contains(m, "segunda") {
-		t.Errorf("vazou: %q", m)
+	if !strings.HasPrefix(m, `C:\Users\bob\x falhou /home/ana/y `) || strings.Contains(m, "segunda") {
+		t.Errorf("caminho como veio e só a primeira linha: %q", m)
 	}
 	if n := len([]rune(m)); n > 200 {
 		t.Errorf("tamanho %d", n)
