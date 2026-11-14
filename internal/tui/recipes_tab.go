@@ -602,10 +602,10 @@ func (t *RecipesTab) renderedSteps(r RecipeInfo, w int) stepRender {
 	}
 	run := t.runOf(r.ID)
 	if len(run.Steps) == 0 && r.Diagnostic {
-		sr.lines = append(sr.lines, " Nunca rodou. Marque e tecle Enter: a Revisão mostra o que será executado.")
+		sr.lines = append(sr.lines, wrapLine(" Nunca rodou. Marque e tecle Enter: a Revisão mostra o que será executado.", w)...)
 	}
 	if run.Status == "failed" { // no topo: lido primeiro e nunca escondido abaixo da dobra
-		sr.lines = append(sr.lines, clip(" toolkit recipe reset "+r.ID+" libera nova tentativa", w))
+		sr.lines = append(sr.lines, wrapLine(" toolkit recipe reset "+r.ID+" libera nova tentativa", w)...)
 	}
 	for i, s := range r.Steps {
 		cursor := " "
@@ -617,7 +617,7 @@ func (t *RecipesTab) renderedSteps(r RecipeInfo, w int) stepRender {
 		sr.first = append(sr.first, len(sr.lines))
 		sr.lines = append(sr.lines, clip(fmt.Sprintf(" %s %2d %s  %s", cursor, i+1, cell(s.Name, max(w-34, 12)), style.Render(txt)), w))
 		if st.Status == "failed" && st.Error != "" {
-			sr.lines = append(sr.lines, clip("       "+t.theme.Err().Render("erro:")+" "+firstSentence(textsafe.Line(st.Error)), w))
+			sr.lines = append(sr.lines, hangLines("       "+t.theme.Err().Render("erro:")+" ", 7+5+1, firstSentence(textsafe.Line(st.Error)), w)...)
 		}
 		sr.last = append(sr.last, len(sr.lines)-1)
 	}

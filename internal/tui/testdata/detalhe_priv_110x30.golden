@@ -7,13 +7,13 @@
    itens do usuário. O toolkit nunca eleva sozinho.              │ Faz o básico e também ajusta política,
  PRIVACIDADE DO WINDOWS · edição pro · administrador: não        │ serviço e tarefas da máquina. Exige
    basico        só o que é do usuário · não exige administrador │ administrador.
- > recomendado   básico + política, serviço e tarefas · exige ad…│ Os nomes de cada chave, serviço e tarefa
-─ Ajustes do perfil recomendado ─────────────────────────────────│ aparecem no plano (tecla p), antes de
- ✓ aplicado       ID de publicidade desligado                    │ qualquer mudança.
- ○ pendente       Sugestões no menu Iniciar desligadas           │
- ○ pendente       Dados de diagnóstico no mínimo [admin]         │ AJUSTES
- ! parcial        Serviço de telemetria [admin]                  │ 4 ajustes: 1 aplicado, 2 pendentes, 1
-                                                                 │ parcial
+ > recomendado   básico + política, serviço e tarefas · exige    │ Os nomes de cada chave, serviço e tarefa
+                 administrador                                   │ aparecem no plano (tecla p), antes de
+─ Ajustes do perfil recomendado ─────────────────────────────────│ qualquer mudança.
+ ✓ aplicado       ID de publicidade desligado                    │
+ ○ pendente       Sugestões no menu Iniciar desligadas           │ AJUSTES
+ ○ pendente       Dados de diagnóstico no mínimo [admin]         │ 4 ajustes: 1 aplicado, 2 pendentes, 1
+ ! parcial        Serviço de telemetria [admin]                  │ parcial
                                                                  │
                                                                  │ ADMINISTRADOR
                                                                  │ Exige administrador: este terminal não é.

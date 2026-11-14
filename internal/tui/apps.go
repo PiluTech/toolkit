@@ -689,8 +689,8 @@ func (t *AppsTab) View(w, h int) string {
 		lines = append(lines, " Nada com \""+textsafe.Line(t.filter)+"\". Esc limpa a busca.")
 		return strings.Join(lines, "\n")
 	}
-	cols := t.columns(w)
 	n := t.bodyRows()
+	cols := t.fitColumns(w, n)
 	for i := t.top; i < len(t.rows) && i < t.top+n; i++ {
 		lines = append(lines, t.rowLine(i, cols))
 	}
@@ -711,7 +711,7 @@ func (t *AppsTab) searchBar() string {
 
 // cols são as larguras das colunas, por largura da janela (docs/tui.md): >= 80 completo; 70 a 79 sem VIA;
 // 60 a 69 sem VIA e sem a coluna VERSÃO (a versão vai junto do estado).
-type cols struct{ name, state, ver, via int }
+type cols struct{ name, state, ver, via, pick int } // pick: largura usada para escolher o texto do estado (0 = state)
 
 func (t *AppsTab) columns(w int) cols {
 	c := cols{state: 24, ver: 10, via: 7}
@@ -736,6 +736,78 @@ func (t *AppsTab) columns(w int) cols {
 	return c
 }
 
+// nameMin é a largura mínima da coluna de nome: abaixo disso as outras colunas cedem antes.
+const (
+	nameMin = 12
+	nameCut = 6 // piso do nome quando a versão vai junto do estado
+)
+
+// fitColumns parte de columns(w) e alarga a coluna de versão para a maior versão das linhas visíveis
+// (a versão nunca corta com reticências). Se não cabe, cedem na ordem: via, depois o nome (até nameMin),
+// e por último a versão vai junto do estado (coluna de estado alargada). Sem espaço nem assim, vale o desenho de columns.
+func (t *AppsTab) fitColumns(w, n int) cols {
+	base := t.columns(w)
+	needVer, needMerged := 0, 0
+	for i := t.top; i < len(t.rows) && i < t.top+n; i++ {
+		if t.rows[i].header != "" {
+			continue
+		}
+		state, ver := t.rowStateVer(t.apps[t.rows[i].app], base.state)
+		if ver == "" {
+			continue
+		}
+		needVer = max(needVer, lipgloss.Width(ver))
+		needMerged = max(needMerged, lipgloss.Width(state)+1+lipgloss.Width(ver))
+	}
+	if needVer <= base.ver { // tudo cabe como no desenho original (inclui sem versões)
+		return base
+	}
+	nameFor := func(c cols) int {
+		fixed, gaps := 7, 0
+		for _, x := range []int{c.state, c.ver, c.via} {
+			if x > 0 {
+				fixed += x
+				gaps += 2
+			}
+		}
+		return w - fixed - gaps
+	}
+	var cands []cols
+	if base.ver > 0 {
+		wide := base
+		wide.ver = needVer
+		cands = append(cands, wide)
+		if wide.via > 0 {
+			wide.via = 0
+			cands = append(cands, wide)
+		}
+	}
+	merged := base
+	merged.ver, merged.via = 0, 0
+	merged.state, merged.pick = max(base.state, needMerged), base.state
+	cands = append(cands, merged)
+	for _, c := range cands {
+		floor := nameMin
+		if c.ver == 0 { // versão junto do estado: o nome (inteiro no painel e na linha de estado) cede até o osso
+			floor = nameCut
+		}
+		if nm := nameFor(c); nm >= floor {
+			c.name = nm
+			return c
+		}
+	}
+	return base // último recurso (sem painel, < 60 colunas): o desenho de sempre
+}
+
+// rowStateVer devolve o estado e a versão de uma linha: a versão marcada ("→ v") vale mais que a instalada.
+func (t *AppsTab) rowStateVer(a AppInfo, stateW int) (state, ver string) {
+	state, ver = t.stateText(a, stateW)
+	if v, ok := t.marks[a.ID]; ok && v != "" {
+		ver = "→ " + v
+	}
+	return state, ver
+}
+
 func (t *AppsTab) rowLine(i int, c cols) string {
 	r := t.rows[i]
 	if r.header != "" {
@@ -757,7 +829,11 @@ func (t *AppsTab) rowLine(i int, c cols) string {
 	if i == t.cur {
 		name = t.theme.Bold().Render(name)
 	}
-	state, ver := t.stateText(a, c.state)
+	sw := c.state
+	if c.pick > 0 {
+		sw = c.pick
+	}
+	state, ver := t.stateText(a, sw)
 	if c.ver == 0 && ver != "" { // 60 a 69 colunas: a versão junto do estado
 		state += " " + ver
 		ver = ""
