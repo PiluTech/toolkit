@@ -237,33 +237,39 @@ func runPrivUndo(ctx context.Context, out io.Writer, deps Deps, f privFlags) err
 	if err != nil {
 		return cleanErr(err)
 	}
-	if plan.Pending() == 0 {
-		_, _ = fmt.Fprintln(out, textsafe.Multiline(formatUndo(plan)))
-		if f.dryRun { // dry-run nunca remove nem escreve nada
-			_, _ = fmt.Fprintln(out, msg.PrivDryRunDone)
-			return nil
-		}
-		_, _ = fmt.Fprintln(out, msg.PrivUndoNothing)
-		return e.store.Remove()
-	}
+	zero := plan.Pending() == 0 // tudo já está como antes: só o backup seria removido, mas com a MESMA cautela do restaurar
 	_, _ = fmt.Fprint(out, textsafe.Multiline(formatUndo(plan)))
-	if f.dryRun {
+	if f.dryRun { // dry-run nunca remove nem escreve nada, nem com zero pendências
 		_, _ = fmt.Fprintln(out, msg.PrivDryRunDone)
 		return nil
 	}
-	if plan.NeedsAdmin() && !e.sys.IsAdmin(ctx) {
+	question := msg.PrivConfirmUndo
+	if zero {
+		_, _ = fmt.Fprintln(out, msg.PrivUndoNothing)
+		question = msg.PrivConfirmUndoNothing
+	} else if plan.NeedsAdmin() && !e.sys.IsAdmin(ctx) {
 		return errors.New(msg.PrivUndoNeedsAdm)
 	}
-	if ok, err := privConfirm(ctx, out, deps, f.yes, msg.PrivConfirmUndo); !ok || err != nil {
+	if ok, err := privConfirm(ctx, out, deps, f.yes, question); !ok || err != nil {
 		return err
 	}
-	// backup e sistema são relidos DEPOIS da confirmação e comparados ao que foi mostrado, antes de restaurar qualquer coisa.
+	// backup e sistema são relidos DEPOIS da confirmação e comparados ao que foi mostrado, antes de restaurar ou
+	// remover qualquer coisa (vale também com --yes e com zero pendências).
 	fresh, freshBk, err := privacidade.BuildUndo(ctx, e.sys, e.store, e.lang)
+	if errors.Is(err, privacidade.ErrNoBackup) {
+		return errors.New(msg.PrivStale)
+	}
 	if err != nil {
 		return cleanErr(err)
 	}
 	if formatUndo(fresh) != formatUndo(plan) || fresh.Pending() != plan.Pending() || !reflect.DeepEqual(freshBk, bk) {
 		return errors.New(msg.PrivStale)
+	}
+	if zero {
+		if err := e.store.Remove(); err != nil {
+			return cleanErr(err)
+		}
+		return nil
 	}
 	plan, bk = fresh, freshBk
 	res, err := privacidade.ApplyUndo(ctx, e.sys, e.store, plan, bk)

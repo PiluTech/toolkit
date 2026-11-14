@@ -22,6 +22,10 @@ type privSys struct {
 	svcs   map[string]*privacidade.ServiceState
 	tasks  map[string]*privacidade.TaskState
 	writes int
+	// onEdition (opcional) roda no INÍCIO de cada Edition (uma por Build/BuildUndo), com o número da chamada (1, 2...):
+	// simula outro processo mexendo entre a leitura do plano e a de revalidação.
+	editions  int
+	onEdition func(call int)
 	// gate bloqueia a PRÓXIMA leitura de edição (armed) até o teste liberar: simula um plano lento/cancelado.
 	armed   atomic.Bool
 	entered chan struct{}
@@ -45,6 +49,10 @@ func newPrivSys(admin bool) *privSys {
 func pk(key, name string) string { return strings.ToUpper(key) + "|" + name }
 
 func (s *privSys) Edition(context.Context) (string, error) {
+	s.editions++
+	if s.onEdition != nil {
+		s.onEdition(s.editions)
+	}
 	if s.armed.CompareAndSwap(true, false) {
 		s.entered <- struct{}{}
 		<-s.gate
@@ -102,9 +110,18 @@ func (s *privSys) TaskSetEnabled(_ context.Context, p string, e bool) error {
 	return nil
 }
 
-type privStore struct{ b *privacidade.Backup }
+type privStore struct {
+	b *privacidade.Backup
+	// afterLoad (opcional) roda DEPOIS de cada Load, com o número da chamada: simula o backup mudando entre leituras.
+	loads     int
+	afterLoad func(call int)
+}
 
 func (m *privStore) Load() (*privacidade.Backup, error) {
+	m.loads++
+	if m.afterLoad != nil {
+		defer m.afterLoad(m.loads)
+	}
 	if m.b == nil {
 		return nil, nil
 	}
@@ -356,7 +373,7 @@ func TestUndoDryRunSemPendenciasPreservaOBackup(t *testing.T) {
 	if st.b == nil || len(st.b.Entries) != 1 {
 		t.Fatal("desfazer --dry-run apagou o backup")
 	}
-	if _, err := runPriv(t, privDeps(t, sys, st, "windows", false, ""), "desfazer"); err != nil || st.b != nil {
+	if _, err := runPriv(t, privDeps(t, sys, st, "windows", false, ""), "desfazer", "--yes"); err != nil || st.b != nil {
 		t.Errorf("sem --dry-run o backup sem pendências deve ser removido: %v %v", err, st.b)
 	}
 }

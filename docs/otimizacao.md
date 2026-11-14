@@ -142,7 +142,7 @@ backup; se algo falha no meio, o que não foi restaurado fica no backup.
 
 **Revalidação depois da confirmação (CLI).** Depois do `[s/N]` (e também com `--yes`, logo antes de aplicar) e ANTES de qualquer
 backup ou escrita, o comando recalcula o plano e exige o MESMO texto e as mesmas pendências do que foi mostrado; no desfazer
-reconfere também o backup (mesmo conteúdo). Divergência (outro processo mexeu no valor durante a pergunta) =
+reconfere também o backup (mesmo conteúdo). Isso vale também para o desfazer com ZERO pendências: pergunta "Tudo já está como antes. Remover o backup? [s/N]" (sem terminal exige `--yes`), revalida e só então remove o backup; `--dry-run` nunca remove. Divergência (outro processo mexeu no valor durante a pergunta) =
 `o estado mudou desde o plano mostrado; nada foi alterado; veja o plano de novo`, zero mutações e backup intacto.
 
 **Leitura do registro.** Pelo mesmo `reg.exe` da privacidade (caminho absoluto, `ReadOnlyRunner` para ler e `MutatingRunner` para
