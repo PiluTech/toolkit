@@ -61,7 +61,8 @@ func atoi(s string) int {
 // maskName mascara um nome pessoal. Nome com 3 caracteres ou mais: em qualquer posição, sem diferenciar maiúsculas
 // (um nome de usuário aparece dentro de caminhos, domínios e frases). Nome curto (1 a 2 caracteres, ex.: usuário "Li",
 // máquina "PC"): por TOKEN, ou seja, só quando é a palavra inteira (delimitada por algo que não é letra, dígito ou _),
-// com a MESMA caixa informada, para "PC" não mascarar "PCI" nem "list" virar "[pessoal]st". Nome de 1 caractere não
+// sem diferenciar maiúsculas (o log muda a caixa: "li", "LI", "Pc"), para "PC" não mascarar "PCI" nem "list" virar
+// "[pessoal]st". Nome de 1 caractere não
 // dá para distinguir de texto comum ("a") e é ignorado (limite documentado em docs/diagnostico.md).
 func maskName(s, n string) string {
 	switch {
@@ -70,7 +71,7 @@ func maskName(s, n string) string {
 	case len([]rune(n)) >= 3:
 		return regexp.MustCompile(`(?i)`+regexp.QuoteMeta(n)).ReplaceAllString(s, "[pessoal]")
 	}
-	re := regexp.MustCompile(`(^|[^\p{L}\p{N}_])` + regexp.QuoteMeta(n) + `($|[^\p{L}\p{N}_])`)
+	re := regexp.MustCompile(`(?i)(^|[^\p{L}\p{N}_])` + regexp.QuoteMeta(n) + `($|[^\p{L}\p{N}_])`)
 	for i := 0; i < 8; i++ { // o delimitador entre dois tokens vizinhos ("Li Li") é consumido por um só casamento
 		out := re.ReplaceAllString(s, "${1}[pessoal]${2}")
 		if out == s {

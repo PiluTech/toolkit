@@ -74,7 +74,7 @@ Detalhes da máscara: o `--json` mascara os **valores de texto já decodificados
 chaves, os números e os tipos do contrato nunca mudam (um nome pessoal como `report` ou `Source` não toca as chaves) e os
 escapes do JSON (aspas e barras de um serial ou de um caminho do Windows) nunca se perdem. Nomes pessoais de 3 caracteres ou
 mais são mascarados em qualquer posição; nomes curtos (2 caracteres, ex.: usuário "Li", máquina "PC") por TOKEN, só quando são a
-palavra inteira e com a mesma caixa (`PCI` e `list` ficam). Um nome de 1 caractere não dá para distinguir de texto comum e é
+palavra inteira, sem diferenciar maiúsculas (`li`, `LI`, `Pc`; `PCI`, `list` e `Lisa` ficam). Um nome de 1 caractere não dá para distinguir de texto comum e é
 ignorado (limite).
 
 ## Testes

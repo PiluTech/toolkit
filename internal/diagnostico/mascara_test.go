@@ -34,14 +34,14 @@ func TestMaskTextNomesCurtosNaoMascaramTextoComum(t *testing.T) {
 
 // Lupa #60 (3): nomes curtos (usuário "Li", máquina "PC") são mascarados por TOKEN, sem dispensá-los.
 func TestMaskTextNomesCurtosPorToken(t *testing.T) {
-	in := "falha no PC do usuário Li (user=Li, PC-01 e Li/pasta) em PC. PCI e list e Lisa e UPC e li ficam; Li Li"
+	in := "falha no PC do usuário Li (user=Li, PC-01 e Li/pasta) em PC. PCI e list e Lisa e UPC ficam; Li Li"
 	out := MaskText(in, []string{"Li", "PC"})
 	for _, bad := range []string{"no PC do", "usuário Li", "user=Li", "em PC."} {
 		if strings.Contains(out, bad) {
 			t.Errorf("%q sobrou: %s", bad, out)
 		}
 	}
-	for _, keep := range []string{"PCI", "list", "Lisa", "UPC", " li "} {
+	for _, keep := range []string{"PCI", "list", "Lisa", "UPC"} {
 		if !strings.Contains(out, keep) {
 			t.Errorf("%q não pode ser alterado: %s", keep, out)
 		}
@@ -65,5 +65,27 @@ func TestMaskDocumentSoMascaraValores(t *testing.T) {
 	m := l[1].(map[string]any)
 	if l[0] != "[pessoal]" || m["paulo"] != "x [pessoal]" {
 		t.Errorf("chaves intactas, valores mascarados: %v", out)
+	}
+}
+
+// Lupa #60 (rodada 3): o log muda a caixa do nome ("li", "LI", "Pc", "pc"): nome curto também sem diferenciar maiúsculas,
+// e os controles PCI, list, Lisa e UPC (palavra maior) continuam intactos.
+func TestMaskTextNomesCurtosSemDiferenciarCaixa(t *testing.T) {
+	for _, in := range []string{
+		"user li falhou", "USER LI falhou", "user Li falhou", "falha no pc", "falha no PC", "falha no Pc", "falha no pC", "dono=LI;", "(pc)", "pc: erro", "li/pasta",
+	} {
+		out := MaskText(in, []string{"Li", "PC"})
+		if !strings.Contains(out, "[pessoal]") || strings.Contains(strings.ToLower(out), " li ") || strings.Contains(strings.ToLower(out), "no pc") {
+			t.Errorf("%q: o nome curto sobrou: %q", in, out)
+		}
+	}
+	for _, keep := range []string{"PCI", "pci", "list", "LIST", "Lisa", "lisa", "UPC", "upc", "pcs", "lido", "pc1"} {
+		if out := MaskText("termo "+keep+" fim", []string{"Li", "PC"}); out != "termo "+keep+" fim" {
+			t.Errorf("%q não pode ser alterado: %q", keep, out)
+		}
+	}
+	// nome informado em minúsculas também casa com a caixa do log
+	if out := MaskText("Usuário LI e PC", []string{"li", "pc"}); strings.Contains(out, "LI") || strings.Contains(out, "PC") {
+		t.Errorf("%q", out)
 	}
 }
