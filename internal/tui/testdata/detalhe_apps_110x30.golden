@@ -1,0 +1,30 @@
+ toolkit  0 Início [1 Instalar] 2 Máquina  3 Segurança  4 Rede  5 Histórico                            v0.1.0
+ Instalar › [Apps]  Receitas                                                                       admin: sim
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ DEV                                                             │ Python
+   [ ] Git                                 ✓ instalado 1:2.43.0-…│ python · dev
+ > [ ] Python                           ▾  ○ não instalado       │
+ MIDIA                                                           │ ESTADO
+   [ ] VLC                                 - sem instalador      │ ○ não instalado
+ NAVEGADORES                                                     │
+   [ ] Firefox                             ✓ instalado 133.0     │ INSTALAÇÃO
+                                                                 │ - apt: o primeiro que o toolkit tenta
+                                                                 │   usa sudo -n (rode sudo -v antes; o
+                                                                 │   toolkit nunca pede senha)
+                                                                 │ Aceita versão fixa: tecla v abre a lista.
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+                                                                 │
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ python — Python (apt)
+ ↑↓ mover  espaço marcar  / buscar  Enter revisar  v versões  ? ajuda  q sair

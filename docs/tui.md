@@ -61,6 +61,33 @@ Abaixo disso rola, mantendo o item do cursor inteiro na tela, e a régua mostra 
 - `0` a `5` vão para a área (na última seção visitada dela); Tab e Shift+Tab trocam de seção DENTRO da área (dão a volta, não
   saem). Números e Tab não agem durante confirmação, Revisão, execução (só leitura) e modal; seção capturando texto recebe tudo.
 
+## Painel de detalhe (fase 7 do redesign, `internal/tui/detail.go`)
+
+A partir de **110 colunas** a seção ativa que implementa `Detailer` (`tab.go`: `Detail(w, h int) string`) ganha um painel de
+**44 colunas à direita**, separado da lista por uma coluna `│` (o tema não tem conjunto ASCII: o `│` vale sempre, em Mono
+também). A lista (`View`) recebe `w - 45` colunas e o painel `DetailWidth` (44). Abaixo de 110 nada muda: o `Detail` nem é
+chamado e os goldens de 60 e 80 ficam idênticos.
+
+- A divisão é da RAIZ (`Model.detailBody`, chamada por `screen`): cabeçalho, régua, faixa de resultado, linha de estado e barra de
+  teclas seguem em largura total. A faixa de resultado continua inteira acima do corpo com o painel aberto.
+- O painel só existe na visão normal da lista: some na Revisão, na execução, com pergunta `[s/N]` aberta, na ajuda e no modal de
+  versão nova (a raiz decide), e quando a seção devolve `""` (carregando, erro, vazio, não suportado, plano ou confirmação na tela,
+  lista de versões aberta, busca sem resultado, visão Máquina do Diagnóstico).
+- É SÓ LEITURA: mostra o item sob o cursor e nunca repete ação. Usa só o que a seção JÁ tem em memória (nada é lido do sistema
+  para montá-lo). O que a seção não tem, o painel não inventa: diz como ver (ex.: "os nomes aparecem no plano (tecla p)").
+- Texto quebra na largura (`wrap`, palavra comprida vira várias linhas com `\`), nunca reticências; tudo passa por `textsafe`; em
+  Mono os rótulos de bloco vão em MAIÚSCULAS e todo estado leva símbolo e palavra. Se não cabe na altura, a última linha vira
+  `↓ mais N linhas` (sem rolagem: o painel acompanha o cursor da lista).
+- Conteúdo por seção: Apps (nome, id, categoria, estado e versão instalada, onde está quando instalado fora do gerenciador,
+  marcação, gerenciadores do SO na ordem em que o toolkit tenta, o que cada um exige: sudo -n, UAC, sem root, SHA-256, versão fixa pela tecla v);
+  Receitas e Diagnóstico (descrição, estado, administrador, reinício, etapas em ordem com estado e `reinicia`/`pode reiniciar`, erro da
+  etapa; `>` na etapa em foco); Apps nativos (título, pacote, perfil básico/completo, instalado/ausente, escopo, como reinstalar: tecla i,
+  só texto); Privacidade (o perfil sob o cursor: o que faz, contagem dos ajustes por estado, administrador, `só usuário`, como desfaz:
+  backup e tecla d); Início (para que serve, destino do Enter, requisito).
+- Testes: `detail_test.go` (divisão por largura e altura, `Detail` de cada seção com dados falsos, quebra e textsafe, painel que some)
+  e `detail_golden_test.go` (goldens `detalhe_*_120x40` e `_110x30`). Os goldens de 120x40 que já existiam e têm seção com painel
+  (Início, faixas de Apps/Privacidade/Apps nativos) foram regenerados.
+
 ## Estrutura da tela (H = altura)
 
 Esta tabela é a do modo legado; no modo áreas o cabeçalho tem as 3 linhas descritas acima (ver "Áreas e seções").

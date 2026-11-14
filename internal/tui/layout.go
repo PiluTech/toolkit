@@ -41,7 +41,7 @@ func (m *Model) screen() string {
 		body = strings.Join(all[m.review.scroll:end], "\n")
 		reviewMore = len(all) - end
 	default:
-		body = m.tabs[m.active].View(m.w, bodyH)
+		body = m.detailBody(bodyH)
 	}
 	lines := fit(strings.Split(strings.TrimRight(body, "\n"), "\n"), m.w, bodyH)
 

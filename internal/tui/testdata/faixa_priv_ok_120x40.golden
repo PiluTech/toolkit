@@ -5,36 +5,36 @@
    Backup em C:\ProgramData\toolkit\backups\privacidade-20261114-1200.json
    Para desfazer: tecle d nesta aba
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- PRIVACIDADE DO WINDOWS · edição pro · administrador: sim
-   basico        só o que é do usuário · não exige administrador
- > recomendado   básico + política, serviço e tarefas · exige administrador
-─ Ajustes do perfil recomendado ────────────────────────────────────────────────────────────────────────────────────────
- ✓ aplicado       ID de publicidade desligado
- ○ pendente       Sugestões no menu Iniciar desligadas
- ○ pendente       Dados de diagnóstico no mínimo [admin]
- ! parcial        Serviço de telemetria [admin]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+ PRIVACIDADE DO WINDOWS · edição pro · administrador: sim                  │ Perfil recomendado
+   basico        só o que é do usuário · não exige administrador           │
+ > recomendado   básico + política, serviço e tarefas · exige administrador│ O QUE FAZ
+─ Ajustes do perfil recomendado ───────────────────────────────────────────│ Faz o básico e também ajusta política,
+ ✓ aplicado       ID de publicidade desligado                              │ serviço e tarefas da máquina. Exige
+ ○ pendente       Sugestões no menu Iniciar desligadas                     │ administrador.
+ ○ pendente       Dados de diagnóstico no mínimo [admin]                   │ Os nomes de cada chave, serviço e tarefa
+ ! parcial        Serviço de telemetria [admin]                            │ aparecem no plano (tecla p), antes de
+                                                                           │ qualquer mudança.
+                                                                           │
+                                                                           │ AJUSTES
+                                                                           │ 4 ajustes: 1 aplicado, 2 pendentes, 1
+                                                                           │ parcial
+                                                                           │
+                                                                           │ ADMINISTRADOR
+                                                                           │ Exige administrador: este terminal é
+                                                                           │ administrador.
+                                                                           │
+                                                                           │ COMO DESFAZ
+                                                                           │ Antes de aplicar o toolkit guarda um backup
+                                                                           │ dos valores originais. A tecla d restaura a
+                                                                           │ partir dele, depois da confirmação.
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  Aplicado: 3 mudança(s).
  ↑↓ perfil  p ver plano  a aplicar…  d desfazer…  m só usuário  ? ajuda  q sair

@@ -639,3 +639,42 @@ func (t *NativeAppsTab) mainLines(w int) []string {
 	}
 	return out
 }
+
+// Detail implementa Detailer: o app nativo sob o cursor, só com o que a aba já tem em memória. Sem painel enquanto carrega,
+// com erro, fora do Windows, com o plano ou a confirmação na tela, ou durante a preparação/remoção.
+func (t *NativeAppsTab) Detail(w, h int) string {
+	if !t.usable() || t.asking || t.view || t.busy != natBusyNone || t.cur < 0 || t.cur >= len(t.info.Apps) {
+		return ""
+	}
+	a := t.info.Apps[t.cur]
+	d := newDetail(t.theme, w)
+	d.name(a.Title)
+	d.para("pacote: " + a.ID)
+
+	d.section("Perfil")
+	if a.Basic {
+		d.para("básico (também entra no completo)")
+	} else {
+		d.para("completo (só neste perfil)")
+	}
+
+	d.section("Estado")
+	if a.Installed {
+		d.status(t.theme.OK(), SymOK+" instalado")
+	} else {
+		d.status(t.theme.Muted(), SymPending+" ausente: nada a remover")
+	}
+	if t.marked[a.ID] {
+		d.para("[x] marcado para a remoção")
+	}
+	if t.allUsers {
+		d.para("escopo: todos os usuários e o provisionamento (exige administrador)")
+	} else {
+		d.para("escopo: só o usuário atual")
+	}
+
+	d.section("Como reinstalar")
+	d.para("A tecla i mostra, só como texto, como reinstalar a partir do backup; nada é executado.")
+	d.para("O toolkit não reinstala apps sozinho.")
+	return d.render(h)
+}

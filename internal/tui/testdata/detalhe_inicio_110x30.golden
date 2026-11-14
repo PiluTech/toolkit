@@ -1,0 +1,30 @@
+ toolkit [0 Início] 1 Instalar  2 Máquina  3 Segurança  4 Rede  5 Histórico                            v0.1.0
+ Início                                                                                            admin: sim
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ O QUE VOCÊ QUER FAZER?                                          │ Remover apps nativos do Windows
+                                                                 │
+   1 Instalar programas                                          │ PARA QUE SERVE
+     Escolha os programas do catálogo e instale todos de uma     │ Remove só os apps do Windows que você
+     vez.                                                        │ escolher, depois de ver o plano.
+   2 Preparar a máquina com uma receita                          │
+     Uma receita faz vários passos em sequência e continua após  │ DESTINO
+     reiniciar.                                                  │ Enter abre 2 Máquina › Apps nativos
+   3 Ver a saúde da máquina                                      │ ou a tecla 4
+     Diagnóstico só de leitura: hardware, série, UUID, MAC e o   │
+     que está ruim.                                              │
+ > 4 Remover apps nativos do Windows                             │
+     Remove só os apps do Windows que você escolher, depois de   │
+     ver o plano.                                                │
+   5 Proteger a privacidade do Windows                           │
+     Ajustes de privacidade, um por um, com confirmação e como   │
+     desfazer.                                                   │
+     ! pede administrador para alguns itens                      │
+   6 Analisar a rede                                  ○ em breve │
+     IPs, Wi-Fi, DNS e portas da máquina.                        │
+   7 Ver o que já rodou                                          │
+     O que já rodou e o que falhou, com o registro de cada       │
+     execução.                                                   │
+                                                                 │
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Enter abre 2 Máquina › Apps nativos
+ ↑↓ mover  Enter abrir  1-7 ir direto  ? ajuda  q sair

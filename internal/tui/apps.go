@@ -822,19 +822,22 @@ func (t *AppsTab) stateText(a AppInfo, width int) (state, ver string) {
 }
 
 // styleState põe cor SÓ no símbolo e na palavra de estado (nunca na linha toda).
-func (t *AppsTab) styleState(a AppInfo, s string) string {
+func (t *AppsTab) styleState(a AppInfo, s string) string { return t.statePaint(a).Render(s) }
+
+// statePaint é a pintura do estado do app (o painel de detalhe a usa sem passar por texto já estilizado).
+func (t *AppsTab) statePaint(a AppInfo) Paint {
 	st := t.status[a.ID]
 	switch {
 	case a.NoInstaller:
-		return t.theme.Muted().Render(s)
+		return t.theme.Muted()
 	case st.Err != nil:
-		return t.theme.Err().Render(s)
+		return t.theme.Err()
 	case st.Installed:
-		return t.theme.OK().Render(s)
+		return t.theme.OK()
 	case t.pending[a.ID]:
-		return t.theme.Accent().Render(s)
+		return t.theme.Accent()
 	}
-	return s
+	return Paint{}
 }
 
 // cell ajusta s a exatamente w colunas: corta com … ou completa com espaços.
@@ -889,4 +892,67 @@ func joinManagers(a AppInfo) string {
 		return "o gerenciador"
 	}
 	return strings.Join(a.Managers, ", ")
+}
+
+// Detail implementa Detailer: o app sob o cursor, só com o que a aba já tem em memória (nada é lido do sistema).
+// Sem painel enquanto carrega, com erro, sem apps, com a lista de versões aberta ou sem item sob o cursor.
+func (t *AppsTab) Detail(w, h int) string {
+	if t.loading || t.loadErr != nil || len(t.apps) == 0 || t.mode == modeVersions {
+		return ""
+	}
+	a, ok := t.current()
+	if !ok {
+		return ""
+	}
+	d := newDetail(t.theme, w)
+	d.name(a.Name)
+	meta := a.ID
+	if a.Category != "" {
+		meta += " · " + a.Category
+	}
+	d.para(meta)
+
+	d.section("Estado")
+	state, ver := t.stateText(a, w-2)
+	d.status(t.statePaint(a), state)
+	st := t.status[a.ID]
+	if ver != "" {
+		d.para("versão instalada: " + ver)
+	}
+	if st.Err != nil {
+		d.para("motivo: " + st.Err.Error())
+	}
+	if st.Installed && st.External && st.ExternalWhere != "" {
+		d.para("em " + st.ExternalWhere)
+	}
+	if v, marked := t.marks[a.ID]; marked {
+		if v == "" {
+			d.para("[x] marcado para a Revisão (versão mais recente)")
+		} else {
+			d.para("[x] marcado para a Revisão, versão " + v)
+		}
+	}
+
+	d.section("Instalação")
+	if a.NoInstaller {
+		d.para("Sem instalador para " + osName(t.goos) + ": o app não pode ser marcado.")
+	}
+	for i, m := range a.Managers {
+		lead := "tentado depois, se o anterior não tiver o app"
+		if i == 0 {
+			lead = "o primeiro que o toolkit tenta"
+		}
+		d.item(m + ": " + lead)
+		if note := managerNote(m); note != "" {
+			d.marked("  ", note)
+		}
+	}
+	if !a.NoInstaller {
+		if a.Versions {
+			d.para("Aceita versão fixa: tecla v abre a lista.")
+		} else {
+			d.para("Só a versão atual do gerenciador.")
+		}
+	}
+	return d.render(h)
 }

@@ -728,3 +728,82 @@ func splitWidth(s string, w int) (string, string) {
 	}
 	return s, ""
 }
+
+// Detail implementa Detailer: o perfil sob o cursor (a aba não tem cursor por ajuste), só com o que ela já tem em memória:
+// o que o perfil faz, quantos ajustes estão em cada estado, administrador e como desfazer. Sem painel enquanto carrega,
+// com erro, fora do Windows, com o plano ou a confirmação na tela, ou durante a preparação/aplicação.
+func (t *PrivacyTab) Detail(w, h int) string {
+	if !t.usable() || t.asking || t.view || t.busy != busyNone {
+		return ""
+	}
+	prof := t.profileNow()
+	d := newDetail(t.theme, w)
+	d.name("Perfil " + string(prof))
+
+	d.section("O que faz")
+	if prof == PrivBasico {
+		d.para("Ajusta só o que é do usuário atual. Não exige administrador.")
+	} else {
+		d.para("Faz o básico e também ajusta política, serviço e tarefas da máquina. Exige administrador.")
+	}
+	d.para("Os nomes de cada chave, serviço e tarefa aparecem no plano (tecla p), antes de qualquer mudança.")
+
+	var applied, pending, partial, absent, total int
+	for _, s := range t.info.Settings {
+		if prof == PrivBasico && s.Admin {
+			continue
+		}
+		total++
+		switch s.State {
+		case PrivApplied:
+			applied++
+		case PrivPartial:
+			partial++
+		case PrivAbsent:
+			absent++
+		default:
+			pending++
+		}
+	}
+	d.section("Ajustes")
+	if total == 0 {
+		d.para("Nenhum ajuste para este perfil.")
+	} else {
+		d.para(plural(total, "ajuste", "ajustes") + ": " + strings.Join(t.settingCounts(applied, pending, partial, absent), ", "))
+	}
+
+	d.section("Administrador")
+	switch {
+	case prof == PrivBasico:
+		d.para("Não exige administrador.")
+	case t.info.IsAdmin:
+		d.para("Exige administrador: este terminal é administrador.")
+	default:
+		d.para("Exige administrador: este terminal não é. Aqui só vale aplicar os itens do usuário (tecla m). O toolkit nunca eleva sozinho.")
+	}
+	if t.onlyUser {
+		d.para("[x] aplica só os itens do usuário; o que exige administrador fica de fora")
+	}
+
+	d.section("Como desfaz")
+	d.para("Antes de aplicar o toolkit guarda um backup dos valores originais. A tecla d restaura a partir dele, depois da confirmação.")
+	return d.render(h)
+}
+
+// settingCounts escreve só as contagens que não são zero, na ordem aplicado, pendente, parcial, não se aplica.
+func (t *PrivacyTab) settingCounts(applied, pending, partial, absent int) []string {
+	var out []string
+	if applied > 0 {
+		out = append(out, plural(applied, "aplicado", "aplicados"))
+	}
+	if pending > 0 {
+		out = append(out, plural(pending, "pendente", "pendentes"))
+	}
+	if partial > 0 {
+		out = append(out, plural(partial, "parcial", "parciais"))
+	}
+	if absent > 0 {
+		out = append(out, plural(absent, "não se aplica", "não se aplicam"))
+	}
+	return out
+}

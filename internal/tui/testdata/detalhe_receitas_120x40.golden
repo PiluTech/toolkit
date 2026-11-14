@@ -1,0 +1,40 @@
+ toolkit  0 Início [1 Instalar] 2 Máquina  3 Segurança  4 Rede  5 Histórico                                      v0.1.0
+ Instalar ›  Apps  [Receitas]                                                                                admin: sim
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ > [ ] Ambiente WSL para desenvolvimento           ! aguardando reinício   │ Ambiente WSL para desenvolvimento
+   [ ] Ambiente Linux                              ✗ falhou                │ wsl-dev
+─ Etapas de wsl-dev ─────── 0 de 3 · exige administrador · reinicia 1 vez  │
+    1 Habilitar o WSL                            ! aguardando reinício     │ O QUE FAZ
+    2 Instalar a distro                          ○ pendente                │ Instala o WSL e as ferramentas.
+    3 Instalar ferramentas                       ○ pendente                │
+                                                                           │ ESTADO
+                                                                           │ ! aguardando reinício
+                                                                           │ exige administrador
+                                                                           │ pode reiniciar a máquina em 1 etapa
+                                                                           │
+                                                                           │ ETAPAS, EM ORDEM
+                                                                           │   1 Habilitar o WSL
+                                                                           │     ! aguardando reinício · reinicia
+                                                                           │   2 Instalar a distro
+                                                                           │     ○ pendente
+                                                                           │   3 Instalar ferramentas
+                                                                           │     ○ pendente
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+                                                                           │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ wsl-dev — Ambiente WSL para desenvolvimento: Instala o WSL e as ferramentas.
+ ↑↓ mover  espaço marcar  → etapas  / buscar  Enter revisar  ? ajuda  q sair

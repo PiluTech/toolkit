@@ -672,3 +672,69 @@ func stepState(th Theme, status string) (string, Paint) {
 	}
 	return SymPending + " pendente", Paint{}
 }
+
+// Detail implementa Detailer: a receita sob o cursor, só com o que a aba já tem em memória (receitas e último
+// andamento). Sem painel enquanto carrega, com erro, sem receitas ou sem item sob o cursor (busca sem resultado).
+func (t *RecipesTab) Detail(w, h int) string {
+	if t.loading || t.loadErr != nil || len(t.items) == 0 {
+		return ""
+	}
+	r, ok := t.current()
+	if !ok {
+		return ""
+	}
+	d := newDetail(t.theme, w)
+	d.name(r.Name)
+	d.para(r.ID)
+	if r.Description != "" {
+		d.section("O que faz")
+		d.para(r.Description)
+	}
+
+	d.section("Estado")
+	if txt, paint := t.recipeState(r); txt != "" {
+		d.status(paint, txt)
+	} else {
+		d.status(Paint{}, SymPending+" nunca rodou")
+	}
+	if r.RequiresAdmin {
+		d.para("exige administrador")
+	} else {
+		d.para("não exige administrador")
+	}
+	switch n := rebootSteps(r); {
+	case n == 1:
+		d.para("pode reiniciar a máquina em 1 etapa")
+	case n > 1:
+		d.para("pode reiniciar a máquina em " + itoa(n) + " etapas")
+	default:
+		d.para("não reinicia a máquina")
+	}
+
+	d.section("Etapas, em ordem")
+	run := t.runOf(r.ID)
+	if len(r.Steps) == 0 {
+		d.para("Esta receita não tem etapas.")
+	}
+	for i, s := range r.Steps {
+		cursor := " "
+		if t.focus && i == t.scur {
+			cursor = ">"
+		}
+		d.marked(cursor+" "+itoa(i+1)+" ", s.Name)
+		st := run.Steps[s.ID]
+		txt, paint := stepState(t.theme, st.Status)
+		extra := ""
+		switch s.Reboot {
+		case "required":
+			extra = " · reinicia"
+		case "if-needed":
+			extra = " · pode reiniciar"
+		}
+		d.statusAt("    ", paint, txt+extra)
+		if st.Status == "failed" && st.Error != "" {
+			d.marked("    erro: ", firstSentence(textsafe.Line(st.Error)))
+		}
+	}
+	return d.render(h)
+}
