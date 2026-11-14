@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/PiluTech/toolkit/internal/diagfmt"
 	"github.com/PiluTech/toolkit/internal/exec"
 	"github.com/PiluTech/toolkit/internal/platform"
 	"github.com/PiluTech/toolkit/internal/resume"
@@ -113,6 +115,10 @@ type Engine struct {
 	Clock      func() time.Time
 	NewRunID   func() string
 	Log        *slog.Logger
+	// Details: etapas com render mostram também a saída original (tecla d na TUI, --detalhes na CLI).
+	Details bool
+	// Getenv escolhe o idioma do resumo (nil = os.Getenv): TOOLKIT_LANG, LC_ALL, LC_MESSAGES, LANG.
+	Getenv func(string) string
 }
 
 const maxOutput = 64 << 10
@@ -287,6 +293,32 @@ func (e *Engine) runAction(ctx context.Context, r *Recipe, st Step, a *Action, r
 	return res.ExitCode, clean(out), nil
 }
 
+// render resume a saída crua da etapa (campo render): o resumo no idioma do usuário e, no modo detalhes, a saída
+// original logo depois. Se o resumo não puder ser feito, mostra a original com um aviso: o diagnóstico nunca some.
+func (e *Engine) render(st Step, raw string) string {
+	get := e.Getenv
+	if get == nil {
+		get = os.Getenv
+	}
+	l := diagfmt.LangFromEnv(get)
+	summary, err := diagfmt.Render(st.Render, raw, l)
+	if err != nil || strings.TrimSpace(summary) == "" {
+		// Sem --detalhes a saída crua NUNCA aparece (nem no fallback): ela pode trazer número de série e UUIDs.
+		notice := diagfmt.T(l, "(não deu para resumir esta saída; use --detalhes, ou a tecla d na TUI, para ver a original sem os identificadores da máquina)", "(could not summarize this output; use --detalhes, or the d key in the TUI, to see the original without the machine identifiers)", "(no se pudo resumir esta salida; use --detalhes, o la tecla d en la TUI, para ver la original sin los identificadores del equipo)")
+		if !e.Details {
+			return notice
+		}
+		return clean(notice + "\n" + diagfmt.Redact(raw))
+	}
+	// o resumo sai da entrada original: um nome de disco com UUID ou MAC não pode reaparecer nele
+	summary = diagfmt.Redact(clean(summary))
+	if !e.Details {
+		return summary
+	}
+	// os detalhes mostram a saída original SEM número de série, UUID, MAC e afins
+	return summary + "\n" + diagfmt.T(l, "-- Detalhes (saída original, sem os identificadores da máquina) --", "-- Details (original output, without the machine identifiers) --", "-- Detalles (salida original, sin los identificadores del equipo) --") + "\n" + diagfmt.Redact(raw)
+}
+
 // clean tira controles (ESC etc.), deixa \n e \t e limita o tamanho: a saída vai para o terminal e o log.
 func clean(s string) string {
 	if len(s) > maxOutput {
@@ -394,12 +426,19 @@ func (e *Engine) execStep(ctx context.Context, r *Recipe, st Step) (StepReport, 
 	case st.Run != nil:
 		code, out, err := e.runAction(ctx, r, st, st.Run, false, false)
 		sr.Output = out
+		if st.Render != "" {
+			// etapa com resumo: nem a saída de uma falha sai com identificadores da máquina
+			sr.Output = diagfmt.Redact(out)
+		}
 		if err != nil {
 			return fail(0, "não executou: %v", err)
 		}
 		sr.ExitCode = code
 		if !st.Run.OKExit(code) {
 			return fail(code, "saiu com código %d", code)
+		}
+		if st.Render != "" {
+			sr.Output = e.render(st, out)
 		}
 		rebootNeeded = rebootNeeded || (st.Reboot == RebootIfNeeded && code == 3010)
 	}

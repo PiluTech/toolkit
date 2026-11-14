@@ -22,6 +22,7 @@ steps:
     check: <ação>              # opcional: saiu com 0 = já está feito, etapa pulada
     run: <ação>                # exatamente um entre run e install
     install: [<app>, ...]      # ids do catálogo, aceita "python@3.12"
+    render: <nome>             # só diagnóstico, com run: resumo legível da saída (ver "Resumo legível")
     reboot: never | required | if-needed   # padrão: never
     timeout: 30m               # opcional
 ```
@@ -185,6 +186,59 @@ steps:
   - id: disco
     run: { powershell: "Get-PhysicalDisk | Select-Object FriendlyName,MediaType,HealthStatus,OperationalStatus | Format-Table -AutoSize" }
 ```
+
+### Resumo legível dos diagnósticos (`render`)
+
+Uma etapa de diagnóstico pode ter `render: <nome>`: a saída crua do comando (JSON do PowerShell, `/proc/meminfo`,
+`system_profiler`...) passa por um renderizador de `internal/diagfmt` e o relatório mostra um **resumo** em pt-BR, ou em
+`en`/`es` por `TOOLKIT_LANG`, `LC_ALL`, `LC_MESSAGES` ou `LANG` (o primeiro valor não vazio decide; outro idioma cai em
+pt-BR). A saída original só aparece no **modo detalhes**: tecla `d` na aba Diagnóstico da TUI (a dica mostra
+`d detalhes ✓` quando ligado; vale para os diagnósticos marcados na próxima execução) ou `toolkit recipe run <id>
+--detalhes`; ela vem depois do resumo, sob `-- Detalhes (saída original, sem os identificadores da máquina) --`. **Identificadores nunca
+saem:** antes de qualquer saída da etapa (detalhes, falha do comando e o log do smoke de teste) o toolkit remove número
+de série, UUID/GUID, UDID, ECID, WWN, IMEI, endereço MAC e afins (`diagfmt.Redact`: o valor vira `[***]`, a chave fica),
+inclusive em JSON truncado. JSON válido é lido de verdade e redigido por chave (aspas escapadas, unicode, valores de qualquer
+tipo); o resto (truncado, tabela do `Format-Table` ou de colunas alinhadas, linhas `Chave: valor`) passa por um fallback
+conservador por padrões, e UUIDs e MACs soltos somem sempre. O RESUMO também é redigido no último ponto antes da saída (um
+nome de disco com UUID ou MAC não reaparece), com e sem detalhes e no smoke de teste. As consultas do Windows nem pedem
+`SerialNumber` nem UUID (os campos são escolhidos um a um no `Select-Object`); o `system_profiler` do macOS traz os
+seus de qualquer jeito, e por isso a redação. Se o renderizador não entender a saída (formato novo do sistema), a etapa NÃO falha, mas a
+saída crua NÃO aparece por padrão: só o aviso "não deu para resumir esta saída; use --detalhes ... para ver a original
+sem os identificadores da máquina". O `render`
+só vale em etapa `run` de receita `kind: diagnostic`; um nome desconhecido é erro de carga. Renderizadores:
+
+| Nome | Entrada | Resumo |
+|---|---|---|
+| `windows-memory` | JSON de `Win32_PhysicalMemory`, `Win32_PhysicalMemoryArray` e `Win32_OperatingSystem` | `Memória: 8 GB no total (1 de 2 slots usados) · DDR4 2400 MT/s`, um `Slot N` por módulo (capacidade · fabricante · peça) e `Em uso agora: 5,1 de 7,9 GB (65%)` |
+| `windows-disks` | JSON de `Get-PhysicalDisk` | `Disco: LITEON CV8-CE256-HP · SSD · 256 GB · saudável` (Healthy = saudável, Warning = atenção, Unhealthy = com problema) |
+| `linux-memory` | linhas de `/proc/meminfo` | total, em uso (total menos `MemAvailable`) e swap; os pentes exigem root e não são mostrados |
+| `linux-disks` | JSON de `lsblk -b -d -J` | uma linha por disco (SSD/HDD/NVMe e tamanho); a saúde SMART exige root e não é verificada |
+| `macos-memory` | `sysctl hw.memsize`, `vm_stat` e `system_profiler SPMemoryDataType` | total, tipo quando o macOS informa, em uso aproximado |
+| `macos-disks` | `system_profiler` (NVMe, SATA, armazenamento) | `Disco: <modelo> · SSD · 500 GB · S.M.A.R.T.: verificado` |
+
+Capacidade de memória usa GB binário (8589934592 bytes = 8 GB, como o Windows mostra) e a de disco, GB decimal (como o
+fabricante anuncia); decimais com vírgula em pt-BR e es e com ponto em en. Fabricante da RAM no Windows vem de uma tabela de
+códigos JEDEC comuns (80AD SK hynix, 80CE Samsung, 802C Micron, 859B Crucial, 0198 Kingston, 029E Corsair, 04CB A-DATA, 04EF Team Group,
+04CD G.Skill, 830B Nanya); um código fora da tabela aparece como `JEDEC <código>` exatamente como veio (só o preenchimento
+provado de 16 dígitos, código de 4 mais 12 zeros, é descartado; `8010` nunca vira `0801`). O tipo da RAM vem do `SMBIOSMemoryType`
+(DSP0134, Type 17: 20 é DDR2 FB-DIMM, 21 a 23 são reservados) e, só quando ele vem 0, do `MemoryType` legado do WMI (20 é DDR):
+são tabelas diferentes e não se misturam. No macOS o disco é identificado pelo nome BSD (`disk0`): a mesma identidade em
+duas seções do `system_profiler` vira um disco (vale o pior status SMART) e dois discos do mesmo modelo continuam dois;
+a visão de volumes (Storage) só se junta a um disco NVMe/SATA com identidade FÍSICA comprovada: o disco inteiro do volume
+(`disk0s2` é do `disk0`) ou, para volume de contêiner APFS (`disk3s5`, do contêiner `disk3`), o disco físico do contêiner
+pelo mapa do `diskutil apfs list -plist` (a receita emite as seções `### profiler` e `### apfs`: `disk3` -> `disk0s2` ->
+`disk0`). Ter o MESMO MODELO nunca prova nada (um externo igual ao interno é outro disco). Sem prova o volume vira disco
+próprio, um por disco físico (`disk6s1` e `disk6s2` são do `disk6`; `disk6` e `disk7` são dois), e sem `bsd_name` fica
+sozinho. O mapa APFS é um complemento OPCIONAL: o `diskutil` só entra na seção `### apfs` quando termina com sucesso (ausente
+ou com erro, a seção sai vazia, a etapa NÃO falha e o resumo sai só com o profiler; só a falha do `system_profiler` é a falha
+da etapa). O plist é lido com XML estrito (precisa fechar `</plist>` e terminar: truncado, mesmo depois de um dict completo, não
+vale). Sem o mapa um volume de contêiner não se junta a ninguém e o disco interno pode aparecer também como disco do Storage. As receitas continuam só de leitura e sem
+administrador. Cada etapa do Log da TUI sai como `✓ Memória` (no lugar de `etapa modulos: done`).
+
+Testes: `internal/diagfmt/*_test.go` (saídas falsas: código JEDEC desconhecido, slot vazio, 2+ módulos, formatos truncados,
+en/es), `internal/recipes/render_test.go` (engine: resumo, detalhes, idioma, renderizador que falha) e
+`internal/recipes/diagmemoria_real_test.go`, que roda a etapa de verdade (só leitura) no runner e confere que o renderizador
+entende a saída real (no Windows isto acontece no CI, no `windows-latest`).
 
 ### Diagnóstico de rede (Linux e macOS): `diag-rede`
 

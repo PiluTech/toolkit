@@ -48,6 +48,9 @@ type Step struct {
 	Check   *Action  // opcional: saiu com 0 = já está feito, etapa pulada
 	Run     *Action  // exatamente um entre Run e Install
 	Install []string // ids do catálogo, aceita "python@3.12"
+	// Render (só diagnóstico, com run): nome de um renderizador de internal/diagfmt que transforma a saída crua da
+	// etapa num resumo legível. A saída original só aparece no modo detalhes.
+	Render  string
 	Reboot  RebootPolicy
 	Timeout time.Duration
 	Line    int

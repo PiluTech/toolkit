@@ -18,6 +18,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/PiluTech/toolkit/internal/catalog"
+	"github.com/PiluTech/toolkit/internal/diagfmt"
 	"github.com/PiluTech/toolkit/internal/platform"
 )
 
@@ -282,6 +283,11 @@ func (p *parser) parseStep(r *Recipe, n *yaml.Node) (Step, bool) {
 			default:
 				p.errAt(v, "reboot %q desconhecido (use: never, required, if-needed)", v.Value)
 			}
+		case "render":
+			st.Render = p.text(v, "render")
+			if st.Render != "" && !diagfmt.Known(st.Render) {
+				p.errAt(v, "render %q desconhecido (use: %s)", st.Render, strings.Join(diagfmt.Names(), ", "))
+			}
 		case "timeout":
 			d, err := time.ParseDuration(p.text(v, "timeout"))
 			switch {
@@ -293,7 +299,7 @@ func (p *parser) parseStep(r *Recipe, n *yaml.Node) (Step, bool) {
 				st.Timeout = d
 			}
 		default:
-			p.errAt(k, "etapa: chave desconhecida %q (esperado: id, name, check, run, install, reboot, timeout)", k.Value)
+			p.errAt(k, "etapa: chave desconhecida %q (esperado: id, name, check, run, install, render, reboot, timeout)", k.Value)
 		}
 	}
 	if st.ID == "" {
@@ -301,6 +307,9 @@ func (p *parser) parseStep(r *Recipe, n *yaml.Node) (Step, bool) {
 	}
 	if (runNode == nil) == (installNode == nil) {
 		p.errAt(n, "etapa %q: exige exatamente um entre \"run\" e \"install\"", st.ID)
+	}
+	if st.Render != "" && (runNode == nil || r.Kind != KindDiagnostic) {
+		p.errAt(n, "etapa %q: \"render\" só vale em etapa \"run\" de receita de diagnóstico", st.ID)
 	}
 	if r.Kind == KindDiagnostic {
 		if installNode != nil {

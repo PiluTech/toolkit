@@ -6,10 +6,28 @@ kind: diagnostic
 steps:
   - id: memoria
     name: Memória
-    run: { sh: "vm_stat" }
+    render: macos-memory
+    run:
+      sh: |
+        echo "### memsize"
+        sysctl -n hw.memsize
+        echo "### vm_stat"
+        vm_stat
+        echo "### profiler"
+        system_profiler SPMemoryDataType -json
   - id: discos
     name: Discos
-    run: { sh: "diskutil list" }
+    render: macos-disks
+    run:
+      sh: |
+        echo "### profiler"
+        system_profiler SPNVMeDataType SPSerialATADataType SPStorageDataType -json
+        rc=$?
+        # O mapa APFS (contêiner -> disco físico) é um complemento OPCIONAL: se o diskutil faltar ou falhar, a seção sai
+        # vazia e o resumo sai só com o profiler (sem juntar nada). A falha do coletor principal continua sendo a da etapa.
+        printf '\n### apfs\n'
+        if apfs="$(diskutil apfs list -plist 2>/dev/null)"; then printf '%s\n' "$apfs"; fi
+        exit "$rc"
   - id: espaco
     name: Espaço usado
     run: { sh: "df -h" }

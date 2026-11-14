@@ -55,6 +55,8 @@ type RecipesBackend interface {
 type RecipeMark struct {
 	ID, Name   string
 	Diagnostic bool
+	// Details: no Diagnóstico, mostra também a saída original (crua) de cada etapa (tecla d).
+	Details bool
 }
 
 type recipesLoadedMsg struct {
@@ -67,6 +69,7 @@ type RecipesTab struct {
 	be         RecipesBackend
 	ctx        context.Context
 	diagnostic bool
+	details    bool // aba Diagnóstico: mostra também a saída original (tecla d)
 	theme      Theme
 
 	loading bool
@@ -139,7 +142,7 @@ func (t *RecipesTab) Marked() []RecipeMark {
 	for _, id := range t.order {
 		if t.marks[id] {
 			r := t.byID(id)
-			out = append(out, RecipeMark{ID: id, Name: r.Name, Diagnostic: r.Diagnostic})
+			out = append(out, RecipeMark{ID: id, Name: r.Name, Diagnostic: r.Diagnostic, Details: t.details && r.Diagnostic})
 		}
 	}
 	return out
@@ -277,6 +280,10 @@ func (t *RecipesTab) key(msg tea.KeyPressMsg) tea.Cmd {
 			t.filter = ""
 			t.clamp()
 		}
+	case "d":
+		if t.diagnostic { // detalhes: o relatório também traz a saída original (crua) de cada etapa
+			t.details = !t.details
+		}
 	case "space":
 		if has {
 			if t.marks[r.ID] {
@@ -338,7 +345,19 @@ func (t *RecipesTab) Keys() []KeyHint {
 	if t.focus {
 		return []KeyHint{{"↑↓", "rolar etapas"}, {"←", "voltar à lista"}, {"Esc", "voltar"}}
 	}
-	return []KeyHint{{"↑↓", "mover"}, {"espaço", "marcar"}, {"→", "etapas"}, {"/", "buscar"}, {"Enter", "revisar"}}
+	keys := []KeyHint{{"↑↓", "mover"}, {"espaço", "marcar"}, {"→", "etapas"}}
+	if t.diagnostic {
+		// a lista de diagnósticos é curta: a dica de busca ("/" continua valendo) cede o lugar à de detalhes, para
+		// "Enter revisar" caber em 80 colunas
+		label := "detalhes"
+		if t.details {
+			label = "detalhes ✓"
+		}
+		keys = append(keys, KeyHint{"d", label})
+	} else {
+		keys = append(keys, KeyHint{"/", "buscar"})
+	}
+	return append(keys, KeyHint{"Enter", "revisar"})
 }
 
 // Status implementa Tab.

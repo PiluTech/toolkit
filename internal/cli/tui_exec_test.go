@@ -410,7 +410,7 @@ func TestRunnerRecipeRunsThroughTheEngine(t *testing.T) {
 	if statuses(evs) != "ok" {
 		t.Fatalf("estado %s\n%s", statuses(evs), logText(evs))
 	}
-	if !strings.Contains(logText(evs), "etapa a: done") || !strings.Contains(logText(evs), "etapa b: done") {
+	if !strings.Contains(logText(evs), "✓ Primeira") || !strings.Contains(logText(evs), "✓ b") {
 		t.Fatalf("log:\n%s", logText(evs))
 	}
 }

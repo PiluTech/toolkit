@@ -139,6 +139,7 @@ spinner (4 quadros, 100 ms). Troca de aba, modal e cursor são instantâneos; o 
 | ↑ ↓ j k | tudo | move o cursor ou rola |
 | g / G / PgUp / PgDn | listas e rolagens | início, fim, página |
 | → l / ← h | Receitas, Diagnóstico | foco nas etapas ou no relatório / volta à lista |
+| d | Diagnóstico | liga/desliga o modo detalhes: o relatório mostra também a saída original (crua) de cada etapa, depois do resumo (a dica da barra vira `d detalhes ✓`; vale para os diagnósticos marcados na próxima execução). A dica de busca `/` cede o lugar à do `d` nesta aba (a tecla `/` continua valendo) |
 | Espaço | Apps, Receitas, Diagnóstico | marca ou desmarca; bloqueado durante a execução, com aviso na linha de estado |
 | v | Apps, em app com `▾` | abre a lista de versões |
 | / | Apps, Receitas, Diagnóstico | busca; com ela ativa letras e números vão ao filtro (inclusive q, j, 1) e só Enter, Esc e setas são comandos |

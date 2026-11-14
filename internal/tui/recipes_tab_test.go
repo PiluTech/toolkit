@@ -410,3 +410,48 @@ func stepsShown(view string) int {
 	}
 	return n
 }
+
+// Tecla d (aba Diagnóstico): liga/desliga os detalhes (saída original) e a marca leva o pedido ao executor.
+func TestDiagnosticDKeyTogglesDetailsAndMarksCarryIt(t *testing.T) {
+	tab := loadedRecipes(t, recipeSample(), true)
+	hasKey := func(label string) bool {
+		for _, k := range tab.Keys() {
+			if k.Key == "d" && k.Label == label {
+				return true
+			}
+		}
+		return false
+	}
+	if !hasKey("detalhes") {
+		t.Fatalf("dica da tecla d desligada: %v", tab.Keys())
+	}
+	tab.Update(key(' ', "space"))
+	if m := tab.Marked(); len(m) != 1 || m[0].Details {
+		t.Fatalf("sem d, a marca não pede detalhes: %+v", m)
+	}
+	tab.Update(key('d', "d"))
+	if !hasKey("detalhes ✓") {
+		t.Fatalf("depois do d a dica mostra o estado ligado: %v", tab.Keys())
+	}
+	if m := tab.Marked(); len(m) != 1 || !m[0].Details {
+		t.Fatalf("com d, a marca pede detalhes: %+v", m)
+	}
+	tab.Update(key('d', "d"))
+	if m := tab.Marked(); m[0].Details || !hasKey("detalhes") {
+		t.Fatalf("d de novo desliga: %+v", m)
+	}
+}
+
+func TestRecipesTabIgnoresDKey(t *testing.T) {
+	tab := loadedRecipes(t, recipeSample(), false)
+	tab.Update(key(' ', "space"))
+	tab.Update(key('d', "d"))
+	if m := tab.Marked(); len(m) != 1 || m[0].Details {
+		t.Fatalf("a aba Receitas não tem detalhes: %+v", m)
+	}
+	for _, k := range tab.Keys() {
+		if k.Key == "d" {
+			t.Fatalf("a aba Receitas não anuncia a tecla d: %v", tab.Keys())
+		}
+	}
+}
