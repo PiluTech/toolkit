@@ -169,10 +169,7 @@ func Analyze(r *Report, l Lang) []Finding {
 			t("a tabela de rotas não tem saída para outras redes: esta máquina está sem conexão", "the routing table has no way out to other networks: this machine is offline", "la tabla de rutas no tiene salida a otras redes: este equipo está sin conexión"),
 			t("Confira o cabo, o Wi-Fi e o roteador.", "Check the cable, the Wi-Fi and the router.", "Revise el cable, el Wi-Fi y el router."))
 	}
-	add("ip-publico", "ip-publico", SevInfo,
-		t("IP público: não consultado (sob pedido, PR seguinte)", "Public IP: not queried (on request, next PR)", "IP público: no consultado (bajo pedido, PR siguiente)"),
-		t("descobrir o IP público exige uma requisição a um serviço externo, que fica para um pedido explícito", "finding the public IP needs a request to an external service, which is left for an explicit request", "descubrir la IP pública requiere una petición a un servicio externo, que queda para un pedido explícito"),
-		t("Para saber o IP público agora, veja o painel do roteador.", "To learn the public IP now, check the router's admin page.", "Para saber la IP pública ahora, vea el panel del router."))
+	analysePublic(r, l, add)
 
 	if !hasData(r) {
 		add("nada-lido", "rede", SevInfo,
@@ -492,15 +489,7 @@ func Summary(r *Report, fs []Finding, l Lang) string {
 		fmt.Fprintf(&b, "%s: %s.\n\n", res, t("nada de ruim encontrado", "nothing bad found", "no se encontró nada malo"))
 	}
 	for _, f := range fs {
-		sym, word := SevWord(f.Severity, l)
-		fmt.Fprintf(&b, "%s %s: %s", sym, word, f.Title)
-		if f.Detail != "" {
-			fmt.Fprintf(&b, " — %s", f.Detail)
-		}
-		b.WriteByte('\n')
-		if f.Action != "" {
-			fmt.Fprintf(&b, "    %s %s\n", t("O que fazer:", "What to do:", "Qué hacer:"), f.Action)
-		}
+		formatFinding(&b, f, l)
 	}
 	if n := len(r.Skipped); n > 0 {
 		var areas []string
@@ -546,4 +535,17 @@ func osName(os string) string {
 		return "Linux"
 	}
 	return os
+}
+
+// formatFinding escreve um achado: símbolo e gravidade, título, detalhe e "o que fazer".
+func formatFinding(b *strings.Builder, f Finding, l Lang) {
+	sym, word := SevWord(f.Severity, l)
+	fmt.Fprintf(b, "%s %s: %s", sym, word, f.Title)
+	if f.Detail != "" {
+		fmt.Fprintf(b, " — %s", f.Detail)
+	}
+	b.WriteByte('\n')
+	if f.Action != "" {
+		fmt.Fprintf(b, "    %s %s\n", diagfmt.T(l, "O que fazer:", "What to do:", "Qué hacer:"), f.Action)
+	}
 }

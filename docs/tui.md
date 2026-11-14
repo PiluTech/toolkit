@@ -222,6 +222,19 @@ processo, nome de interface) passa por `textsafe.Multiline` (ESC, OSC, bidi e CR
 backend real (`internal/cli/tui_rede.go`) usa o mesmo coletor do CLI, com o Runner de leitura e o prazo de 3 minutos.
 Goldens: `rede_analise_{80x24,120x40,60x16}` e `rede_analise_vazio_80x24`.
 
+**Consultas sob pedido (PR9; `NetQueryBackend` opcional).** Quando o backend as tem (o real tem), a barra ganha `o IP público…`
+e `w portal cativo…` (letras novas da legenda `keys.go`, com reticências porque abrem confirmação; `i` já é "como
+reinstalar"). A tecla só ABRE a confirmação (`confirm.go`, foco em Cancelar, `s` confirma, `Esc`/`n` cancelam): título, o
+serviço NOMEADO (host e URL sem parâmetros), o que será enviado (um GET, sem corpo, sem cookies, `User-Agent: toolkit`), o que
+a pessoa revela (o IP público dela ao serviço) e "Nada será enviado sem a sua confirmação". O serviço vem de `TOOLKIT_IP_URL`
+ou `TOOLKIT_PORTAL_URL` (a TUI não tem campo de URL). O plano exibido é de USO ÚNICO: ao confirmar, `Query` recebe esse plano
+(nunca relê a configuração) e ele é zerado. Sem URL: a faixa `i info` "nenhum serviço configurado" com os passos; URL recusada:
+faixa `✗ falhou` "Serviço inválido: nada foi enviado". Consultando: `Carregando` com `Esc cancela` (a resposta tardia é
+descartada). Resultado na faixa (`x` fecha): `✓ feito` com o IP, ou `! parcial` "possível portal cativo"; se a rede já foi lida, o
+resumo é refeito com o achado "Máquina exposta?" e o resultado só vive em memória (relê com `c` mantém, nada vai a disco). Todo
+texto passa por `textsafe`; o corpo da resposta nunca aparece. Goldens: `rede_consulta_confirma_{80x24,120x40,60x16}`,
+`rede_consulta_sem_servico_80x24`, `rede_consulta_resultado_80x24` e `rede_consulta_vazio_80x24`.
+
 ## Estados por aba
 
 | Aba | Carregando | Vazio | Erro |
@@ -230,7 +243,7 @@ Goldens: `rede_analise_{80x24,120x40,60x16}` e `rede_analise_vazio_80x24`.
 | Versões | `\| Consultando o <gerenciador>…`, `latest` já selecionável | só `latest`: "O gerenciador não informou outras versões." | "Não deu para listar as versões (motivo). latest continua valendo." |
 | Receitas | `\| Lendo receitas e estado…` | "Nenhuma receita para este sistema." | "Não deu para ler o estado em <caminho>. Rode: toolkit recipe status". Receita falha: etapa, saída e "toolkit recipe reset <id> libera nova tentativa" |
 | Diagnóstico | spinner no item; relatório etapa a etapa | "Nenhum diagnóstico para este sistema." Nunca rodou: "Enter roda." | etapa com `✗`, código de saída e saída como veio. Ferramenta ausente: `- pulado: smartctl não está instalado` |
-| Rede › Análise | `\| Lendo a rede…` (Esc cancela) | "A rede ainda não foi lida. Tecle c ..." (nada roda ao abrir); cancelada: "A leitura da rede foi cancelada." | "Não deu para ler a rede." com o motivo, "Tente de novo (c)." e "Nada foi alterado." |
+| Rede › Análise | `\| Lendo a rede…` (Esc cancela); consulta: `\| Lendo o serviço consultado…` (Esc cancela) | "A rede ainda não foi lida. Tecle c ..." (nada roda ao abrir); cancelada: "A leitura da rede foi cancelada."; sem serviço: faixa "nenhum serviço configurado" | "Não deu para ler a rede." com o motivo, "Tente de novo (c)." e "Nada foi alterado." |
 | Log | itens e log ao vivo | "Nada rodou nesta sessão. Marque apps ou receitas e tecle Enter. Logs anteriores: <pasta>" | "! Não deu para gravar o log em arquivo; a execução continua e o log fica só na tela." |
 | Revisão | `\| Lendo o estado do sistema…`; só Voltar até o plano chegar | "Nada a fazer: tudo já está instalado." Só Voltar | item não planejável: lista os erros, "Nada foi executado", só Voltar. Sem credencial do sudo: aviso com `sudo -v`, Executar continua disponível |
 

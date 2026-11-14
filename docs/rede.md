@@ -9,6 +9,8 @@ toolkit rede                       # resumo: o que está exposto e o que fazer
 toolkit rede --completo            # resumo + relatório completo (todos os dados lidos)
 toolkit rede --json                # o mesmo em JSON
 toolkit rede --relatorio rede.txt  # grava resumo + relatório completo num arquivo NOVO (0600, nunca sobrescreve)
+toolkit rede ip [--servico-ip URL] [--yes] [--dry-run]          # IP público, SÓ sob pedido (veja "IP público e portal cativo")
+toolkit rede portal [--servico-portal URL] [--yes] [--dry-run]  # sondagem de portal cativo, SÓ sob pedido
 ```
 
 O andamento ("Lendo a rede…") vai para o stderr; `--json` não escreve andamento. O comando sempre sai com 0 (achado ruim é
@@ -18,7 +20,8 @@ padrão; en e es). Na TUI: área 4 Rede › Análise (veja `docs/tui.md`).
 **Privacidade dos dados lidos.** IPs, MACs, nomes de rede (SSID) e processos aparecem como o sistema os informa, sem máscara
 (decisão do Paulo para uma ferramenta de análise, como o diagnóstico). Por isso `--json` e `--relatorio` imprimem, no
 stderr e ANTES de gravar, o aviso de que a saída contém dados da rede local. Nada é enviado a ninguém: o pacote não tem
-código de rede (um teste reprova `net/http`, `net.Dial` e `os/exec` em `internal/rede`).
+código de rede (um teste reprova `net/http`, `net.Dial` e `os/exec` em `internal/rede`). Só os subcomandos `ip` e `portal`,
+sob pedido, falam com a internet (próxima seção).
 
 ## O que NÃO faz (nunca)
 
@@ -26,9 +29,10 @@ código de rede (um teste reprova `net/http`, `net.Dial` e `os/exec` em `interna
   Wi-Fi: lê só a conexão ATUAL; o `nmcli` leva sempre `--rescan no` (lista em cache), e `iw ... scan`,
   `nmcli ... rescan`, `netsh wlan show networks` e `airport -s` não existem no pacote.
 - **Não altera** rede, firewall, DNS, perfil nem Wi-Fi. Nenhum comando de escrita (lista fechada, em teste).
-- **Não acessa a internet** e não consulta o IP público (decisão 1 do plano: nenhum serviço nesta fase; o PR9 trata, sob
-  pedido). A análise mostra `IP público: não consultado (sob pedido, PR seguinte)` como item informativo. O portal cativo
-  também fica de fora (decisão 2).
+- **Não acessa a internet** por conta própria. `toolkit rede` (e `--completo`, `--json`, `--relatorio`) nunca faz requisição:
+  o IP público e o portal cativo só existem sob pedido, nos subcomandos `ip` e `portal` e na TUI (`o` e `w`), com um serviço
+  que VOCÊ informa e depois de uma confirmação que o nomeia. A análise padrão mostra `IP público: não consultado (só sob
+  pedido)`.
 - **Não lê senha de Wi-Fi** (nada de `key=clear`, `show-secrets`, Keychain): só o TIPO de segurança.
 - **Não eleva**: nenhum comando leva `Elevate`. O que exigiria administrador vira "não lido" (`Skipped.NeedsAdmin`) com a
   instrução; o usuário abre o terminal elevado se quiser.
@@ -106,7 +110,9 @@ como informativo ou em "Não lidos", e o resumo nunca diz "nada de ruim" quando 
 | `dns-publico-nao-verificado` | info | DNS em endereço público, sem informação sobre DoH/DoT |
 | `ipv6-sem-privacidade` | baixa | IPv6 global presente e endereços temporários desligados |
 | `sem-gateway` | média | tabela de rotas lida e sem rota padrão |
-| `ip-publico` | info | sempre: "não consultado (sob pedido, PR seguinte)" |
+| `ip-publico` | info | sem pedido: "não consultado (só sob pedido)"; com pedido: o IP e o serviço, ou "não foi possível obter" com o motivo |
+| `maquina-exposta` | info, baixa ou média | só com o IP público consultado: cruza portas em escuta e firewall (ver "IP público e portal cativo") |
+| `portal-cativo` | ok, baixa ou info | só com a sondagem pedida: "não detectado", "possível portal cativo" ou "sem conclusão" |
 | `nada-lido` | info | nenhuma área devolveu dado |
 
 **Portas sensíveis** (lista fechada em `internal/rede/analise.go`, só TCP; revisada neste PR, como o plano pediu): 21 FTP,
@@ -122,6 +128,60 @@ roteador, que o toolkit não vê: a função nunca afirma "você foi invadido". 
 interface de loopback) e de CGNAT `100.64.0.0/10` (o DNS da Tailscale). Resolvedores de um domínio só (`Supplemental` do
 macOS) e a lista "scoped" repetida do `scutil` são ignorados. Não há sondagem de "DNS inalcançável" (isso exigiria uma
 consulta de rede): só "sem rota padrão".
+
+## IP público e portal cativo (só sob pedido; PR9)
+
+Decisões do plano aplicadas (#1 e #2): **nenhum serviço padrão** e **portal cativo junto do IP público**, ambos só com URL
+informada pela pessoa. Descobrir o IP público exige uma requisição a um serviço externo, que vê o seu IP; por isso nada disso
+roda na análise padrão.
+
+**Como configurar.** Variável `TOOLKIT_IP_URL` (IP público) e `TOOLKIT_PORTAL_URL` (portal cativo), ou as flags
+`--servico-ip` e `--servico-portal` (a flag vale mais). A URL passa pela mesma validação do catálogo: `https`, host público
+com ponto, porta 443, sem usuário e senha, sem `#`, sem IP literal nem `localhost`, sem espaço, controle ou texto não ASCII
+(use a forma punycode). URL recusada: nenhuma requisição e o erro não repete a URL (pode ter token). **Sem URL**, o pedido
+responde "nenhum serviço configurado" e ensina a configurar (sai com 0, nada é enviado). Exemplos:
+
+```sh
+TOOLKIT_IP_URL=https://exemplo.org/ip toolkit rede ip      # o serviço deve devolver só o seu IP em texto
+toolkit rede portal --servico-portal https://exemplo.org/gen204   # o endereço deve responder 204 sem conteúdo
+```
+
+**Confirmação (privacidade).** Antes de qualquer requisição o comando (e a TUI, na confirmação com foco em Cancelar) mostra:
+o serviço (host e caminho; os parâmetros da URL não são mostrados, só avisados), o que será enviado (um GET, sem corpo, sem
+cookies e sem cabeçalho de identificação além do `User-Agent: toolkit`), o que você revela (o IP público desta conexão ao
+serviço e a quem o opera) e que nada sai sem a sua confirmação. No CLI: `[s/N]`, ou `--yes`; sem terminal exige `--yes`
+(erro antes de enviar). `--dry-run` mostra isso e para: nada é enviado nem lido. A confirmação da TUI envia SÓ o plano
+exibido (uso único): se a configuração mudar depois, o envio continua sendo o do serviço mostrado.
+
+**A requisição** (`internal/rede/httpclient`, a única parte com `net/http`): TLS 1.2+ com o certificado sempre verificado,
+sem proxy implícito (variáveis `HTTP(S)_PROXY` não valem), sem cookies, sem seguir redirecionamento (devolve o 3xx), sem
+compressão nem conexão reaproveitada, prazo de 5 s, corpo limitado a 1 KiB (mais que isso é "resposta inesperada") e recusa
+conectar a endereço não público (um nome que resolva para a rede local, loopback ou CGNAT: proteção contra SSRF). Nada é
+gravado em disco.
+
+**IP público.** A resposta tem de ser SÓ um endereço IPv4 ou IPv6 (`netip`), público (não loopback, privado, link-local,
+CGNAT, não especificado nem multicast) e sem zona; qualquer outra coisa é "resposta inesperada" e o corpo nunca é mostrado
+(nem limpo). Redirecionamento, HTTP diferente de 200, lixo, vazio e resposta grande também são "resposta inesperada".
+
+**Máquina exposta?** Com o IP consultado, o achado `maquina-exposta` cruza as portas sensíveis em escuta em endereço não local
+com o estado do firewall, que a leitura da análise já tem (severidade: média com firewall desligado ou desconhecido, baixa
+com ele ligado, info sem porta sensível). O texto é honesto: **"o toolkit não testa de fora; só cruza o que está escutando
+com o firewall"**: nunca varre o IP público nem o roteador e não afirma que a internet alcança a porta. Se o IP da interface
+Wi-Fi ou de cabo é CGNAT (`100.64.0.0/10`), diz que a máquina provavelmente não é alcançável de fora por IPv4 (uma interface
+sem tipo, como uma VPN nessa faixa, não prova CGNAT); com IPv6 global, avisa que ele pode ser alcançável. Se o IP público é o
+de uma interface, diz "sem NAT". Sem a leitura das portas, diz "não foi possível avaliar".
+
+**Portal cativo.** Um GET ao endereço de teste: **204** = não detectado; **redirecionamento (não seguido)**, **200** com
+conteúdo ou **511** = "possível portal cativo" (mostra só o host do `Location`, limpo; o toolkit não abre nada: abra o
+navegador num site http simples para ver a página de entrada); outro HTTP = sem conclusão; sem resposta = falha (não é prova
+de portal nem de internet livre). Um serviço que responde 200 em vez de 204 aparece como "possível portal": use um endereço
+de teste que responda 204.
+
+**Segurança (modo guia do `security-audit`).** SSRF-like: a URL é informada pela pessoa e validada (https, host público, 443,
+sem userinfo, fragmento nem IP literal), o cliente recusa endereço não público, não segue redirecionamento, limita corpo e
+prazo, e nada é enviado sem confirmação; sem URL nada é enviado. Teste: `internal/rede/publico_test.go`,
+`internal/rede/httpclient/client_test.go` (servidor `httptest` em loopback, nunca a internet), `internal/cli/rede_publico_test.go`
+e `internal/tui/rede_consulta_test.go` (cliente falso que conta as chamadas).
 
 ## Administrador
 
@@ -143,13 +203,17 @@ Nenhum comando eleva. Com administrador (`sudo` no Linux e macOS; terminal como 
 - Fora do macOS testado, as saídas reais por SO (`netsh`, `nmcli`, `resolvectl`, `Get-DnsClientDohServerAddress`,
   `Get-NetIPv6Protocol`, versões do macOS) estão **A VERIFICAR** no smoke de VM; as fixtures são sintéticas
   (IPs de documentação, MACs `02:00:00:00:00:xx`, SSID `REDE-FAKE`).
-- UDP só no Windows e no Linux. IP público, portal cativo e DNS inalcançável ficam fora desta fase.
+- UDP só no Windows e no Linux. DNS inalcançável fica fora (exigiria uma consulta de rede).
+- IP público e portal cativo dependem de um serviço que a pessoa escolhe; o toolkit não avalia a política de privacidade dele.
 
 ## Código
 
 `internal/rede`: `types.go` (Report, Interface, Addr, WiFi, Profile, DNS, Listener, Firewall, Finding, Tri, Security,
 Severity), `deps.go` (`Deps{Runner, ReadFile, Glob, Now, Lang, Admin}`, `Collect(ctx, goos, Deps)`), `coleta_win.go`,
-`coleta_lin.go`, `coleta_mac.go`, `analise.go` (`Analyze`, `Summary`), `relatorio.go` (`Full`). Testes: fixtures sintéticas
+`coleta_lin.go`, `coleta_mac.go`, `analise.go` (`Analyze`, `Summary`), `relatorio.go` (`Full`), `publico.go` (consultas sob
+pedido: `NewPlan`, `Plan.Describe`, `QueryPublicIP`, `ProbePortal`, `Fetcher`, `QuerySummary`; sem `net/http`) e
+`httpclient/` (o `Fetcher` real). Testes: fixtures sintéticas
 por SO, `contrato_test.go` (todos os comandos ReadOnly, sem Elevate, em lista fechada, sem termos de varredura, scripts do
-PowerShell só com `Get-*`, pacote sem rede), fronteiras de severidade. CLI: `internal/cli/rede.go` (`RedeDeps`); TUI:
-`internal/tui/rede_tab.go` e `internal/cli/tui_rede.go`.
+PowerShell só com `Get-*`, pacote sem rede, coleta que não conhece a consulta), fronteiras de severidade. CLI: `internal/cli/rede.go` (`RedeDeps`); TUI:
+`internal/tui/rede_tab.go` e `internal/cli/tui_rede.go`; subcomandos `ip` e `portal` em `internal/cli/rede_publico.go`
+(`RedeDeps.Fetcher`).
