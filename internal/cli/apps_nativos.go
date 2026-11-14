@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -187,6 +188,17 @@ func runAppsNatRemove(ctx context.Context, out io.Writer, deps Deps, f appsNatFl
 	if ok, err := appsNatConfirm(ctx, out, deps, f.yes); !ok || err != nil {
 		return err
 	}
+	// o plano é recalculado DEPOIS da confirmação e antes de gravar o backup ou remover: texto, itens (nome completo,
+	// família, versão, escopo) e escopo têm de ser idênticos aos mostrados (vale também com --yes).
+	fresh, err := appsnativos.Build(ctx, e.sys, sel, e.lang)
+	if err != nil {
+		return cleanErr(err)
+	}
+	if fresh.Format(e.lang) != plan.Format(e.lang) || fresh.Pending() != plan.Pending() || fresh.Scope != plan.Scope ||
+		!reflect.DeepEqual(fresh.Items, plan.Items) {
+		return errors.New(msg.AppsNatStale)
+	}
+	plan = fresh
 	res, err := appsnativos.Apply(ctx, e.sys, e.store, plan, e.now(), appsnativos.Options{})
 	if err != nil {
 		if res != nil && len(res.Removed) > 0 {
