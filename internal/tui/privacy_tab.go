@@ -507,6 +507,9 @@ func (t *PrivacyTab) Keys() []KeyHint {
 
 // HelpKeys implementa SectionHelper: as teclas da seção, uma frase por tecla (legenda única em keys.go).
 func (t *PrivacyTab) HelpKeys() []KeyDef {
+	if !t.usable() {
+		return noActionsHelp(t.loading || t.loadErr != nil)
+	}
 	return []KeyDef{
 		navDef("↑↓", "perfil", "escolhe o perfil de privacidade (do mais leve ao mais forte)."),
 		act("p").says("mostra o plano do perfil: o que muda, sem alterar nada."),

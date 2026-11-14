@@ -262,7 +262,7 @@ Decisões da fase 6: (1) em Apps nativos o perfil completo passou de `c` para `t
 
 ### Tela de ajuda `?`
 
-Gerada (`layout.go helpBody`, `keys.go`): três blocos, na ordem **Nesta seção: <nome>** (as teclas da seção ativa com uma frase cada, na ordem da barra, via `SectionHelper.HelpKeys()` ou, sem ele, as dicas da barra; vem primeiro para que em 80x24 as ações da seção não fiquem abaixo da dobra), **Em qualquer lugar** (as globais acima) e **Como ler a tela** (símbolos `✓ ! ✗ i ○ -`, faixa de resultado, `admin: sim/não`, confirmação com foco `>[ ]<`). Quebra na largura (nunca corta com reticências) e rola com ↑↓ j k, PgUp/PgDn, g/G; "↓ mais N linhas" na régua. Cabe em 80x24 e 60x16; em Mono os títulos vão em MAIÚSCULAS. Goldens: `ajuda_{apps,maquina,priv}_{80x24,120x40,60x16}.golden`.
+Gerada (`layout.go helpBody`, `keys.go`): três blocos, na ordem **Nesta seção: <nome>** (as teclas da seção ativa com uma frase cada, na ordem da barra, via `SectionHelper.HelpKeys()` ou, sem ele, as dicas da barra; vem primeiro para que em 80x24 as ações da seção não fiquem abaixo da dobra), **Em qualquer lugar** (as globais acima) e **Como ler a tela** (símbolos `✓ ! ✗ i ○ -`, faixa de resultado, `admin: sim/não`, confirmação com foco `>[ ]<`). Quebra na largura (nunca corta com reticências) e rola com ↑↓ j k, PgUp/PgDn, g/G; "↓ mais N linhas" na régua. Seção sem ação agora (Apps nativos e Privacidade fora do Windows, carregando ou com erro) mostra só uma frase ("Esta seção só existe no Windows; aqui não há ações.") em vez das teclas, como a barra. Cabe em 80x24 e 60x16; em Mono os títulos vão em MAIÚSCULAS. Goldens: `ajuda_{apps,maquina,priv}_{80x24,120x40,60x16}.golden`.
 
 ## Abaixo de 80 colunas e redimensionamento
 
