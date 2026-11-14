@@ -1,6 +1,10 @@
 package tui
 
 import (
+	"strings"
+	"unicode"
+	"unicode/utf8"
+
 	"charm.land/lipgloss/v2"
 )
 
@@ -31,20 +35,45 @@ func (t Theme) attr(bold, reverse bool) lipgloss.Style {
 	return lipgloss.NewStyle().Bold(bold).Reverse(reverse)
 }
 
-// Muted serve a horários, dicas e cabeçalho de colunas.
-func (t Theme) Muted() lipgloss.Style { return t.pick(8, 7) }
+// Paint pinta um trecho com cor SÓ no símbolo inicial (✓ ✗ ! ○ [x], o spinner), nunca na palavra ao lado: as cores
+// são as 16 do terminal do usuário e algumas (amarelo e verde em fundo claro, os cinzas do Solarized) não chegam a
+// 4,5:1, o mínimo do texto no WCAG 2.2 AA (docs/auditoria-a11y-l10n.md, A1, com a medição por esquema). O texto sai
+// na cor padrão do terminal, que o próprio usuário já ajustou para ser legível, e o estado continua dito por
+// palavra além da cor. Um trecho que não começa por símbolo ("erro:", "Avisos (2)") sai sem cor.
+type Paint struct{ sym, text lipgloss.Style }
 
-// Accent serve à marca [x], ao spinner e à seta de versão nova.
-func (t Theme) Accent() lipgloss.Style { return t.pick(4, 14) }
+// Render aplica a pintura: o primeiro "token" (até o primeiro espaço) é o símbolo quando não começa por letra ou
+// dígito; o resto fica com o estilo de texto (negrito em aviso e erro, nunca cor).
+func (p Paint) Render(s string) string {
+	head, tail := s, ""
+	if i := strings.IndexByte(s, ' '); i >= 0 {
+		head, tail = s[:i], s[i:]
+	}
+	if r, _ := utf8.DecodeRuneInString(head); head != "" && !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+		return p.sym.Render(head) + p.text.Render(tail)
+	}
+	return p.text.Render(s)
+}
 
-// OK serve ao ✓ (sempre com a palavra do estado).
-func (t Theme) OK() lipgloss.Style { return t.pick(2, 10) }
+// Muted serve a horários, dicas e cabeçalho de colunas: texto sem cor (a hierarquia vem da posição, nunca de um
+// cinza mais claro, que não passa de 4,5:1 em vários temas).
+func (t Theme) Muted() Paint { return Paint{} }
 
-// Warn serve ao ! e ao rótulo do aviso.
-func (t Theme) Warn() lipgloss.Style { return t.pick(3, 11).Bold(!t.Mono) }
+// Accent serve à marca [x], ao spinner e à seta de versão nova (cor só no símbolo).
+func (t Theme) Accent() Paint { return Paint{sym: t.pick(4, 14)} }
 
-// Err serve ao ✗ e a "erro:".
-func (t Theme) Err() lipgloss.Style { return t.pick(1, 9).Bold(!t.Mono) }
+// OK serve ao ✓ (a cor fica no símbolo; a palavra do estado vem ao lado, sem cor).
+func (t Theme) OK() Paint { return Paint{sym: t.pick(2, 10)} }
+
+// Warn serve ao ! e ao rótulo do aviso (símbolo colorido; a palavra em negrito, sem cor).
+func (t Theme) Warn() Paint {
+	return Paint{sym: t.pick(3, 11).Bold(!t.Mono), text: t.attr(true, false)}
+}
+
+// Err serve ao ✗ e a "erro:" (símbolo colorido; a palavra em negrito, sem cor).
+func (t Theme) Err() Paint {
+	return Paint{sym: t.pick(1, 9).Bold(!t.Mono), text: t.attr(true, false)}
+}
 
 // Title serve a categorias e títulos de bloco (em Mono, quem chama escreve em MAIÚSCULAS).
 func (t Theme) Title() lipgloss.Style { return t.attr(true, false) }
