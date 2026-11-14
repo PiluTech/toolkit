@@ -452,3 +452,36 @@ func TestWindowsWiFiSoComPlacaWiFiEFalhaDoNetsh(t *testing.T) {
 		}
 	}
 }
+
+// Lupa #80: AutoUpgrade AUSENTE/vazio/ilegível numa entrada DoH EXISTENTE = criptografia e modo DESCONHECIDOS (nunca "em
+// claro"); só "entrada comprovadamente ausente na lista lida" ou Auto explicitamente False provam DNS em claro.
+func TestWindowsDNSAutoUpgradeIlegivelNaoViraDNSEmClaro(t *testing.T) {
+	for name, entry := range map[string]string{
+		"Auto ausente":         `{"Addr":"203.0.113.53","Fb":"False"}`,
+		"Auto vazio":           `{"Addr":"203.0.113.53","Auto":"","Fb":"False"}`,
+		"Auto nulo":            `{"Addr":"203.0.113.53","Auto":null,"Fb":"False"}`,
+		"Auto não reconhecido": `{"Addr":"203.0.113.53","Auto":"talvez","Fb":"False"}`,
+	} {
+		x := newWinFX()
+		x.scripts[winScriptDNS] = winDNSScript(winOK(`[` + entry + `]`))
+		r, _ := x.run(t, false)
+		if r.DNS.Encrypted != Unknown || r.DNS.Mode != DNSModeUnknown {
+			t.Errorf("%s: criptografia e modo têm de ficar desconhecidos, veio %v / %v", name, r.DNS.Encrypted, r.DNS.Mode)
+		}
+		for _, f := range Analyze(r, diagfmt.PT) {
+			if f.ID == "dns-publico" {
+				t.Errorf("%s: não pode publicar DNS sem criptografia: %+v", name, f)
+			}
+		}
+	}
+	// controles: entrada comprovadamente AUSENTE da lista lida e Auto explicitamente False continuam = em claro
+	x := newWinFX()
+	x.scripts[winScriptDNS] = winDNSScript(winOK(`[{"Addr":"203.0.113.99","Auto":"True","Fb":"False"}]`)) // outro endereço
+	if r, _ := x.run(t, false); r.DNS.Encrypted != No || r.DNS.Mode != DNSModeOff {
+		t.Errorf("servidor ausente da lista DoH lida: %v / %v", r.DNS.Encrypted, r.DNS.Mode)
+	}
+	x.scripts[winScriptDNS] = winDNSScript(winOK(`[{"Addr":"203.0.113.53","Auto":"False","Fb":"False"}]`))
+	if r, _ := x.run(t, false); r.DNS.Encrypted != No || r.DNS.Mode != DNSModeOff {
+		t.Errorf("Auto explicitamente False: %v / %v", r.DNS.Encrypted, r.DNS.Mode)
+	}
+}

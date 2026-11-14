@@ -417,16 +417,20 @@ func winReadDNS(m map[string]any, r *Report) []winFailure {
 		entries[winStr(e["Addr"])] = dohEntry{auto: winTri(e["Auto"]), fb: winTri(e["Fb"])}
 	}
 	r.DNS.Note = "Get-DnsClientDohServerAddress"
-	seen, off, fbYes, fbUnknown := false, false, false, false
+	seen, off, autoUnknown, fbYes, fbUnknown := false, false, false, false, false
 	for _, s := range r.DNS.Servers {
 		if isLoopback(s.Addr) {
 			continue
 		}
 		seen = true
-		e := entries[s.Addr]
+		e, found := entries[s.Addr]
 		switch {
-		case e.auto != Yes: // sem modelo DoH, ou sem AutoUpgrade: este servidor é consultado em claro
+		case !found: // comprovadamente AUSENTE da lista DoH lida com sucesso: este servidor é consultado em claro
 			off = true
+		case e.auto == No: // AutoUpgrade explicitamente False: em claro
+			off = true
+		case e.auto != Yes: // entrada existente com AutoUpgrade ausente/vazio/ilegível: NÃO é prova de DNS em claro
+			autoUnknown = true
 		case e.fb == Yes:
 			fbYes = true
 		case e.fb == Unknown:
@@ -435,8 +439,9 @@ func winReadDNS(m map[string]any, r *Report) []winFailure {
 	}
 	switch {
 	case !seen:
-	case off:
+	case off: // ao menos um servidor comprovadamente em claro
 		r.DNS.Encrypted, r.DNS.Mode = No, DNSModeOff
+	case autoUnknown: // criptografia e modo ficam DESCONHECIDOS (o padrão acima): sem prova, sem acusação
 	case fbYes:
 		r.DNS.Mode, r.DNS.AllowFallback = DNSModeOpportunistic, Yes
 	case fbUnknown:

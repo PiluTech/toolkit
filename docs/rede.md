@@ -87,7 +87,7 @@ Decisões e desvios do plano, por SO:
   `Get-NetTCPConnection` sem filtro e filtradas no pipeline (os filtros do cmdlet erram quando nada casa). **A VERIFICAR** na VM.
 - **DNS criptografado: modo e fallback.** O modelo guarda o MODO configurado (`DNS.Mode`: `strict`, `opportunistic`, `off`,
   `unknown`) e se há fallback para DNS em claro (`DNS.AllowFallback`, tri-estado). `Encrypted=Yes` só quando a configuração
-  prova: Windows = DoH com `AutoUpgrade` E `AllowFallbackToUdp=false` em todos os servidores; Linux = `DNSOverTLS=yes`
+  prova: Windows = DoH com `AutoUpgrade` E `AllowFallbackToUdp=false` em todos os servidores; Linux = `DNSOverTLS=yes` Servidor DNS em claro só é afirmado quando está **comprovadamente ausente** da lista DoH lida ou com `AutoUpgrade` explicitamente `False`; uma entrada DoH existente com `AutoUpgrade` ausente, vazio ou ilegível deixa a criptografia e o modo **desconhecidos** (nenhum achado de DNS em claro).
   (`+DNSOverTLS`). `AutoUpgrade` com fallback permitido, ou com o fallback não lido, e o DoT `opportunistic` do
   `resolvectl` ficam `Encrypted=Unknown` com modo `opportunistic` e o texto "configurado para tentar DoH/DoT; pode cair para
   DNS em claro" (ou "fallback não lido"); sem DoH/DoT configurado, `No`. Nunca há consulta externa para confirmar. O
