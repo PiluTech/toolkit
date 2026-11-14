@@ -104,7 +104,7 @@ type TUIDeps struct {
 	StdoutIsTerminal func() bool
 	Term             func() string
 	// Run abre a TUI (nil = tui.Run).
-	Run func(ctx context.Context, o tui.Options, tabs ...tui.Tab) error
+	Run func(ctx context.Context, o tui.Options, areas ...tui.AreaDef) error
 }
 
 func (d TUIDeps) stdoutTTY() bool {
@@ -121,11 +121,11 @@ func (d TUIDeps) term() string {
 	return os.Getenv("TERM")
 }
 
-func (d TUIDeps) run(ctx context.Context, o tui.Options, tabs ...tui.Tab) error {
+func (d TUIDeps) run(ctx context.Context, o tui.Options, areas ...tui.AreaDef) error {
 	if d.Run != nil {
-		return d.Run(ctx, o, tabs...)
+		return d.Run(ctx, o, areas...)
 	}
-	return tui.Run(ctx, o, tabs...)
+	return tui.RunAreas(ctx, o, areas...)
 }
 
 // runRoot é o `toolkit` sem argumentos: abre a TUI quando há terminal, senão mostra a ajuda.
@@ -154,6 +154,7 @@ func openTUI(cmd *cobra.Command, deps Deps, rd RecipeDeps, notifier *updateNotif
 	th := tui.Theme{Mono: os.Getenv("NO_COLOR") != "", Dark: true, NoMotion: reduceMotion(cmd, deps.UpdateCheck.env)}
 	opts := tui.Options{
 		Version: buildinfo.Version, Mono: th.Mono, NoMotion: th.NoMotion,
+		IsAdmin: deps.Diag.admin(ctx, deps.GOOS, deps.runner()),
 		Planner: &tuiPlanner{deps: deps, rd: rd},
 		Runner:  &tuiRunner{deps: deps, rd: rd, logDir: func() string { return runLogDir(deps, rd) }},
 	}
@@ -176,20 +177,41 @@ func openTUI(cmd *cobra.Command, deps Deps, rd RecipeDeps, notifier *updateNotif
 	if notifier != nil {
 		notifier.silence = true // a faixa da TUI já avisou: sem linha no fim
 	}
-	tabs := []tui.Tab{
-		tui.NewAppsTab(ctx, &appsBackend{deps: deps}, th, deps.GOOS),
-		tui.NewRecipesTab(ctx, &recipesBackend{deps: deps, rd: rd}, th, false),
-		newDiagTab(ctx, deps, rd, th),
-		tui.NewLogTab(th, ""),
-		newPrivacyTab(ctx, deps, th),
-		newAppsNativosTab(ctx, deps, th),
-	}
-	err := deps.TUI.run(ctx, opts, tabs...)
+	err := deps.TUI.run(ctx, opts, tuiAreas(ctx, deps, rd, th)...)
 	if errors.Is(err, tui.ErrUpdateRequested) {
 		// o usuário escolheu Atualizar: a TUI já fechou; roda o mesmo `toolkit update` do terminal
 		return runUpdate(ctx, cmd.OutOrStdout(), deps, updateFlags{})
 	}
 	return err
+}
+
+// tuiAreas monta as áreas da TUI (modo cli): Início, Instalar, Máquina, Segurança, Rede e Histórico, cada uma com as suas
+// seções. A seção de uma área que ainda não existe (Rede) aparece com a explicação em vez de sumir.
+func tuiAreas(ctx context.Context, deps Deps, rd RecipeDeps, th tui.Theme) []tui.AreaDef {
+	execs := tui.NewLogTab(th, "")
+	execs.SetNames(msg.TUISecaoExecucoes, msg.TUISecaoExecucoesShort, msg.TUIDetalhesHistorico)
+	return []tui.AreaDef{
+		{Key: "inicio", Title: msg.TUIAreaInicio, Short: msg.TUIAreaInicioShort, Tabs: []tui.Tab{
+			tui.NewInfoTab(msg.TUIAreaInicio, msg.TUIAreaInicioShort, msg.TUIInicioText),
+		}},
+		{Key: "instalar", Title: msg.TUIAreaInstalar, Short: msg.TUIAreaInstalarShort, Tabs: []tui.Tab{
+			tui.NewAppsTab(ctx, &appsBackend{deps: deps}, th, deps.GOOS),
+			tui.NewRecipesTab(ctx, &recipesBackend{deps: deps, rd: rd}, th, false),
+		}},
+		{Key: "maquina", Title: msg.TUIAreaMaquina, Short: msg.TUIAreaMaquinaShort, Tabs: []tui.Tab{
+			newDiagTab(ctx, deps, rd, th),
+			newAppsNativosTab(ctx, deps, th),
+		}},
+		{Key: "seguranca", Title: msg.TUIAreaSeguranca, Short: msg.TUIAreaSegurancaShort, Tabs: []tui.Tab{
+			newPrivacyTab(ctx, deps, th),
+		}},
+		{Key: "rede", Title: msg.TUIAreaRede, Short: msg.TUIAreaRedeShort, Tabs: []tui.Tab{
+			tui.NewInfoTab(msg.TUISecaoAnalise, msg.TUISecaoAnaliseShort, msg.TUIAnaliseText),
+		}},
+		{Key: "historico", Title: msg.TUIAreaHistorico, Short: msg.TUIAreaHistoricoShort, Tabs: []tui.Tab{
+			execs,
+		}},
+	}
 }
 
 // appsBackend liga a aba Apps ao catálogo e aos providers (somente leitura).

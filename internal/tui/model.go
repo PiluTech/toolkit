@@ -20,7 +20,9 @@ type Options struct {
 	// LatestNotes e LatestURL são as notas e a página da versão nova (a tecla u as mostra).
 	LatestNotes, LatestURL string
 	// Updates entrega a versão nova que a consulta em segundo plano achar DEPOIS da abertura (nil = sem consulta).
-	Updates  <-chan UpdateInfo
+	Updates <-chan UpdateInfo
+	// IsAdmin diz se o processo roda como administrador (Windows) ou root (Unix): a linha 2 do cabeçalho mostra "admin: sim/não".
+	IsAdmin  bool
 	Mono     bool // sem cor, negrito nem reverso (NO_COLOR)
 	NoMotion bool // reduzir movimento: spinner fixo e nenhum quadro agendado
 	// Planner e Runner ligam a Revisão e a execução (nil: Enter só avisa que a execução não está ligada).
@@ -40,11 +42,16 @@ const (
 type Model struct {
 	opts   Options
 	theme  Theme
-	tabs   []Tab
-	active int
-	modal  modal
-	w, h   int
-	quit   bool
+	tabs   []Tab // TODAS as seções, em lista plana (índice plano: execução, seleção, resultados e origens)
+	active int   // índice plano da seção ativa
+	// áreas (areas.go): cada uma agrupa seções por índice plano; lastSec lembra a última seção visitada de cada área.
+	// areaMode falso = modo legado (New com abas planas: números e Tab percorrem as abas, sem a linha 2).
+	areas    []Area
+	areaMode bool
+	lastSec  []int
+	modal    modal
+	w, h     int
+	quit     bool
 
 	// revisão e execução
 	mode     appMode
@@ -105,7 +112,7 @@ func New(o Options, tabs ...Tab) *Model {
 		tabs = DefaultTabs()
 	}
 	// tema escuro até a detecção do terminal chegar
-	return &Model{opts: o, theme: Theme{Mono: o.Mono, Dark: true, NoMotion: o.NoMotion}, tabs: tabs, w: 80, h: 24, results: map[int]*Result{}}
+	return &Model{opts: o, theme: Theme{Mono: o.Mono, Dark: true, NoMotion: o.NoMotion}, tabs: tabs, areas: legacyAreas(tabs), lastSec: make([]int, len(tabs)), w: 80, h: 24, results: map[int]*Result{}}
 }
 
 // Init pede a cor de fundo do terminal (claro ou escuro).
@@ -233,6 +240,11 @@ func (m *Model) global(k string) (tea.Model, tea.Cmd, bool) {
 		}
 		m.modal, m.updFocus, m.updScroll = modalUpdate, 0, 0
 		return m, nil, true
+	}
+	if m.areaMode {
+		return m, nil, m.areaKey(k)
+	}
+	switch k {
 	case "tab":
 		m.active = (m.active + 1) % len(m.tabs)
 		return m, nil, true

@@ -24,7 +24,24 @@ func Run(ctx context.Context, o Options, tabs ...Tab) error {
 	return run(ctx, o, nil, tabs...)
 }
 
+// RunAreas é o Run com a raiz de áreas (NewWithAreas): é o que o `toolkit` abre.
+func RunAreas(ctx context.Context, o Options, areas ...AreaDef) error {
+	return runAreas(ctx, o, nil, areas)
+}
+
+func runAreas(ctx context.Context, o Options, popts []tea.ProgramOption, areas []AreaDef) error {
+	var tabs []Tab
+	for _, a := range areas {
+		tabs = append(tabs, a.Tabs...)
+	}
+	return runBuilt(ctx, o, popts, tabs, func() *Model { return NewWithAreas(o, areas) })
+}
+
 func run(ctx context.Context, o Options, popts []tea.ProgramOption, tabs ...Tab) error {
+	return runBuilt(ctx, o, popts, tabs, func() *Model { return New(o, tabs...) })
+}
+
+func runBuilt(ctx context.Context, o Options, popts []tea.ProgramOption, tabs []Tab, build func() *Model) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	for _, t := range tabs {
@@ -33,7 +50,7 @@ func run(ctx context.Context, o Options, popts []tea.ProgramOption, tabs ...Tab)
 		}
 	}
 	popts = append(popts, tea.WithContext(ctx))
-	m := New(o, tabs...)
+	m := build()
 	m.SetExec(ctx, o.Planner, o.Runner)
 	p := tea.NewProgram(m, popts...)
 	if o.Updates != nil {

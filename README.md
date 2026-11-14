@@ -56,7 +56,7 @@ rodando o arquivo salvo, `.\win.ps1 -NoLaunch`. Se a TUI não abrir ou sair com 
 Depois de instalado:
 
 ```sh
-toolkit                         # abre a TUI (abas Apps, Receitas, Diagnóstico, Log)
+toolkit                         # abre a TUI (áreas 0 a 5: Início, Instalar, Máquina, Segurança, Rede, Histórico)
 toolkit list                    # lista o catálogo
 toolkit list --installed        # e o que já está instalado (inclusive fora do gerenciador)
 toolkit install python@3.12 discord git
