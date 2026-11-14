@@ -1,14 +1,14 @@
- toolkit  [1 Apps]  2 Receitas   3 Diagnóstico   4 Log                   v0.1.0 
+ toolkit  [1 Apps]  2 Receitas   3 Diagnóstico   4 Log                   v0.1.0
 ────────────────────────────────────────────────────────────────────────────────
  ! parcial  Instalação concluída: 1 ok, 1 falharam                   [x] fechar
    Falharam: Receita linux-dev
    Detalhes: aba Log
 ────────────────────────────────────────────────────────────────────────────────
  DEV
- > [x] Git                         | verificando                         apt    
-   [ ] Python                   ▾  | verificando                         apt    
+ > [x] Git                         | verificando                         ap
+   [ ] Python                   ▾  | verificando                         ap
  MIDIA
-   [ ] VLC                         - sem instalador                             
+   [ ] VLC                         - sem instalador
  NAVEGADORES
    [ ] Firefox                     | verificando                         flatpak
 
@@ -20,5 +20,5 @@
 
 
 ────────────────────────────────────────────────────────────────────────────────
- git — Git (apt)                                         Enter revisa 1 marcado 
+ git — Git (apt)                                         Enter revisa 1 marcado
  ↑↓ mover  espaço marcar  / buscar  Enter revisar  v versões  ? ajuda  q sair
