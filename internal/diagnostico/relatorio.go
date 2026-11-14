@@ -62,7 +62,32 @@ func Summary(r *Report, fs []Finding, l Lang) string {
 			fmt.Fprintf(&b, "    %s %s\n", t("O que fazer:", "What to do:", "Qué hacer:"), f.Action)
 		}
 	}
+	if gain := adminGain(r, l); gain != "" {
+		fmt.Fprintf(&b, "\n%s\n", gain)
+	}
 	return strings.TrimRight(b.String(), "\n") + "\n"
+}
+
+// adminGain diz, quando a coleta NÃO rodou como administrador/root, o que o diagnóstico leria a mais com privilégio
+// (as áreas em Skipped.NeedsAdmin) e como rodar. Vazio quando já era admin ou nada se ganha.
+func adminGain(r *Report, l Lang) string {
+	if r.Admin {
+		return ""
+	}
+	var areas []string
+	for _, s := range r.Skipped {
+		if s.NeedsAdmin {
+			areas = append(areas, areaName(s.Area, l))
+		}
+	}
+	if len(areas) == 0 {
+		return ""
+	}
+	how := diagfmt.T(l, "abra o terminal como administrador e rode de novo", "open the terminal as administrator and run it again", "abra el terminal como administrador y ejecútelo de nuevo")
+	if r.OS != "windows" {
+		how = diagfmt.T(l, "rode com sudo (sudo toolkit diagnostico)", "run with sudo (sudo toolkit diagnostico)", "ejecute con sudo (sudo toolkit diagnostico)")
+	}
+	return diagfmt.T(l, "Com administrador o diagnóstico também lê: ", "With administrator rights the diagnosis also reads: ", "Con administrador el diagnóstico también lee: ") + strings.Join(areas, ", ") + " (" + how + ")."
 }
 
 func osName(os string) string {
@@ -113,6 +138,9 @@ func Full(r *Report, l Lang) string {
 		line(t("Núcleos / threads", "Cores / threads", "Núcleos / hilos"), fmt.Sprintf("%d / %d", hw.Cores, hw.Threads))
 	}
 	line(t("Firmware", "Firmware", "Firmware"), hw.Firmware)
+	line(t("Nome da máquina", "Machine name", "Nombre del equipo"), hw.Hostname)
+	line(t("Número de série", "Serial number", "Número de serie"), hw.Serial)
+	line(t("UUID (ID de hardware)", "UUID (hardware ID)", "UUID (ID de hardware)"), hw.UUID)
 	line(t("Ligado há", "Uptime", "Encendido hace"), dur(hw.Uptime, l))
 
 	h(t("Memória", "Memory", "Memoria"))
@@ -129,12 +157,23 @@ func Full(r *Report, l Lang) string {
 		fmt.Fprintln(&b, t("não lida", "not read", "no leída"))
 	}
 
+	h(t("Rede (placas físicas)", "Network (physical adapters)", "Red (adaptadores físicos)"))
+	if len(r.NICs) == 0 {
+		fmt.Fprintln(&b, t("nenhuma lida", "none read", "ninguna leída"))
+	}
+	for _, n := range r.NICs {
+		fmt.Fprintf(&b, "- %s: %s\n", n.Name, n.MAC)
+	}
+
 	h(t("Discos", "Disks", "Discos"))
 	if len(r.Disks) == 0 {
 		fmt.Fprintln(&b, t("nenhum disco lido", "no disks read", "ningún disco leído"))
 	}
 	for _, d := range r.Disks {
 		parts := []string{d.Name}
+		if d.Serial != "" {
+			parts = append(parts, t("série ", "serial ", "serie ")+d.Serial)
+		}
 		for _, p := range []string{d.Medium, d.Bus} {
 			if p != "" {
 				parts = append(parts, p)
@@ -162,6 +201,12 @@ func Full(r *Report, l Lang) string {
 		}
 		if d.ReallocatedSectors != nil {
 			parts = append(parts, fmt.Sprintf("%s %d", t("setores realocados", "reallocated sectors", "sectores reasignados"), *d.ReallocatedSectors))
+		}
+		if d.ReadErrors != nil {
+			parts = append(parts, fmt.Sprintf("%s %d", t("erros de leitura (total)", "read errors (total)", "errores de lectura (total)"), *d.ReadErrors))
+		}
+		if d.ReadErrorsUncorrected != nil {
+			parts = append(parts, fmt.Sprintf("%s %d", t("erros de leitura não corrigidos", "uncorrected read errors", "errores de lectura no corregidos"), *d.ReadErrorsUncorrected))
 		}
 		fmt.Fprintf(&b, "- %s\n", strings.Join(parts, " · "))
 	}

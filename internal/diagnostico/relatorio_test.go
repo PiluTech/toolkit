@@ -57,3 +57,45 @@ func TestFullTemTodasAsAreasESemTexto(t *testing.T) {
 		}
 	}
 }
+
+// Decisão do Paulo: série, UUID, nome da máquina e MACs aparecem no relatório completo (ferramenta de análise).
+func TestFullMostraSerieUUIDHostnameENICs(t *testing.T) {
+	r := sample()
+	r.Hardware.Serial, r.Hardware.UUID, r.Hardware.Hostname = "SN-FAKE-0001", "00000000-0000-4000-8000-000000000001", "HOST-FAKE"
+	r.NICs = []NIC{{Name: "Ethernet", MAC: "02:00:00:00:00:01"}, {Name: "Wi-Fi", MAC: "02:00:00:00:00:02"}}
+	r.Disks[0].Serial = "DSK-FAKE-9"
+	out := Full(r, diagfmt.PT)
+	for _, want := range []string{"Nome da máquina: HOST-FAKE", "Número de série: SN-FAKE-0001", "UUID (ID de hardware): 00000000-0000-4000-8000-000000000001",
+		"== Rede (placas físicas) ==", "- Ethernet: 02:00:00:00:00:01", "- Wi-Fi: 02:00:00:00:00:02", "série DSK-FAKE-9"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("faltou %q:\n%s", want, out)
+		}
+	}
+	if en := Full(r, diagfmt.EN); !strings.Contains(en, "Serial number: SN-FAKE-0001") || !strings.Contains(en, "Machine name: HOST-FAKE") {
+		t.Errorf("en:\n%s", en)
+	}
+}
+
+// Sem administrador o resumo diz o que se ganharia com ele (só as áreas com NeedsAdmin) e como rodar; com administrador
+// (ou sem nada a ganhar) a linha não aparece.
+func TestSummaryDizOQueSeGanhaComAdmin(t *testing.T) {
+	r := &Report{OS: "linux", Skipped: []Skipped{{Area: "smart", Reason: "x", NeedsAdmin: true}, {Area: "gpu", Reason: "y"}, {Area: "temperatura", Reason: "z", NeedsAdmin: true}}}
+	out := Summary(r, Analyze(r, diagfmt.PT), diagfmt.PT)
+	if !strings.Contains(out, "Com administrador o diagnóstico também lê: saúde SMART dos discos, temperatura (rode com sudo (sudo toolkit diagnostico)).") || strings.Contains(out, "GPU (rode") {
+		t.Errorf("só as áreas com NeedsAdmin:\n%s", out)
+	}
+	r.OS = "windows"
+	if out := Summary(r, Analyze(r, diagfmt.PT), diagfmt.PT); !strings.Contains(out, "abra o terminal como administrador e rode de novo") {
+		t.Errorf("windows:\n%s", out)
+	}
+	if out := Summary(r, Analyze(r, diagfmt.EN), diagfmt.EN); !strings.Contains(out, "With administrator rights the diagnosis also reads: disk SMART health, temperature") {
+		t.Errorf("en:\n%s", out)
+	}
+	r.Admin = true
+	if out := Summary(r, Analyze(r, diagfmt.PT), diagfmt.PT); strings.Contains(out, "Com administrador") {
+		t.Errorf("já é admin, sem a linha:\n%s", out)
+	}
+	if out := Summary(&Report{OS: "linux"}, Analyze(&Report{OS: "linux"}, diagfmt.PT), diagfmt.PT); strings.Contains(out, "Com administrador") {
+		t.Errorf("nada a ganhar, sem a linha:\n%s", out)
+	}
+}

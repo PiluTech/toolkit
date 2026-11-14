@@ -68,6 +68,11 @@ func Analyze(r *Report, l Lang) []Finding {
 				fmt.Sprintf("%d", *d.ReallocatedSectors),
 				t("O disco já está remapeando áreas defeituosas: faça backup e planeje a troca.", "The disk is already remapping bad areas: back up and plan to replace it.", "El disco ya está remapeando áreas defectuosas: haga una copia de seguridad y planifique el cambio."))
 		}
+		if d.ReadErrorsUncorrected != nil && *d.ReadErrorsUncorrected > 0 {
+			add("disco", SevWarn, t("Erros de leitura não corrigidos no disco: ", "Uncorrected read errors on the disk: ", "Errores de lectura no corregidos en el disco: ")+name,
+				fmt.Sprintf("%d", *d.ReadErrorsUncorrected),
+				t("O disco falhou em ler dados e não conseguiu corrigir: faça backup e confira o disco com a ferramenta do fabricante.", "The disk failed to read data and could not correct it: back up and check the disk with the manufacturer's tool.", "El disco falló al leer datos y no pudo corregirlos: haga una copia de seguridad y revise el disco con la herramienta del fabricante."))
+		}
 		if d.SizeBytes > 0 && d.FreeBytes > 0 {
 			frac := float64(d.FreeBytes) / float64(d.SizeBytes)
 			if frac < freeWarn {
