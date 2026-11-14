@@ -1,6 +1,7 @@
 package diagfmt
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -85,5 +86,42 @@ func TestRedactValidJSONIsRedactedByKeyAtAnyDepth(t *testing.T) {
 		if !strings.Contains(out, ok) {
 			t.Errorf("faltou %s: %s", ok, out)
 		}
+	}
+}
+
+// Mensagem de log com identificador no meio da frase.
+func TestRedactInlineIdentifierInsideASentence(t *testing.T) {
+	in := "- 2026-11-13 kernel ×2 [erro] falha no disco serial: SN-SECRETO-1, uuid=4F5E-AA e Serial Number: ABC123;"
+	out := Redact(in)
+	for _, bad := range []string{"SN-SECRETO-1", "4F5E-AA", "ABC123"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("%q sobrou: %s", bad, out)
+		}
+	}
+	if !strings.Contains(out, "falha no disco serial: [***]") {
+		t.Errorf("o resto da frase fica: %s", out)
+	}
+	if out := Redact("a série de testes terminou: ok"); out != "a série de testes terminou: ok" {
+		t.Errorf("texto comum não muda: %s", out)
+	}
+}
+
+// Lupa #60 (2): JSON válido é redigido por chave e por VALOR decodificado e continua JSON válido, com serial entre aspas
+// escapadas e barras (nada do valor sobra, nenhuma barra de escape se perde).
+func TestRedactValidJSONWithEscapedQuotesStaysValidAndLeakFree(t *testing.T) {
+	in := `{"events":[{"Message":"falha serial: SN\"12\\34 e C:\\Users\\x e uuid=4F5E-AA","Count":3}],"serial_number":"SN\"99\\9"}`
+	out := Redact(in)
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("o resultado precisa ser JSON válido: %v\n%s", err, out)
+	}
+	for _, bad := range []string{`SN"12`, `12\34`, `SN"99`, `99\9`, "4F5E-AA"} {
+		if strings.Contains(out, bad) || strings.Contains(out, strings.ReplaceAll(bad, `"`, `\"`)) {
+			t.Errorf("%q sobrou: %s", bad, out)
+		}
+	}
+	ev := doc["events"].([]any)[0].(map[string]any)
+	if ev["Count"].(float64) != 3 || !strings.Contains(ev["Message"].(string), `C:\Users\x`) || !strings.Contains(ev["Message"].(string), "serial: [***]") {
+		t.Errorf("o resto do valor fica: %v", ev)
 	}
 }

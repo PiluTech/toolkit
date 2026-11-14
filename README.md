@@ -64,6 +64,7 @@ toolkit install --dry-run vscode   # mostra o que faria, sem alterar nada
 toolkit recipe list
 toolkit recipe run wsl-dev
 toolkit recipe status
+toolkit diagnostico              # saúde da máquina, só leitura: o que está ruim e o que fazer (docs/diagnostico.md)
 toolkit resume                  # chamado sozinho depois do reboot; pode ser rodado à mão
 ```
 

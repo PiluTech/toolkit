@@ -45,7 +45,7 @@ func newRoot(out, errOut io.Writer, deps Deps) (*cobra.Command, *updateNotifier)
 	}
 	root.SetOut(out)
 	root.SetErr(errOut)
-	root.AddCommand(newVersionCmd(), newListCmd(deps), newInstallCmd(deps), newUpdateCmd(deps), newTUICmd(deps, RecipeDeps{}, notifier))
+	root.AddCommand(newVersionCmd(), newListCmd(deps), newInstallCmd(deps), newUpdateCmd(deps), newTUICmd(deps, RecipeDeps{}, notifier), newDiagnosticoCmd(deps))
 	root.AddCommand(newRecipeCmds(deps)...)
 	return root, notifier
 }
