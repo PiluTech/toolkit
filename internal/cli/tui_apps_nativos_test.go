@@ -310,7 +310,7 @@ func TestNewAppsNativosTabWindowsFluxoCompleto(t *testing.T) {
 		t.Errorf("plano:\n%s", scr)
 	}
 	scr = natScreen(t, deps, nk("space"), nk("r"))
-	if !strings.Contains(scr, "[s/N]") || len(sys.removes) != 0 || st.b != nil {
+	if !strings.Contains(scr, ">[ Cancelar ]<") || len(sys.removes) != 0 || st.b != nil {
 		t.Errorf("confirmação:\n%s", scr)
 	}
 	scr = natScreen(t, deps, nk("space"), nk("r"), nk("n"))

@@ -217,8 +217,8 @@ func TestNativeAppsTabRemoverPedeConfirmacaoEUsaOIDDoPlano(t *testing.T) {
 	be := &fakeNat{info: natSample(true), plan: NatPlan{ID: "plano-7", Text: natPlanText, Pending: 1, IsAdmin: true}, applyRes: NatResult{Removed: 1, BackupPath: `C:\b.json`}}
 	tab := natTab(t, be)
 	nkey(tab, "space", "r")
-	if !tab.Capturing() || !strings.HasSuffix(tab.Status(), "[s/N]") || !strings.Contains(tab.Status(), "1 app(s)") {
-		t.Fatalf("confirmação: capturing=%v status=%q", tab.Capturing(), tab.Status())
+	if v := tab.View(100, 24); !tab.Capturing() || !strings.Contains(tab.Status(), "s confirma") || !strings.Contains(v, "REMOVER 1 APP(S)") || !strings.Contains(v, ">[ Cancelar ]<") {
+		t.Fatalf("confirmação: capturing=%v status=%q\n%s", tab.Capturing(), tab.Status(), v)
 	}
 	if len(be.applies) != 0 {
 		t.Fatal("removeu antes da confirmação")
@@ -242,7 +242,7 @@ func TestNativeAppsTabRemoverPedeConfirmacaoEUsaOIDDoPlano(t *testing.T) {
 }
 
 func TestNativeAppsTabSoSConfirma(t *testing.T) {
-	for _, k := range []string{"n", "N", "enter", "esc", "x", "q", "1", "tab", "space"} {
+	for _, k := range []string{"n", "N", "enter", "esc"} {
 		be := &fakeNat{info: natSample(true), plan: NatPlan{ID: "p", Text: natPlanText, Pending: 1, IsAdmin: true}}
 		tab := natTab(t, be)
 		nkey(tab, "space", "r", k)
@@ -253,11 +253,21 @@ func TestNativeAppsTabSoSConfirma(t *testing.T) {
 			t.Errorf("tecla %q: capturing=%v status=%q", k, tab.Capturing(), tab.Status())
 		}
 	}
-	be := &fakeNat{info: natSample(true), plan: NatPlan{ID: "p", Text: natPlanText, Pending: 1, IsAdmin: true}}
-	tab := natTab(t, be)
-	nkey(tab, "space", "r", "y")
-	if len(be.applies) != 1 {
-		t.Error("y confirma")
+	for _, k := range []string{"x", "q", "1", "space"} {
+		be := &fakeNat{info: natSample(true), plan: NatPlan{ID: "p", Text: natPlanText, Pending: 1, IsAdmin: true}}
+		tab := natTab(t, be)
+		nkey(tab, "space", "r", k)
+		if len(be.applies) != 0 || !tab.Capturing() {
+			t.Errorf("tecla %q: applies=%d capturing=%v", k, len(be.applies), tab.Capturing())
+		}
+	}
+	for _, keys := range [][]string{{"s"}, {"y"}, {"tab", "enter"}} {
+		be := &fakeNat{info: natSample(true), plan: NatPlan{ID: "p", Text: natPlanText, Pending: 1, IsAdmin: true}}
+		tab := natTab(t, be)
+		nkey(tab, append([]string{"space", "r"}, keys...)...)
+		if len(be.applies) != 1 {
+			t.Errorf("%v não confirmou", keys)
+		}
 	}
 }
 
@@ -274,10 +284,11 @@ func TestNativeAppsTabSemAdminRecusaAntesDeConfirmar(t *testing.T) {
 	be := &fakeNat{info: natSample(false), plan: NatPlan{ID: "p", Text: natPlanText, Pending: 1, NeedsAdmin: true}}
 	tab := natTab(t, be)
 	nkey(tab, "space", "r")
-	if tab.Capturing() || !strings.Contains(tab.Status(), "exigem administrador") || !strings.HasPrefix(tab.Status(), SymWarn) {
-		t.Fatalf("status=%q", tab.Status())
+	v := tab.View(100, 24)
+	if !tab.Capturing() || !strings.Contains(v, "nada será alterado") || !strings.Contains(v, "( Remover: sem administrador )") || !strings.Contains(v, ">[ Cancelar ]<") {
+		t.Fatalf("view=%s", v)
 	}
-	nkey(tab, "esc", "s")
+	nkey(tab, "s", "y", "tab", "enter")
 	if len(be.applies) != 0 {
 		t.Fatal("nada pode mudar")
 	}

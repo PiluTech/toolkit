@@ -24,7 +24,7 @@ Limite real: no Windows Home e Pro o mínimo de dados de diagnóstico é "obriga
 1. Lê o estado atual (só leitura) e monta o plano. O plano é sempre impresso.
 2. `--dry-run` para aqui. Nada é alterado.
 3. Se o plano tem itens de administrador e o terminal não é administrador, o comando recusa ANTES de mudar qualquer coisa e manda abrir o terminal como administrador e rodar de novo. O toolkit nunca pede elevação sozinho.
-4. Confirmação: com terminal pergunta `[s/N]` (só s, sim, y, yes confirmam); sem terminal exige `--yes` (erro antes de qualquer mudança).
+4. Confirmação (CLI): com terminal pergunta `[s/N]` (só s, sim, y, yes confirmam); sem terminal exige `--yes` (erro antes de qualquer mudança).
 5. Grava o backup e só então muda, item a item. Se algo falha, para e informa quantos itens já foram aplicados; o backup já tem os originais.
 
 `--somente-usuario` aplica só os itens do usuário (`HKCU`) e ignora os de administrador; serve para quem não pode abrir o terminal elevado. Com o perfil `recomendado` isso equivale ao `basico`.
@@ -51,3 +51,9 @@ Os testes automáticos (`internal/cli/privacidade_test.go`, `internal/privacidad
 ## Formato do backup
 
 O formato do backup nasce na v0.4.0-rc.1 (nunca houve outro publicado): não há migração. O `desfazer` valida cada entrada contra o catálogo atual, sem exceções; backup que cite algo fora do catálogo é recusado sem mudar nada.
+
+## Na TUI (aba Privacidade)
+
+**Confirmação na TUI** (`internal/tui/confirm.go`, componente único das duas abas): ao pedir aplicar/restaurar/remover, a aba mostra, nesta ordem, o título, o resumo, o aviso (administrador, sem desfazer automático), o BACKUP, o COMO DESFAZER, o plano inteiro (rolável com `↑↓`/`PgUp`/`PgDn`, com `↓ mais N linhas` quando longo) e só depois os botões. O foco inicial é `>[ Cancelar ]<` (padrão seguro); `Tab`/`Shift+Tab`/`←→`/`h l` movem o foco, `Enter` ativa o botão focado, `s` ou `y` confirmam direto, `n` e `Esc` cancelam e qualquer outra tecla não faz nada (nunca confirma). Plano com itens de administrador num terminal sem administrador também abre a confirmação, mas o botão vira `( Aplicar: sem administrador )` e não ativa: só Cancelar funciona, com a instrução de abrir o terminal como administrador. A linha de status mostra só a dica de teclas. Sem cor (`NO_COLOR`) tudo sai por símbolo e palavra.
+
+Os botões são `Aplicar` (perfil) e `Restaurar` (desfazer; `Remover backup` quando já está tudo como antes). O plano exibido é o mesmo que o backend devolveu (uso único, por ID); a confirmação só aplica esse plano.

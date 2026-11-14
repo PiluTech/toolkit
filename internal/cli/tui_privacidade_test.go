@@ -190,7 +190,7 @@ func TestNewPrivacyTabWindowsFluxoCompleto(t *testing.T) {
 		t.Errorf("plano:\n%s", scr)
 	}
 	scr = screenOf(t, deps, key("a"))
-	if !strings.Contains(scr, "[s/N]") || sys.writes != 0 || st.b != nil {
+	if !strings.Contains(scr, ">[ Cancelar ]<") || sys.writes != 0 || st.b != nil {
 		t.Errorf("confirmação:\n%s", scr)
 	}
 	scr = screenOf(t, deps, key("a"), key("s"))
@@ -212,7 +212,7 @@ func TestNewPrivacyTabWindowsSemAdminAvisa(t *testing.T) {
 		t.Errorf("sem aviso de administrador:\n%s", scr)
 	}
 	scr = screenOf(t, deps, key("j"), key("a"), key("s"))
-	if sys.writes != 0 || st.b != nil || !strings.Contains(scr, "nada foi alterado") {
+	if sys.writes != 0 || st.b != nil || !strings.Contains(scr, "( Aplicar: sem administrador )") {
 		t.Errorf("recomendado sem admin deveria recusar:\n%s", scr)
 	}
 }
