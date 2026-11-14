@@ -259,15 +259,25 @@ func (p perfSample) queueStats() (avg, peak *float64) {
 	return &total, &pk
 }
 
-// latencyMs aplica a fórmula do PERF_AVERAGE_TIMER entre a primeira e a última amostra: ((N1-N0)/F)/(D1-D0) segundos por
-// transferência, em ms. Menos de 2 amostras, D sem aumento, N que voltou ou F <= 0 = sem leitura (nil), nunca 0 ms.
+// latencyMs aplica a fórmula do PERF_AVERAGE_TIMER sobre TODA a janela: média ponderada pelas transferências, ou seja
+// ((N1-N0)/F)/(D1-D0) entre a primeira e a última amostra, em ms. Cada intervalo consecutivo é validado (contador e base
+// monotônicos, F > 0 e constante; base parada só com contador parado, o disco ocioso): UM intervalo inválido invalida a
+// medida inteira, porque a primeira e a última amostra sozinhas dariam um valor plausível e enganoso. Menos de 2 amostras
+// ou D sem aumento no total = sem leitura (nil), nunca 0 ms.
 func (p perfSample) latencyMs() *float64 {
-	if len(p.lat) < 2 {
+	if len(p.lat) < 2 || p.lat[0].f <= 0 {
 		return nil
+	}
+	for i := 1; i < len(p.lat); i++ {
+		a, b := p.lat[i-1], p.lat[i]
+		dn, dd := b.n-a.n, b.d-a.d
+		if b.f != a.f || dn < 0 || dd < 0 || (dd == 0 && dn != 0) {
+			return nil
+		}
 	}
 	a, b := p.lat[0], p.lat[len(p.lat)-1]
 	dn, dd := b.n-a.n, b.d-a.d
-	if b.f <= 0 || dn < 0 || dd <= 0 {
+	if dd <= 0 {
 		return nil
 	}
 	ms := dn / b.f / dd * 1000
