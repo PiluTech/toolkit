@@ -44,8 +44,6 @@ func TestInstallDryRunCatalogoEmbutidoNovosApps(t *testing.T) {
 		{"brave", "darwin", "brew install --cask brave-browser"},
 		{"brave", "linux", "flatpak install --system -y --noninteractive flathub com.brave.Browser"},
 		{"chrome", "windows", "winget install --id Google.Chrome"},
-		{"chrome", "darwin", "brew install --cask google-chrome"},
-		{"chrome", "linux", "flatpak install --system -y --noninteractive flathub com.google.Chrome"},
 		{"libreoffice", "windows", "winget install --id TheDocumentFoundation.LibreOffice "},
 		{"libreoffice", "darwin", "brew install --cask libreoffice"},
 		{"libreoffice", "linux", "flatpak install --system -y --noninteractive flathub org.libreoffice.LibreOffice"},
@@ -83,6 +81,25 @@ func TestInstallPeaZipSemInstaladorNoMacOS(t *testing.T) {
 	cmd.SetArgs([]string{"install", "peazip", "--dry-run"})
 	if err := cmd.ExecuteContext(context.Background()); err == nil {
 		t.Fatalf("peazip no macOS não tem instalador confirmado, esperava erro:\n%s", o.String())
+	}
+}
+
+// Lupa #78: o Chrome entra SÓ no Windows (winget, hash conferido). No macOS o cask oficial google-chrome declara
+// sha256 :no_check (não há hash a conferir: viola a regra do projeto) e no Linux o com.google.Chrome do Flathub é
+// comunitário, não verificado pelo Google: nos dois o Chrome fica SEM instalador (o plano falha, nunca inventa).
+func TestInstallChromeSemInstaladorNoMacOSENoLinux(t *testing.T) {
+	for _, goos := range []string{"darwin", "linux"} {
+		f := &leitorFalso{}
+		var o, e strings.Builder
+		deps := Deps{GOOS: goos, EmbeddedYML: toolkit.CatalogYAML, NewRunner: func() exec.Runner { return f }, CheckElevation: func(exec.Cmd) error { return nil }, Interactive: func() bool { return false }}
+		cmd := NewRootCmdWith(&o, &e, deps)
+		cmd.SetArgs([]string{"install", "chrome", "--dry-run"})
+		if err := cmd.ExecuteContext(context.Background()); err == nil {
+			t.Errorf("%s: o Chrome não pode ter instalador fora do Windows, esperava erro:\n%s", goos, o.String())
+		}
+		if strings.Contains(o.String(), "google-chrome") || strings.Contains(o.String(), "com.google.Chrome") {
+			t.Errorf("%s: o plano não pode citar cask/flatpak do Chrome:\n%s", goos, o.String())
+		}
 	}
 }
 

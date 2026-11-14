@@ -116,9 +116,10 @@ discord:
 ## Apps do catálogo embutido
 
 Navegadores: Firefox, Brave, Google Chrome. Escritório: LibreOffice. Utilitários: 7-Zip, PeaZip. Os ids vêm de páginas públicas (winget-pkgs, API do
-Homebrew, Flathub); o que não foi confirmado fica de fora (PeaZip no macOS, LibreOffice por apt/dnf). Brave, Chrome, LibreOffice e PeaZip no Linux entram só por
+Homebrew, Flathub); o que não foi confirmado fica de fora (PeaZip no macOS, LibreOffice por apt/dnf). Brave, LibreOffice e PeaZip no Linux entram só por
 flatpak (apt/dnf exigiriam repositório de terceiros).
 
+- **Chrome só no Windows.** No macOS o cask oficial `google-chrome` declara `sha256 :no_check` (nada a conferir: o projeto nunca instala sem hash) e no Linux o `com.google.Chrome` do Flathub é comunitário, não verificado pelo Google. Nos dois o Chrome fica **sem instalador** (o plano diz isso; nada é inventado). No Windows o winget confere o hash.
 - **Chrome e hash divergente.** O instalador do winget aponta para uma URL do fabricante cujo conteúdo muda a cada versão. Se o manifesto ainda não acompanhou,
   a instalação falha com "hash divergente". É o comportamento correto: o toolkit nunca usa `--ignore-security-hash`. Tente de novo depois que o manifesto for
   atualizado.

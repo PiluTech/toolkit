@@ -84,9 +84,12 @@ apps:
       windows: { display_name: 7-Zip }
 
   # Navegadores, escritório e compactadores (PR10). Só ids verificados em páginas públicas (winget-pkgs, API do
-  # Homebrew, Flathub). Linux só por flatpak: apt/dnf exigiriam repositório de terceiros (Brave, Chrome) ou o nome
+  # Homebrew, Flathub). Linux só por flatpak: apt/dnf exigiriam repositório de terceiros (Brave) ou o nome
   # do pacote ainda não foi confirmado (LibreOffice). PeaZip no macOS fica de fora até o cask ser confirmado.
-  # O Chrome pode falhar com "hash divergente": a URL do fabricante muda de conteúdo a cada versão e o manifesto
+  # O Chrome entra SÓ no Windows (winget, com hash conferido pelo gerenciador). No macOS o cask oficial google-chrome
+  # declara sha256 :no_check (não há hash a conferir: viola a regra do projeto de nunca instalar sem hash) e no Linux o
+  # com.google.Chrome do Flathub é comunitário, não verificado pelo Google: nos dois o Chrome fica sem instalador.
+  # No Windows ele pode falhar com "hash divergente": a URL do fabricante muda de conteúdo a cada versão e o manifesto
   # demora a acompanhar. O toolkit nunca contorna isso (sem --ignore-security-hash): espere o manifesto atualizar.
   brave:
     name: Brave
@@ -102,10 +105,7 @@ apps:
     name: Google Chrome
     category: navegadores
     windows: [{ provider: winget, id: Google.Chrome }]
-    macos:   [{ provider: brew, cask: google-chrome }]
-    linux:   [{ provider: flatpak, id: com.google.Chrome }]
     detect:
-      macos:   { app_bundle: "Google Chrome.app", bundle_id: com.google.Chrome }
       windows: { display_name: Google Chrome }
 
   libreoffice:
