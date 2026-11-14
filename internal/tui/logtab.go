@@ -304,11 +304,11 @@ func (t *LogTab) spin() string { return t.theme.Spin(t.frame) }
 func (t *LogTab) View(w, h int) string {
 	t.lastH = h
 	if len(t.items) == 0 {
-		msg := " Nada rodou nesta sessão. Marque apps ou receitas e tecle Enter."
+		steps := []string{"Marque apps ou receitas e tecle Enter."}
 		if t.logPath != "" {
-			msg += "\n Logs anteriores: " + t.logPath
+			steps = append(steps, "Logs anteriores: "+t.logPath)
 		}
-		return msg
+		return strings.Join(StateEmpty(t.theme, w, h, "Nada rodou nesta sessão.", steps...), "\n")
 	}
 	var out []string
 	if t.title != "" {

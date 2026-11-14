@@ -166,7 +166,7 @@ func screenOf(t *testing.T, deps Deps, keys ...tea.KeyPressMsg) string {
 func TestNewPrivacyTabMacMostraSoWindows(t *testing.T) {
 	sys, st := newPrivSys(true), &privStore{}
 	scr := screenOf(t, privDeps(t, sys, st, "darwin", true, ""))
-	if !strings.Contains(scr, "Privacidade") || !strings.Contains(scr, "A privacidade só existe no Windows") {
+	if !strings.Contains(scr, "Privacidade") || !strings.Contains(strings.Join(strings.Fields(scr), " "), "A privacidade: só existe no Windows (este sistema é macOS)") {
 		t.Fatalf("tela no Mac:\n%s", scr)
 	}
 	scr = screenOf(t, privDeps(t, sys, st, "darwin", true, ""), tea.KeyPressMsg{Code: 'a', Text: "a"}, tea.KeyPressMsg{Code: 's', Text: "s"})

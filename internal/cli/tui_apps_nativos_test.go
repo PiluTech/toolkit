@@ -286,7 +286,8 @@ func TestNewAppsNativosTabForaDoWindowsMostraSoWindows(t *testing.T) {
 	for goos, want := range map[string]string{"darwin": "volume protegido", "linux": "não remove pacotes da distribuição"} {
 		sys, st := newNatSys(true, "Microsoft.BingWeather"), &natStore{}
 		scr := natScreen(t, natDeps(t, sys, st, goos, true, ""), nk("space"), nk("b"), nk("r"), nk("s"))
-		if !strings.Contains(scr, "Os apps nativos só existem no Windows") || !strings.Contains(scr, want) {
+		flat := strings.Join(strings.Fields(scr), " ")
+		if !strings.Contains(flat, "i Não disponível neste sistema") || !strings.Contains(flat, "Os apps nativos: só existe no Windows") || !strings.Contains(flat, want) {
 			t.Fatalf("%s:\n%s", goos, scr)
 		}
 		if len(sys.removes) != 0 || st.b != nil {

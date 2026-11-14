@@ -267,11 +267,12 @@ func (m *Model) totalSelected() int {
 // captura teclas nem tem estado.
 type InfoTab struct {
 	title, short, text string
+	theme              Theme
 }
 
 // NewInfoTab monta uma seção só de texto (o texto pode ter várias linhas; cada uma quebra na largura da tela).
-func NewInfoTab(title, short, text string) *InfoTab {
-	return &InfoTab{title: title, short: short, text: text}
+func NewInfoTab(th Theme, title, short, text string) *InfoTab {
+	return &InfoTab{title: title, short: short, text: text, theme: th}
 }
 
 // Init não carrega nada.
@@ -289,13 +290,9 @@ func (t *InfoTab) Short() string { return t.short }
 // Update ignora tudo.
 func (t *InfoTab) Update(tea.Msg) (Tab, tea.Cmd) { return t, nil }
 
-// View desenha o texto com um espaço de margem, quebrado na largura.
-func (t *InfoTab) View(w, _ int) string {
-	var out []string
-	for _, l := range strings.Split(t.text, "\n") {
-		out = append(out, wrap(" "+textsafe.Line(strings.TrimLeft(l, " ")), w, 1)...)
-	}
-	return strings.Join(out, "\n")
+// View mostra o estado "ainda não existe nesta versão" (StateSoon) com o texto da seção, quebrado na largura.
+func (t *InfoTab) View(w, h int) string {
+	return strings.Join(StateSoon(t.theme, w, h, t.text), "\n")
 }
 
 // Keys devolve nada: a seção não tem atalhos próprios.

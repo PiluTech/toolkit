@@ -189,7 +189,7 @@ func TestPrivacyTabAdminSemAvisoQuandoAdmin(t *testing.T) {
 func TestPrivacyTabForaDoWindowsSemTeclasDeMudanca(t *testing.T) {
 	be := &fakePriv{info: PrivInfo{Supported: false, OS: "linux"}}
 	tab := privTab(t, be)
-	if v := tab.View(80, 14); !strings.Contains(v, "A privacidade só existe no Windows") || !strings.Contains(v, "linux") {
+	if v := tab.View(80, 14); !strings.Contains(v, "A privacidade: só existe no Windows") || !strings.Contains(v, "este sistema é Linux") {
 		t.Fatalf("view: %q", v)
 	}
 	if len(tab.Keys()) != 0 {
@@ -204,7 +204,7 @@ func TestPrivacyTabForaDoWindowsSemTeclasDeMudanca(t *testing.T) {
 func TestPrivacyTabErroDeLeitura(t *testing.T) {
 	tab := privTab(t, &fakePriv{loadErr: errors.New("powershell falhou\x1b[31m")})
 	v := tab.View(80, 14)
-	if !strings.Contains(v, "erro:") || strings.Contains(v, "\x1b[31m") {
+	if !strings.Contains(v, "✗ Erro") || !strings.Contains(v, "Motivo: powershell falhou") || strings.Contains(v, "\x1b[31m") {
 		t.Errorf("view: %q", v)
 	}
 	pkey(tab, "a")
@@ -496,7 +496,7 @@ func TestPrivacyTabPlanoAtrasadoEhIgnorado(t *testing.T) {
 
 func TestPrivacyTabUsaSpinnerSemMovimento(t *testing.T) {
 	tab := NewPrivacyTab(context.Background(), &fakePriv{}, Theme{Mono: true, NoMotion: true})
-	if !strings.Contains(tab.View(80, 14), SymBusy) {
+	if !strings.Contains(tab.View(80, 14), SymLoad+" Carregando") {
 		t.Error("com movimento reduzido o símbolo é fixo")
 	}
 	if tab.theme.Tick() != nil {
@@ -596,5 +596,59 @@ func TestPrivacyConfirmUsaOIDDoPlanoExibido(t *testing.T) {
 	}
 	if len(be.applies) != 1 {
 		t.Fatalf("o plano exibido devia ter sido aplicado: %v", be.applies)
+	}
+}
+
+// Lupa #71: a releitura roda DEPOIS de aplicar/restaurar; se ela falhar, a tela nunca nega as alterações.
+func TestPrivacidadeReleituraFalhaDepoisDeAplicarNaoDizNadaFoiAlterado(t *testing.T) {
+	for _, partial := range []bool{false, true} {
+		be := &fakePriv{info: privSample(true), plan: PrivPlan{Text: planText, Pending: 2}, applyRes: PrivResult{Applied: 2, BackupPath: `C:\b.json`}}
+		if partial {
+			be.applyErr = errors.New("falhou no meio")
+		}
+		tab := privTab(t, be)
+		be.loadErr = errors.New("reg.exe: acesso negado") // a releitura pós-ação falha
+		pkey(tab, "a", "s")
+		check := func(when string) {
+			out := stripANSI(tab.View(80, 24))
+			if strings.Contains(out, "Nada foi alterado") {
+				t.Errorf("partial=%v %s: a tela nega as alterações:\n%s", partial, when, out)
+			}
+			if !strings.Contains(out, "atualizar a leitura") {
+				t.Errorf("partial=%v %s: deve dizer que não deu para atualizar a leitura:\n%s", partial, when, out)
+			}
+		}
+		check("com a faixa")
+		tab.Dismiss() // fechar a faixa com x não pode deixar só a frase falsa
+		check("depois de fechar a faixa")
+	}
+}
+
+// Sem alteração nenhuma, o erro de leitura continua dizendo (com razão) que nada foi alterado.
+func TestPrivacidadeErroDeLeituraSemAcaoContinuaDizendoNadaFoiAlterado(t *testing.T) {
+	be := &fakePriv{loadErr: errors.New("boom")}
+	tab := privTab(t, be)
+	if out := stripANSI(tab.View(80, 24)); !strings.Contains(out, "Nada foi alterado") {
+		t.Errorf("sem ação, vale a cauda:\n%s", out)
+	}
+}
+
+// Lupa #71 (2): o Desfazer bem-sucedido APAGA o backup; se a releitura falhar depois, a tela não promete um backup que
+// não existe mais (nem com a faixa, nem depois do x).
+func TestPrivacidadeDesfazerOKReleituraFalhaNaoPrometeBackup(t *testing.T) {
+	be := &fakePriv{info: privSample(true), undoPlan: PrivPlan{Text: "O que será restaurado\n  x -> y\n", Pending: 1}, undoRes: PrivResult{Applied: 1}}
+	tab := privTab(t, be)
+	be.loadErr = errors.New("reg.exe: acesso negado")
+	pkey(tab, "d", "s")
+	for _, when := range []string{"com a faixa", "depois do x"} {
+		out := stripANSI(tab.View(80, 24))
+		low := strings.ToLower(out)
+		if strings.Contains(low, "backup guarda") || strings.Contains(out, "Nada foi alterado") {
+			t.Errorf("%s: promete backup inexistente ou nega a alteração:\n%s", when, out)
+		}
+		if !strings.Contains(out, "atualizar a leitura") {
+			t.Errorf("%s: deve dizer que não deu para atualizar a leitura:\n%s", when, out)
+		}
+		tab.Dismiss()
 	}
 }

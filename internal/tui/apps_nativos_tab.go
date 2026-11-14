@@ -111,6 +111,7 @@ type NativeAppsTab struct {
 
 	loading bool
 	loadErr error
+	changed bool // alguma remoção já mudou o sistema nesta sessão: o erro de releitura não pode dizer "Nada foi alterado"
 	info    NatInfo
 
 	cur      int
@@ -207,6 +208,9 @@ func (t *NativeAppsTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		}
 		t.onPlan(msg)
 	case natDoneMsg:
+		if msg.res.Removed > 0 {
+			t.changed = true
+		}
 		t.onDone(msg)
 		return t, t.loadCmd()
 	case tickMsg:
@@ -301,7 +305,7 @@ func (t *NativeAppsTab) onDone(m natDoneMsg) {
 		t.res = &Result{Kind: ResultInfo, Title: "O plano mudou", Lines: []string{"O sistema ou a seleção mudou desde o plano mostrado: nada foi alterado.", "Veja o plano de novo (p ou r) antes de confirmar."}}
 	case errors.Is(m.err, ErrNatNeedsAdmin):
 		t.setNotice("Precisa de administrador: nada foi alterado.", true)
-		t.res = &Result{Kind: ResultError, Title: "Precisa de administrador", Lines: []string{"Nada foi alterado.", "Abra o terminal como administrador e tente de novo."}}
+		t.res = &Result{Kind: ResultError, Title: "Precisa de administrador", Lines: adminResultLines()}
 	case m.err != nil && m.res.Removed > 0:
 		t.setNotice("erro: "+m.err.Error(), true)
 		lines := []string{fmt.Sprintf("Antes da falha: %d app(s) removidos", m.res.Removed), "Erro: " + m.err.Error()}
@@ -525,15 +529,17 @@ func (t *NativeAppsTab) View(w, h int) string {
 	t.lastW, t.lastH = w, h
 	switch {
 	case t.loading:
-		return " " + t.theme.Accent().Render(t.theme.Spin(t.frame)) + " Lendo os apps nativos…"
+		return strings.Join(StateLoading(t.theme, w, h, "os apps nativos", t.frame), "\n")
+	case t.loadErr != nil && t.changed:
+		return strings.Join(StateErrorAfterChange(t.theme, w, h, "os apps nativos", t.loadErr, "Saia (q) e abra o toolkit de novo para reler o estado."), "\n")
 	case t.loadErr != nil:
-		return " " + t.theme.Err().Render(SymFail+" erro:") + " não deu para ler os apps nativos (" + textsafe.Line(t.loadErr.Error()) + ")"
+		return strings.Join(StateError(t.theme, w, h, "os apps nativos", t.loadErr, "Saia (q) e abra o toolkit de novo."), "\n")
 	case !t.info.Supported:
-		lines := wrapLine(" Os apps nativos só existem no Windows (este sistema é "+t.info.OS+"). Nada a mudar aqui.", w)
-		if t.info.Reason != "" {
-			lines = append(lines, wrapLine(" "+t.info.Reason, w)...) // quebra a explicação em vez de cortar com reticências
+		why := t.info.Reason
+		if why == "" {
+			why = unsupportedWhy(t.info.OS, "os apps nativos")
 		}
-		return strings.Join(lines, "\n")
+		return strings.Join(StateUnsupported(t.theme, w, h, "os apps nativos", why, osName(t.info.OS)), "\n")
 	}
 	var lines []string
 	if t.asking && t.conf != nil {

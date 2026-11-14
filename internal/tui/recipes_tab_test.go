@@ -90,7 +90,7 @@ func TestRecipesTabsSplitByKind(t *testing.T) {
 
 func TestRecipesLoadingStateAndSpinner(t *testing.T) {
 	tab := NewRecipesTab(context.Background(), &fakeRecipes{}, Theme{Mono: true}, false)
-	if v := plain(tab.View(80, 19)); !strings.Contains(v, "Lendo receitas e estado…") {
+	if v := plain(tab.View(80, 19)); !strings.Contains(v, "| Carregando") || !strings.Contains(v, "Lendo receitas e estado…") {
 		t.Fatalf("carregando: %q", v)
 	}
 	if _, cmd := tab.Update(tickMsg{}); cmd == nil {
@@ -209,7 +209,7 @@ func TestDiagnosticNeverRanAndEmptyStates(t *testing.T) {
 func TestRecipesErrorStates(t *testing.T) {
 	tab := NewRecipesTab(context.Background(), &fakeRecipes{}, Theme{Mono: true}, false)
 	tab.Update(recipesLoadedMsg{err: errors.New("receita x.yaml:3:5: id inválido")})
-	if v := plain(tab.View(80, 19)); !strings.Contains(v, "erro:") || !strings.Contains(v, "x.yaml:3:5") {
+	if v := plain(tab.View(80, 19)); !strings.Contains(v, "✗ Erro") || !strings.Contains(v, "Não deu para ler as receitas.") || !strings.Contains(v, "x.yaml:3:5") {
 		t.Fatalf("erro de carga: %q", v)
 	}
 	d := recipeSample()

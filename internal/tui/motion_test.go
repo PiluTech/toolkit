@@ -33,9 +33,12 @@ func TestNoMotionThemeHasFixedSpinnerAndNoTick(t *testing.T) {
 
 func TestTabsStopTickingAndShowTheFixedSymbolWithoutMotion(t *testing.T) {
 	still := Theme{Mono: true, Dark: true, NoMotion: true}
-	// Receitas: carregando = "~ Lendo receitas e estado…", e o tick não re-arma
+	// Receitas: carregando = "… Carregando" + "Lendo receitas e estado…", e o tick não re-arma
 	rt := NewRecipesTab(context.Background(), &fakeRecipes{}, still, false)
-	if v := plain(rt.View(80, 19)); !strings.Contains(v, SymBusy+" Lendo receitas e estado…") {
+	if v := plain(rt.View(80, 19)); !strings.Contains(v, SymLoad+" Carregando") {
+		t.Fatalf("sem movimento o símbolo é fixo, com a palavra: %q", v)
+	}
+	if v := plain(rt.View(80, 19)); !strings.Contains(v, "Lendo receitas e estado…") {
 		t.Fatalf("carregando sem movimento: %q", v)
 	}
 	if _, cmd := rt.Update(tickMsg{}); cmd != nil {
@@ -43,7 +46,10 @@ func TestTabsStopTickingAndShowTheFixedSymbolWithoutMotion(t *testing.T) {
 	}
 	// Apps
 	at := NewAppsTab(context.Background(), &fakeBackend{}, still, "linux")
-	if v := plain(at.View(80, 19)); !strings.Contains(v, SymBusy+" Lendo o catálogo…") {
+	if v := plain(at.View(80, 19)); !strings.Contains(v, SymLoad+" Carregando") {
+		t.Fatalf("sem movimento o símbolo é fixo, com a palavra: %q", v)
+	}
+	if v := plain(at.View(80, 19)); !strings.Contains(v, "Lendo o catálogo…") {
 		t.Fatalf("apps carregando sem movimento: %q", v)
 	}
 	if _, cmd := at.Update(tickMsg{}); cmd != nil {

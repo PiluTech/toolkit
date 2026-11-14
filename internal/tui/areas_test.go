@@ -296,7 +296,7 @@ func TestAreaHelpListsAreas(t *testing.T) {
 }
 
 func TestInfoTabExplainsAndIsStatic(t *testing.T) {
-	tb := NewInfoTab("Análise", "Anál", "A análise de rede ainda não existe nesta versão.")
+	tb := NewInfoTab(Theme{Mono: true}, "Análise", "Anál", "A análise de rede ainda não existe nesta versão.")
 	if tb.Title() != "Análise" || tb.Short() != "Anál" || tb.Capturing() || tb.Selected() != 0 {
 		t.Fatalf("contrato: %+v", tb)
 	}
@@ -318,7 +318,7 @@ func TestAreasKeepExecutionFlowWithFlatIndexes(t *testing.T) {
 	log := NewLogTab(Theme{Mono: true}, "/var/log/toolkit")
 	spy := &reloadSpy{fakeTab: fakeTab{title: "Apps nativos", short: "Nativos"}}
 	m := NewWithAreas(Options{Version: "v0.1.0", Mono: true}, []AreaDef{
-		{Key: "inicio", Title: "Início", Short: "Iníc", Tabs: []Tab{NewInfoTab("Início", "Iníc", "oi")}},
+		{Key: "inicio", Title: "Início", Short: "Iníc", Tabs: []Tab{NewInfoTab(Theme{Mono: true}, "Início", "Iníc", "oi")}},
 		{Key: "instalar", Title: "Instalar", Short: "Inst", Tabs: []Tab{apps, rec}},
 		{Key: "maquina", Title: "Máquina", Short: "Máq", Tabs: []Tab{diag, spy}},
 		{Key: "historico", Title: "Histórico", Short: "Hist", Tabs: []Tab{log}},
@@ -395,7 +395,7 @@ func TestLegacyModeKeepsFlatTabs(t *testing.T) {
 func TestAreaGoldens(t *testing.T) {
 	d := func() []AreaDef {
 		ds := areaDefs()
-		ds[4].Tabs[0] = NewInfoTab("Análise", "Anál", "A análise de rede ainda não existe nesta versão.")
+		ds[4].Tabs[0] = NewInfoTab(Theme{Mono: true}, "Análise", "Anál", "A análise de rede ainda não existe nesta versão.")
 		return ds
 	}
 	for _, sz := range [][2]int{{80, 24}, {120, 40}, {60, 17}} {

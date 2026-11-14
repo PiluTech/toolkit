@@ -244,11 +244,11 @@ func (t *DiagTab) View(w, h int) string {
 	t.lastW, t.lastH = w, h
 	switch {
 	case t.loading:
-		return " " + t.theme.Accent().Render(t.theme.Spin(t.frame)) + " Lendo a máquina… (Esc cancela)"
+		return strings.Join(StateLoading(t.theme, w, h, "a máquina", t.frame, "Esc cancela."), "\n")
 	case t.err != nil:
-		return " " + t.theme.Err().Render(SymFail+" erro:") + " não deu para ler a máquina (" + textsafe.Line(t.err.Error()) + "). Tecle c para tentar de novo."
+		return strings.Join(StateError(t.theme, w, h, "a máquina", t.err, "Tente de novo (c)."), "\n")
 	case !t.loaded:
-		return " Tecle c para ler a máquina."
+		return strings.Join(StateEmpty(t.theme, w, h, "Esta máquina ainda não foi lida.", "Tecle c para ler a máquina."), "\n")
 	}
 	t.top = max(min(t.top, t.maxTop()), 0)
 	ls := t.wrapped()

@@ -1,0 +1,17 @@
+ toolkit  [1 Apps]                                   v0.1.0
+────────────────────────────────────────────────────────────
+ ✗ Erro
+ Não deu para ler o catálogo.
+ Motivo: meu.yaml:3:5: app "x": categoria inválida
+   meu.yaml:9:1: chave repetida
+
+ 1. Corrija o arquivo ou rode sem --catalog.
+ Nada foi alterado.
+
+
+
+
+
+────────────────────────────────────────────────────────────
+
+ ↑↓ mover  espaço marcar  / buscar  ? ajuda  q sair

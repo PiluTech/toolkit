@@ -357,7 +357,7 @@ func TestNativeAppsTabForaDoWindowsSemTeclasDeMudanca(t *testing.T) {
 	be := &fakeNat{info: NatInfo{Supported: false, OS: "darwin", Reason: "No macOS os apps do sistema ficam em um volume protegido."}}
 	tab := natTab(t, be)
 	v := tab.View(100, 14)
-	if !strings.Contains(v, "Os apps nativos só existem no Windows") || !strings.Contains(v, "darwin") || !strings.Contains(v, "volume protegido") {
+	if !strings.Contains(v, "Os apps nativos: só existe no Windows") || !strings.Contains(v, "macOS") || !strings.Contains(v, "volume protegido") {
 		t.Fatalf("view: %q", v)
 	}
 	if len(tab.Keys()) != 0 {
@@ -371,7 +371,7 @@ func TestNativeAppsTabForaDoWindowsSemTeclasDeMudanca(t *testing.T) {
 
 func TestNativeAppsTabErroDeLeituraEVazio(t *testing.T) {
 	tab := natTab(t, &fakeNat{loadErr: errors.New("sem powershell")})
-	if v := tab.View(80, 10); !strings.Contains(v, "erro:") || !strings.Contains(v, "sem powershell") {
+	if v := tab.View(80, 10); !strings.Contains(v, "✗ Erro") || !strings.Contains(v, "Não deu para ler os apps nativos.") || !strings.Contains(v, "Motivo: sem powershell") || !strings.Contains(v, "Nada foi alterado.") {
 		t.Errorf("erro: %q", v)
 	}
 	nkey(tab, "r", "i", "space")
@@ -515,5 +515,30 @@ func TestNativeAppsForaDoWindowsQuebraOMotivo(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(strings.Fields(out), " "), "nada foi alterado.") {
 		t.Errorf("o fim do motivo se perdeu:\n%s", out)
+	}
+}
+
+// Lupa #71: idem para a remoção de apps nativos.
+func TestNativosReleituraFalhaDepoisDeRemoverNaoDizNadaFoiAlterado(t *testing.T) {
+	for _, partial := range []bool{false, true} {
+		be := &fakeNat{info: natSample(true), plan: NatPlan{ID: "p", Text: natPlanText, Pending: 1, IsAdmin: true}, applyRes: NatResult{Removed: 2, BackupPath: `C:\b.json`}}
+		if partial {
+			be.applyErr = errors.New("falhou no meio")
+		}
+		tab := natTab(t, be)
+		be.loadErr = errors.New("Get-AppxPackage: acesso negado")
+		nkey(tab, "space", "r", "s")
+		check := func(when string) {
+			out := stripANSI(tab.View(80, 24))
+			if strings.Contains(out, "Nada foi alterado") {
+				t.Errorf("partial=%v %s: a tela nega as alterações:\n%s", partial, when, out)
+			}
+			if !strings.Contains(out, "atualizar a leitura") {
+				t.Errorf("partial=%v %s: deve dizer que não deu para atualizar a leitura:\n%s", partial, when, out)
+			}
+		}
+		check("com a faixa")
+		tab.Dismiss()
+		check("depois de fechar a faixa")
 	}
 }

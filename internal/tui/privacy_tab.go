@@ -135,6 +135,7 @@ type PrivacyTab struct {
 
 	busy    privBusy
 	seq     int
+	changed bool               // alguma ação já mudou o sistema nesta sessão: o erro de releitura não pode dizer "Nada foi alterado"
 	cancel  context.CancelFunc // cancela a preparação do plano em andamento (Esc)
 	view    bool               // mostrando um plano
 	kind    privKind
@@ -214,6 +215,9 @@ func (t *PrivacyTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		}
 		t.onPlan(msg)
 	case privDoneMsg:
+		if msg.res.Applied > 0 {
+			t.changed = true
+		}
 		t.onDone(msg)
 		return t, t.loadCmd()
 	case tickMsg:
@@ -335,7 +339,7 @@ func (t *PrivacyTab) onDone(m privDoneMsg) {
 		t.res = &Result{Kind: ResultInfo, Title: "O plano mudou", Lines: []string{"O sistema ou o backup mudou desde o plano mostrado: nada foi alterado.", "Veja o plano de novo (p, a ou d) antes de confirmar."}}
 	case m.err != nil && errors.Is(m.err, ErrPrivNeedsAdmin):
 		t.setNotice("Precisa de administrador: nada foi alterado.", true)
-		t.res = &Result{Kind: ResultError, Title: "Precisa de administrador", Lines: []string{"Nada foi alterado.", "Abra o terminal como administrador e tente de novo."}}
+		t.res = &Result{Kind: ResultError, Title: "Precisa de administrador", Lines: adminResultLines()}
 	case m.err != nil && m.res.Applied > 0:
 		t.setNotice("erro: "+m.err.Error(), true)
 		lines := []string{fmt.Sprintf("Antes da falha: %d mudança(s)", m.res.Applied), "Erro: " + m.err.Error()}
@@ -537,18 +541,18 @@ func (t *PrivacyTab) More() int {
 	return max(n, 0)
 }
 
-func (t *PrivacyTab) spin() string { return t.theme.Spin(t.frame) }
-
 // View desenha o corpo.
 func (t *PrivacyTab) View(w, h int) string {
 	t.lastW, t.lastH = w, h
 	switch {
 	case t.loading:
-		return " " + t.theme.Accent().Render(t.spin()) + " Lendo o estado de privacidade…"
+		return strings.Join(StateLoading(t.theme, w, h, "o estado de privacidade", t.frame), "\n")
+	case t.loadErr != nil && t.changed:
+		return strings.Join(StateErrorAfterChange(t.theme, w, h, "a privacidade", t.loadErr, "Saia (q) e abra o toolkit de novo para reler o estado."), "\n")
 	case t.loadErr != nil:
-		return " " + t.theme.Err().Render(SymFail+" erro:") + " não deu para ler a privacidade (" + textsafe.Line(t.loadErr.Error()) + ")"
+		return strings.Join(StateError(t.theme, w, h, "a privacidade", t.loadErr, "Saia (q) e abra o toolkit de novo."), "\n")
 	case !t.info.Supported:
-		return " A privacidade só existe no Windows (este sistema é " + t.info.OS + "). Nada a mudar aqui."
+		return strings.Join(StateUnsupported(t.theme, w, h, "a privacidade", unsupportedWhy(t.info.OS, "os ajustes de privacidade"), osName(t.info.OS)), "\n")
 	}
 	var lines []string
 	if t.asking && t.conf != nil {

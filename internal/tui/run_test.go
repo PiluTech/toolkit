@@ -152,7 +152,7 @@ func TestRunAreasCancelsAndStopsEveryArea(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		done <- runAreas(ctx, Options{Mono: true}, []tea.ProgramOption{tea.WithInput(in), tea.WithOutput(io.Discard), tea.WithWindowSize(80, 24)},
-			[]AreaDef{{Key: "inicio", Title: "Início", Short: "Iníc", Tabs: []Tab{NewInfoTab("Início", "Iníc", "oi")}}, {Key: "instalar", Title: "Instalar", Short: "Inst", Tabs: []Tab{apps}}})
+			[]AreaDef{{Key: "inicio", Title: "Início", Short: "Iníc", Tabs: []Tab{NewInfoTab(Theme{Mono: true}, "Início", "Iníc", "oi")}}, {Key: "instalar", Title: "Instalar", Short: "Inst", Tabs: []Tab{apps}}})
 	}()
 	waitFor(t, "a verificação começar", func() bool { return be.inflight.Load() == 1 })
 	cancel()

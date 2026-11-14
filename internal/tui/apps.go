@@ -662,11 +662,12 @@ func (t *AppsTab) View(w, h int) string {
 	}
 	switch {
 	case t.loading:
-		return " " + t.theme.Accent().Render(t.spin()) + " Lendo o catálogo…"
+		return strings.Join(StateLoading(t.theme, w, h, "o catálogo", t.frame), "\n")
 	case t.loadErr != nil:
-		return t.errorBody()
+		return strings.Join(StateError(t.theme, w, h, "o catálogo", t.loadErr, "Corrija o arquivo ou rode sem --catalog."), "\n")
 	case len(t.apps) == 0:
-		return " Nenhum app do catálogo tem instalador para " + osName(t.goos) + ".\n Veja: toolkit list --os"
+		return strings.Join(StateEmpty(t.theme, w, h, "Nenhum app do catálogo tem instalador para "+osName(t.goos)+".",
+			"Veja o que o catálogo cobre: toolkit list --os"), "\n")
 	}
 	t.fixTop()
 	var lines []string
@@ -695,16 +696,6 @@ func (t *AppsTab) searchBar() string {
 		right = fmt.Sprintf("  %d de %d apps", t.matches(), len(t.apps))
 	}
 	return " " + t.theme.Accent().Render("/") + " " + textsafe.Line(t.filter) + cursor + t.theme.Muted().Render(right)
-}
-
-func (t *AppsTab) errorBody() string {
-	var b strings.Builder
-	b.WriteString(" " + t.theme.Err().Render(SymFail+" erro:") + " não deu para ler o catálogo\n")
-	for _, l := range strings.Split(textsafe.Printable(t.loadErr.Error()), `\x0a`) {
-		b.WriteString(" " + l + "\n")
-	}
-	b.WriteString("\n Corrija o arquivo ou rode sem --catalog.")
-	return b.String()
 }
 
 // cols são as larguras das colunas, por largura da janela (docs/tui.md): >= 80 completo; 70 a 79 sem VIA;

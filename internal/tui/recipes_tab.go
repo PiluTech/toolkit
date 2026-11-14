@@ -389,6 +389,29 @@ func (t *RecipesTab) More() int {
 
 func (t *RecipesTab) spin() string { return t.theme.Spin(t.frame) }
 
+// loadingWhat é o que a aba lê (estado carregando); errorWhat é o objeto do erro de leitura.
+func (t *RecipesTab) loadingWhat() string {
+	if t.diagnostic {
+		return "diagnósticos e estado"
+	}
+	return "receitas e estado"
+}
+
+func (t *RecipesTab) errorWhat() string {
+	if t.diagnostic {
+		return "os diagnósticos"
+	}
+	return "as receitas"
+}
+
+// emptySteps diz como ter conteúdo na aba vazia.
+func (t *RecipesTab) emptySteps() []string {
+	if t.diagnostic {
+		return []string{"Veja o que o toolkit sabe diagnosticar: toolkit diagnostico --help"}
+	}
+	return []string{"Veja as receitas do catálogo: toolkit recipe list"}
+}
+
 func (t *RecipesTab) emptyText() string {
 	if t.diagnostic {
 		return "Nenhum diagnóstico para este sistema."
@@ -413,11 +436,11 @@ func (t *RecipesTab) View(w, h int) string {
 	t.lastW, t.lastH = w, h
 	switch {
 	case t.loading:
-		return " " + t.theme.Accent().Render(t.spin()) + " Lendo receitas e estado…"
+		return strings.Join(StateLoading(t.theme, w, h, t.loadingWhat(), t.frame), "\n")
 	case t.loadErr != nil:
-		return " " + t.theme.Err().Render(SymFail+" erro:") + " não deu para ler as receitas (" + textsafe.Line(t.loadErr.Error()) + ")"
+		return strings.Join(StateError(t.theme, w, h, t.errorWhat(), t.loadErr, "Rode: toolkit recipe status"), "\n")
 	case len(t.items) == 0:
-		return " " + t.emptyText()
+		return strings.Join(StateEmpty(t.theme, w, h, t.emptyText(), t.emptySteps()...), "\n")
 	}
 	var lines []string
 	if err := t.data.StateErr; err != nil {

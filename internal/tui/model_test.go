@@ -204,12 +204,14 @@ func TestHelpModalAndQuit(t *testing.T) {
 }
 
 func TestTooSmallWindow(t *testing.T) {
-	for _, sz := range [][2]int{{59, 24}, {80, 15}, {20, 9}} {
+	for _, sz := range [][2]int{{59, 24}, {80, 15}, {20, 16}} {
 		m := sized(Options{Mono: true}, sz[0], sz[1], fakes()...)
 		out := m.render()
 		flat := strings.Join(strings.Fields(out), " ")
-		if !strings.Contains(flat, "Terminal pequeno: a interface precisa de 60×16 e esta janela tem "+itoa(sz[0])+"×"+itoa(sz[1])+".") ||
-			!strings.Contains(flat, "Aumente a janela ou use os comandos sem a interface: toolkit --help") || !strings.Contains(flat, "q sair") {
+		if !strings.Contains(flat, "i Terminal pequeno") ||
+			!strings.Contains(flat, "A interface precisa de 60×16 e este tem "+itoa(sz[0])+"×"+itoa(sz[1])+".") ||
+			!strings.Contains(flat, "1. Aumente a janela.") || !strings.Contains(flat, "2. Ou rode toolkit list / toolkit install ... sem a interface.") ||
+			!strings.Contains(flat, "q sair") {
 			t.Errorf("%v: %q", sz, out)
 		}
 		if cmd := press(m, 'q', 0, "q"); cmd == nil {
@@ -340,7 +342,7 @@ func TestTooSmallWrapsAndKeepsQuitHint(t *testing.T) {
 		}
 		if sz[1] >= 12 { // com altura de sobra o texto inteiro aparece (quebrado)
 			flat := strings.Join(strings.Fields(out), " ")
-			if !strings.Contains(strings.ReplaceAll(flat, " ", ""), strings.ReplaceAll("Terminal pequeno: a interface precisa de 60×16 e esta janela tem "+itoa(sz[0])+"×"+itoa(sz[1])+".", " ", "")) {
+			if !strings.Contains(strings.ReplaceAll(flat, " ", ""), strings.ReplaceAll("A interface precisa de 60×16 e este tem "+itoa(sz[0])+"×"+itoa(sz[1])+".", " ", "")) {
 				t.Errorf("%v: texto cortado:\n%s", sz, out)
 			}
 		}

@@ -230,26 +230,12 @@ func renderHints(hs []KeyHint, th Theme) string {
 	return strings.Join(parts, "  ")
 }
 
-// tooSmall é a tela única para janelas abaixo de 60x16: só avisa (com o tamanho atual), e q continua funcionando.
-// Cada linha quebra na largura da janela (nada é cortado); se faltar altura, o "q sair" (última linha) sobrevive e
-// as primeiras linhas cedem o lugar. Redimensionar volta à interface normal (o estado das abas não muda).
+// tooSmall é a tela única para janelas abaixo de 60x16 (StateTooSmall): título, a frase com o tamanho atual, os dois
+// caminhos (aumentar a janela ou usar os comandos sem a TUI) e "q sair". Cada linha quebra na largura da janela (nada
+// é cortado); se faltar altura, o "q sair" (última linha) sobrevive e o resto cede, por prioridade. Redimensionar
+// volta à interface normal (o estado das abas não muda).
 func (m *Model) tooSmall() string {
-	text := []string{
-		"Terminal pequeno: a interface precisa de " + itoa(MinWidth) + "×" + itoa(MinHeight) + " e esta janela tem " + itoa(m.w) + "×" + itoa(m.h) + ".",
-		"Aumente a janela ou use os comandos sem a interface: toolkit --help",
-		"q sair",
-	}
-	w := max(m.w, 1)
-	var lines []string
-	for _, t := range text {
-		for _, l := range strings.Split(ansi.Wrap(t, w, " "), "\n") {
-			lines = append(lines, strings.TrimRight(l, " "))
-		}
-	}
-	if h := max(m.h, 1); len(lines) > h {
-		lines = append(lines[:h-1], lines[len(lines)-1])
-	}
-	return strings.Join(lines, "\n")
+	return strings.Join(StateTooSmall(m.theme, m.w, max(m.h, 1), MinWidth, MinHeight), "\n")
 }
 
 // helpBody: a tabela de teclas, no lugar do corpo (modal sem caixa flutuante).
