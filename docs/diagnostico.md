@@ -86,7 +86,7 @@ administrador (`sudo toolkit diagnostico` no Linux/macOS; terminal "Executar com
 |---|---|
 | Linux | SMART via `smartctl` (saúde, horas ligado, setores realocados, desgaste NVMe) e, quando o firmware restringe, série e UUID de `/sys/class/dmi/id` |
 | macOS | temperaturas pelo `powermetrics` |
-| Windows | contadores de confiabilidade do disco (`Get-StorageReliabilityCounter`; os erros de leitura entram como aproximação de setores realocados) |
+| Windows | contadores de confiabilidade do disco (`Get-StorageReliabilityCounter`; o total de erros de leitura e os não corrigidos aparecem em campos próprios, nunca como setores realocados; os não corrigidos geram um aviso) |
 
 Sem administrador tudo continua funcionando; o que ficou de fora aparece no resumo como "Com administrador o diagnóstico também
 lê: …" com o jeito de rodar, e no `--completo` como "não lido" com `NeedsAdmin`. Com administrador e sem dado (hardware ou driver

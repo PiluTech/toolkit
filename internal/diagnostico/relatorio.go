@@ -202,6 +202,12 @@ func Full(r *Report, l Lang) string {
 		if d.ReallocatedSectors != nil {
 			parts = append(parts, fmt.Sprintf("%s %d", t("setores realocados", "reallocated sectors", "sectores reasignados"), *d.ReallocatedSectors))
 		}
+		if d.ReadErrors != nil {
+			parts = append(parts, fmt.Sprintf("%s %d", t("erros de leitura (total)", "read errors (total)", "errores de lectura (total)"), *d.ReadErrors))
+		}
+		if d.ReadErrorsUncorrected != nil {
+			parts = append(parts, fmt.Sprintf("%s %d", t("erros de leitura não corrigidos", "uncorrected read errors", "errores de lectura no corregidos"), *d.ReadErrorsUncorrected))
+		}
 		fmt.Fprintf(&b, "- %s\n", strings.Join(parts, " · "))
 	}
 

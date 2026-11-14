@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -120,13 +121,15 @@ func linFullFS() linFS {
 	}
 }
 
-func linFullRunner(t *testing.T) *exectest.FakeRunner {
+func linFullRunner(t *testing.T) *exectest.FakeRunner { return linRunnerWith(t, linLsblk) }
+
+func linRunnerWith(t *testing.T, lsblk string) *exectest.FakeRunner {
 	t.Helper()
 	f := exectest.New(t)
 	for _, n := range []string{"lsblk", "df", "lspci", "journalctl", "dmesg"} {
 		f.WithPath(n, "/usr/bin/"+n)
 	}
-	f.On("/usr/bin/lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN,SERIAL", exectest.Exit(0, linLsblk))
+	f.On("/usr/bin/lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN,SERIAL", exectest.Exit(0, lsblk))
 	f.On("/usr/bin/df -B1 --output=source,avail,size", exectest.Exit(0, linDf))
 	f.On("/usr/bin/lspci -mm", exectest.Exit(0, linLspci))
 	f.On("/usr/bin/journalctl -p err -b --no-pager -q -o short-iso -n 300", exectest.Exit(0, linJournalOut))
@@ -615,4 +618,39 @@ func TestLinDiskParent(t *testing.T) {
 			t.Errorf("%+v", c)
 		}
 	}
+}
+
+// Regressão: o lsblk lista sdc, sda, sdb; o SMART de cada disco tem de cair no modelo/série do PRÓPRIO disco.
+func TestLinSmartAssociaPorDispositivoMesmoDesordenado(t *testing.T) {
+	lsblk := `{"blockdevices":[
+ {"name":"sdc","size":3000,"type":"disk","rota":"1","model":"Model C","tran":"sata","serial":"SER-C"},
+ {"name":"sda","size":1000,"type":"disk","rota":"1","model":"Model A","tran":"sata","serial":"SER-A"},
+ {"name":"sdb","size":2000,"type":"disk","rota":"1","model":"Model B","tran":"sata","serial":"SER-B"}]}`
+	ok := func(h string, hours int) string {
+		return `{"smart_status":{"passed":` + h + `},"power_on_time":{"hours":` + strconv.Itoa(hours) + `}}`
+	}
+	f := linRunnerWith(t, lsblk)
+	f.WithPath("smartctl", "/usr/bin/smartctl")
+	f.On("/usr/bin/smartctl --json=o -H -A /dev/sda", exectest.Exit(0, ok("true", 100)))
+	f.On("/usr/bin/smartctl --json=o -H -A /dev/sdb", exectest.Exit(4, ok("false", 200)))
+	f.On("/usr/bin/smartctl --json=o -H -A /dev/sdc", exectest.Exit(0, ok("true", 300)))
+	d := linFullFS().deps(f)
+	d.Admin = true
+	r := &Report{}
+	collectLinux(context.Background(), d, r)
+	want := map[string]struct {
+		serial string
+		health Health
+		hours  int
+	}{"Model A": {"SER-A", HealthOK, 100}, "Model B": {"SER-B", HealthBad, 200}, "Model C": {"SER-C", HealthOK, 300}}
+	if len(r.Disks) != 3 {
+		t.Fatalf("discos: %+v", r.Disks)
+	}
+	for _, dk := range r.Disks {
+		w, found := want[dk.Name]
+		if !found || dk.Serial != w.serial || dk.Health != w.health || dk.PowerOnHours == nil || *dk.PowerOnHours != w.hours {
+			t.Errorf("disco desalinhado: %+v (esperado %+v)", dk, w)
+		}
+	}
+	linNoMutation(t, f)
 }

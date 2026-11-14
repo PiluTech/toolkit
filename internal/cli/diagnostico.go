@@ -32,12 +32,18 @@ type DiagDeps struct {
 	IsAdmin func(ctx context.Context, goos string, r exec.Runner) bool
 }
 
+// diagAdminTimeout é o prazo PRÓPRIO da detecção de administrador no Windows (um PowerShell pendurado não pode gastar o
+// orçamento dos coletores). Estourou = falha = "não admin".
+var diagAdminTimeout = 10 * time.Second
+
 func (d DiagDeps) admin(ctx context.Context, goos string, r exec.Runner) bool {
 	if d.IsAdmin != nil {
 		return d.IsAdmin(ctx, goos, r)
 	}
 	if goos == "windows" {
-		return platform.IsElevatedViaPowerShell(ctx, r)
+		actx, cancel := context.WithTimeout(ctx, diagAdminTimeout)
+		defer cancel()
+		return platform.IsElevatedViaPowerShell(actx, r)
 	}
 	return os.Geteuid() == 0
 }

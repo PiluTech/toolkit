@@ -475,8 +475,18 @@ func linDisks(ctx context.Context, d Deps, r *Report) {
 		devs = append(devs, linDiskDev{dev: name, nvme: dk.Bus == "NVMe"})
 		disks = append(disks, dk)
 	}
-	sort.SliceStable(disks, func(i, j int) bool { return devs[i].dev < devs[j].dev })
-	sort.SliceStable(devs, func(i, j int) bool { return devs[i].dev < devs[j].dev })
+	// ordena os PARES dispositivo+disco juntos: ordenar os dois slices em separado desalinha o índice usado pelo SMART e pelo df.
+	idx := make([]int, len(devs))
+	for i := range idx {
+		idx[i] = i
+	}
+	sort.SliceStable(idx, func(i, j int) bool { return devs[idx[i]].dev < devs[idx[j]].dev })
+	sortedDevs := make([]linDiskDev, len(devs))
+	sortedDisks := make([]Disk, len(disks))
+	for n, i := range idx {
+		sortedDevs[n], sortedDisks[n] = devs[i], disks[i]
+	}
+	devs, disks = sortedDevs, sortedDisks
 
 	// espaço livre: df agrupado pelo disco pai (0 = desconhecido)
 	if dfOut, err := linRun(ctx, d, 20*time.Second, "df", "-B1", "--output=source,avail,size"); err == nil {

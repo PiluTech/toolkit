@@ -489,7 +489,7 @@ func TestWinComAdminSemDadoNaoPedeAdmin(t *testing.T) {
 	}
 }
 
-func TestWinAdminSomaErrosDeLeituraEmSetoresRealocados(t *testing.T) {
+func TestWinAdminGuardaErrosDeLeituraSemSomarENuncaComoSetoresRealocados(t *testing.T) {
 	r, f := winRunAdmin(t, winAll(), diagfmt.PT)
 	if len(r.Skipped) != 0 {
 		t.Fatalf("skipped: %+v", r.Skipped)
@@ -497,20 +497,42 @@ func TestWinAdminSomaErrosDeLeituraEmSetoresRealocados(t *testing.T) {
 	if len(f.Calls()) != 12 {
 		t.Errorf("comandos: %d", len(f.Calls()))
 	}
-	if r.Disks[0].ReallocatedSectors == nil || *r.Disks[0].ReallocatedSectors != 5 {
-		t.Errorf("disco 0: %+v", r.Disks[0].ReallocatedSectors)
+	d0 := r.Disks[0]
+	if d0.ReadErrors == nil || *d0.ReadErrors != 3 || d0.ReadErrorsUncorrected == nil || *d0.ReadErrorsUncorrected != 2 {
+		t.Errorf("disco 0: total=%v nao corrigidos=%v", d0.ReadErrors, d0.ReadErrorsUncorrected)
 	}
-	if r.Disks[1].ReallocatedSectors != nil {
-		t.Errorf("disco 1 sem dado: %+v", r.Disks[1].ReallocatedSectors)
+	for i, d := range r.Disks {
+		if d.ReallocatedSectors != nil {
+			t.Errorf("disco %d: ReallocatedSectors só vale para SMART real: %v", i, *d.ReallocatedSectors)
+		}
+	}
+	if d := r.Disks[1]; d.ReadErrors != nil || d.ReadErrorsUncorrected != nil {
+		t.Errorf("disco 1 sem dado: %+v", d)
 	}
 }
 
+// Regressão: Total=100 e Uncorrected=0 (o total já inclui os corrigidos) não pode virar "trocar o disco".
+func TestWinErrosDeLeituraCorrigidosNaoGeramSetoresRealocados(t *testing.T) {
+	s := winAll()
+	s[winScriptSmartAdmin] = `[{"Id":"0","ReadErr":100,"ReadUnc":0}]`
+	r, _ := winRunAdmin(t, s, diagfmt.PT)
+	for _, f := range Analyze(r, diagfmt.PT) {
+		if strings.Contains(strings.ToLower(f.Title), "realocados") || f.Severity >= SevBad {
+			if f.Area == "disco" {
+				t.Errorf("achado indevido: %+v", f)
+			}
+		}
+	}
+	if !strings.Contains(Full(r, diagfmt.PT), "erros de leitura") {
+		t.Error("o relatório completo deve mostrar os erros de leitura com rótulo próprio")
+	}
+}
 func TestWinAdminSemErrosDeLeituraNaoQuebra(t *testing.T) {
 	for _, out := range []string{"", "[]", "not json"} {
 		s := winAll()
 		s[winScriptSmartAdmin] = out
 		r, _ := winRunAdmin(t, s, diagfmt.PT)
-		if r.Disks[0].ReallocatedSectors != nil || r.Disks[0].TempC == nil {
+		if r.Disks[0].ReallocatedSectors != nil || r.Disks[0].ReadErrors != nil || r.Disks[0].TempC == nil {
 			t.Errorf("%q: %+v", out, r.Disks[0])
 		}
 	}

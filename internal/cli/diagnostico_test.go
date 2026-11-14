@@ -396,3 +396,55 @@ func TestDiagnosticoPassaOEstadoDeAdminAoColetor(t *testing.T) {
 		}
 	}
 }
+
+// blockRunner só devolve quando o contexto vence (simula o PowerShell pendurado).
+type blockRunner struct{ ctx chan struct{} }
+
+func (b blockRunner) Run(ctx context.Context, _ exec.Cmd) (exec.Result, error) {
+	<-ctx.Done()
+	close(b.ctx)
+	return exec.Result{}, ctx.Err()
+}
+func (blockRunner) LookPath(string) (string, error) { return "", nil }
+
+func TestDiagDetecaoDeAdminTemPrazoProprio(t *testing.T) {
+	old := diagAdminTimeout
+	diagAdminTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { diagAdminTimeout = old })
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	done := make(chan bool, 1)
+	go func() { done <- DiagDeps{}.admin(ctx, "windows", blockRunner{ctx: make(chan struct{})}) }()
+	select {
+	case got := <-done:
+		if got {
+			t.Error("falha de detecção = não admin")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a detecção de admin não respeitou prazo próprio")
+	}
+	if ctx.Err() != nil {
+		t.Errorf("o orçamento dos coletores não pode ser consumido: %v", ctx.Err())
+	}
+}
+
+func TestDiagColetoresRecebemOrcamentoIntegroAposDetecaoLenta(t *testing.T) {
+	old := diagAdminTimeout
+	diagAdminTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { diagAdminTimeout = old })
+	var ctxErr error
+	var admin bool
+	deps := diagDeps(t, nil)
+	deps.GOOS = "windows"
+	deps.NewRunner = func() exec.Runner { return blockRunner{ctx: make(chan struct{})} }
+	deps.Diag.Collect = func(ctx context.Context, _ string, d diagnostico.Deps) *diagnostico.Report {
+		ctxErr, admin = ctx.Err(), d.Admin
+		return diagReport()
+	}
+	if _, _, err := runDiag(t, deps); err != nil {
+		t.Fatal(err)
+	}
+	if ctxErr != nil || admin {
+		t.Errorf("ctx=%v admin=%v", ctxErr, admin)
+	}
+}

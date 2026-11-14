@@ -141,7 +141,7 @@ func collectWindows(ctx context.Context, d Deps, r *Report) {
 		})
 	}
 	if d.Admin && len(r.Disks) > 0 {
-		// Só com admin: soma dos erros de leitura em ReallocatedSectors. Sem dado = nada a registrar (não é Skipped: o
+		// Só com admin: erros de leitura do contador de confiabilidade (campos próprios, nunca ReallocatedSectors). Sem dado = nada a registrar (não é Skipped: o
 		// contador é opcional e já há o item "smart").
 		winArea(ctx, d, r, "smart-erros", winScriptSmartAdmin, winSmartErrors(diskIDs), func() {})
 	}
@@ -485,8 +485,9 @@ func winSmart(ids []string) func(Deps, *Report, any) error {
 	}
 }
 
-// winSmartErrors soma ReadErrorsTotal e ReadErrorsUncorrected em Disk.ReallocatedSectors. É uma APROXIMAÇÃO: o Windows não expõe
-// o atributo SMART "Reallocated Sectors"; os erros de leitura do contador de confiabilidade são o que há de mais próximo.
+// winSmartErrors guarda ReadErrorsTotal e ReadErrorsUncorrected do contador de confiabilidade em campos PRÓPRIOS, sem somar:
+// o total já inclui os não corrigidos e nenhum dos dois é contagem de setores remapeados (Disk.ReallocatedSectors só recebe
+// SMART real). Fonte: https://learn.microsoft.com/en-us/windows-hardware/drivers/storage/msft-storagereliabilitycounter
 func winSmartErrors(ids []string) func(Deps, *Report, any) error {
 	return func(_ Deps, r *Report, v any) error {
 		found := false
@@ -494,13 +495,19 @@ func winSmartErrors(ids []string) func(Deps, *Report, any) error {
 			id := winStr(row["Id"])
 			a, okA := winUint(row["ReadErr"])
 			b, okB := winUint(row["ReadUnc"])
-			if id == "" || (!okA && !okB) || a+b > math.MaxInt32 {
+			if id == "" || (!okA && !okB) || a > math.MaxInt32 || b > math.MaxInt32 {
 				continue
 			}
 			for i := range r.Disks {
 				if i < len(ids) && ids[i] == id {
-					n := int(a + b)
-					r.Disks[i].ReallocatedSectors = &n
+					if okA {
+						n := int(a)
+						r.Disks[i].ReadErrors = &n
+					}
+					if okB {
+						n := int(b)
+						r.Disks[i].ReadErrorsUncorrected = &n
+					}
 					found = true
 				}
 			}

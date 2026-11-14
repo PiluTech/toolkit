@@ -92,7 +92,11 @@ type Disk struct {
 	TempC              *float64
 	WearPct            *int // desgaste do SSD (0 a 100; 100 = vida esgotada)
 	PowerOnHours       *int
-	ReallocatedSectors *int
+	ReallocatedSectors *int // só do SMART real (atributo 5 do smartctl); nunca dos contadores do Windows
+	// Contadores de confiabilidade do Windows (Get-StorageReliabilityCounter, só como administrador). NÃO são setores remapeados:
+	// ReadErrors é o total de erros de leitura (já inclui os corrigidos); ReadErrorsUncorrected os que o disco não corrigiu.
+	ReadErrors            *int
+	ReadErrorsUncorrected *int
 }
 
 // Battery é a bateria (nil em Report quando não há).
