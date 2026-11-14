@@ -155,3 +155,12 @@ func navHelp(key string) string {
 	}
 	return "veja a ajuda da seção."
 }
+
+// noActionsHelp é a ajuda de uma seção cujas teclas não agem agora (a barra não oferece nenhuma): fora do Windows a
+// explicação curta; carregando ou com erro, o motivo. Nunca lista teclas que a barra não mostra.
+func noActionsHelp(notReady bool) []KeyDef {
+	if notReady {
+		return []KeyDef{{Help: "Sem ações agora: a seção está carregando ou não conseguiu ler o estado."}}
+	}
+	return []KeyDef{{Help: "Esta seção só existe no Windows; aqui não há ações."}}
+}

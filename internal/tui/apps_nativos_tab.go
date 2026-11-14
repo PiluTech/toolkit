@@ -493,6 +493,9 @@ func (t *NativeAppsTab) Keys() []KeyHint {
 
 // HelpKeys implementa SectionHelper: as teclas da seção, uma frase por tecla (legenda única em keys.go).
 func (t *NativeAppsTab) HelpKeys() []KeyDef {
+	if !t.usable() {
+		return noActionsHelp(t.loading || t.loadErr != nil)
+	}
 	return []KeyDef{
 		navDef("↑↓", "", "move o cursor pela lista."),
 		act("espaço").says("marca ou desmarca o app sob o cursor."),
