@@ -20,8 +20,9 @@ type Options struct {
 	// LatestNotes e LatestURL são as notas e a página da versão nova (a tecla u as mostra).
 	LatestNotes, LatestURL string
 	// Updates entrega a versão nova que a consulta em segundo plano achar DEPOIS da abertura (nil = sem consulta).
-	Updates <-chan UpdateInfo
-	Mono    bool // sem cor, negrito nem reverso (NO_COLOR)
+	Updates  <-chan UpdateInfo
+	Mono     bool // sem cor, negrito nem reverso (NO_COLOR)
+	NoMotion bool // reduzir movimento: spinner fixo e nenhum quadro agendado
 	// Planner e Runner ligam a Revisão e a execução (nil: Enter só avisa que a execução não está ligada).
 	Planner Planner
 	Runner  Runner
@@ -100,7 +101,7 @@ func New(o Options, tabs ...Tab) *Model {
 		tabs = DefaultTabs()
 	}
 	// tema escuro até a detecção do terminal chegar
-	return &Model{opts: o, theme: Theme{Mono: o.Mono, Dark: true}, tabs: tabs, w: 80, h: 24}
+	return &Model{opts: o, theme: Theme{Mono: o.Mono, Dark: true, NoMotion: o.NoMotion}, tabs: tabs, w: 80, h: 24}
 }
 
 // Init pede a cor de fundo do terminal (claro ou escuro).

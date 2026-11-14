@@ -55,7 +55,7 @@ O toolkit é CLI + TUI de terminal (Bubble Tea), não site nem app gráfico. Por
 - **Medir:** teste Go com as paletas de referência (as da seção abaixo, mais One Half Light/Dark e Terminal.app Pro)
   que falha abaixo de 4,5:1 para texto e 3:1 para símbolos em cada token do modo escolhido. Esforço: P–M.
 
-### A2 · Sem opção de reduzir movimento — M
+### A2 · Sem opção de reduzir movimento — M (corrigido na Fase 1: `TOOLKIT_REDUCE_MOTION=1` / `--no-motion`)
 - **Onde:** `internal/tui/apps.go:70` (`tickEvery = 100ms`, spinner `spinnerFrames`), `logtab.go`, `apps.go:298`.
 - **Problema:** a skill exige respeitar "reduzir movimento". Hoje o spinner roda a 10 quadros/s, sem opção; no
   leitor de tela ele também gera redesenhos constantes (ver A4).
@@ -63,7 +63,7 @@ O toolkit é CLI + TUI de terminal (Bubble Tea), não site nem app gráfico. Por
   trocar o spinner por texto estático "em andamento…" e redesenhar só quando o estado mudar. Teste: com a opção
   ligada, nenhum `tickMsg` agendado. Esforço: P.
 
-### A3 · A doc afirma "nada pisca mais de 3 vezes por segundo", e o spinner muda 10 vezes por segundo — B
+### A3 · A doc afirma "nada pisca mais de 3 vezes por segundo", e o spinner muda 10 vezes por segundo — B (frase corrigida na Fase 1)
 - **Onde:** `docs/roadmap.md` ("o único movimento é o spinner… nada pisca mais de 3 vezes por segundo").
 - **Análise:** o WCAG 2.3.1 limita *flashes* de área grande e alto brilho; um caractere ASCII não atinge o limiar de
   área, então não reprova. Mas a frase está imprecisa.

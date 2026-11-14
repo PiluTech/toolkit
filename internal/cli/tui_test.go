@@ -543,3 +543,56 @@ func TestTuiSubcommandIgnoresCIButNeedsTerminal(t *testing.T) {
 		t.Fatalf("sem terminal na entrada o `toolkit tui` recusa, mesmo explícito")
 	}
 }
+
+// A2: --no-motion e TOOLKIT_REDUCE_MOTION (regra do envOn) chegam à TUI como Options.NoMotion, no `toolkit` e no `toolkit tui`.
+func TestReduceMotionFlagAndEnvReachTheTUI(t *testing.T) {
+	run := func(env map[string]string, args ...string) bool {
+		t.Helper()
+		var o, e bytes.Buffer
+		got, called := false, false
+		deps := Deps{GOOS: "linux", EmbeddedYML: []byte(embedded), Interactive: func() bool { return true },
+			UpdateCheck: UpdateCheckDeps{Env: func(k string) string { return env[k] }},
+			TUI: TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return "xterm" },
+				Run: func(_ context.Context, opts tui.Options, _ ...tui.Tab) error {
+					got, called = opts.NoMotion, true
+					return nil
+				}}}
+		cmd := NewRootCmdWith(&o, &e, deps)
+		cmd.SetArgs(append(args, "--no-update-check"))
+		if err := cmd.ExecuteContext(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if !called {
+			t.Fatalf("a TUI deveria abrir: %v %v", env, args)
+		}
+		return got
+	}
+	for _, args := range [][]string{nil, {"tui"}} {
+		if run(nil, args...) {
+			t.Errorf("%v: sem flag nem variável o movimento fica ligado", args)
+		}
+		if !run(nil, append(args, "--no-motion")...) {
+			t.Errorf("%v: --no-motion reduz o movimento", args)
+		}
+		if !run(map[string]string{"TOOLKIT_REDUCE_MOTION": "1"}, args...) {
+			t.Errorf("%v: TOOLKIT_REDUCE_MOTION=1 reduz o movimento", args)
+		}
+		for _, off := range []string{"", "0", "false", " off ", "No"} {
+			if run(map[string]string{"TOOLKIT_REDUCE_MOTION": off}, args...) {
+				t.Errorf("%v: TOOLKIT_REDUCE_MOTION=%q não reduz (regra do envOn)", args, off)
+			}
+		}
+	}
+}
+
+func TestNoMotionFlagIsDocumentedInHelp(t *testing.T) {
+	for _, args := range [][]string{{"--help"}, {"tui", "--help"}} {
+		var o, e bytes.Buffer
+		cmd := NewRootCmdWith(&o, &e, Deps{GOOS: "linux", EmbeddedYML: []byte(embedded)})
+		cmd.SetArgs(args)
+		_ = cmd.ExecuteContext(context.Background())
+		if !strings.Contains(o.String(), "--no-motion") || !strings.Contains(o.String(), "TOOLKIT_REDUCE_MOTION=1") {
+			t.Errorf("%v: a ajuda deve citar --no-motion e TOOLKIT_REDUCE_MOTION=1:\n%s", args, o.String())
+		}
+	}
+}
