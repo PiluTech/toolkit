@@ -71,14 +71,37 @@ type CPU struct {
 
 // Memory é a RAM, o commit e o arquivo de paginação.
 type Memory struct {
-	TotalBytes     uint64 `json:"totalBytes"`
-	AvailableBytes uint64 `json:"availableBytes"` // inclui o cache reutilizável ("Disponível" do Gerenciador de Tarefas)
-	CommitBytes    uint64 `json:"commitBytes,omitempty"`
-	CommitLimit    uint64 `json:"commitLimitBytes,omitempty"`
-	PageAllocBytes uint64 `json:"pageAllocBytes,omitempty"`
-	PageUsedBytes  uint64 `json:"pageUsedBytes,omitempty"`
+	TotalBytes     uint64  `json:"totalBytes"`
+	AvailableBytes *uint64 `json:"availableBytes,omitempty"` // nil = não lido (um zero real é pressão). Inclui o cache reutilizável ("Disponível" do Gerenciador de Tarefas)
+	CommitBytes    uint64  `json:"commitBytes,omitempty"`
+	CommitLimit    uint64  `json:"commitLimitBytes,omitempty"`
+	PageAllocBytes uint64  `json:"pageAllocBytes,omitempty"`
+	PageUsedBytes  uint64  `json:"pageUsedBytes,omitempty"`
 	// Top são os processos com mais memória (conjunto de trabalho).
 	Top []Process `json:"top,omitempty"`
+}
+
+// measured diz se há ao menos uma medida avaliável: a RAM disponível (zero real conta), o limite de commit ou o arquivo de
+// paginação. Só o total não é medida.
+func (m *Memory) measured() bool {
+	return m != nil && m.TotalBytes > 0 && (m.AvailableBytes != nil || m.CommitLimit > 0 || m.PageAllocBytes > 0)
+}
+
+// measured diz se o disco tem ao menos uma medida: espaço (tamanho e livre), tipo, fila ou latência. O "drive" sozinho (o
+// script sempre o preenche) não é leitura.
+func (d *Disk) measured() bool {
+	return d != nil && ((d.SizeBytes > 0 && d.FreeBytes != nil) || d.Medium != "" || d.QueueAvg != nil || d.LatencyMs != nil)
+}
+
+// readAreas conta as áreas com leitura válida (a mesma conta da análise e do resumo: nada lido = resultado inconclusivo).
+func (r *Report) readAreas() int {
+	n := 0
+	for _, ok := range []bool{r.CPU != nil, r.Memory.measured(), r.Disk.measured(), r.Startup != nil, r.Services != nil, r.Boot != nil && r.Boot.Found} {
+		if ok {
+			n++
+		}
+	}
+	return n
 }
 
 // Disk é o disco do sistema: tipo, espaço livre e, quando a amostra trouxe, fila e latência.

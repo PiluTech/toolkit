@@ -46,9 +46,10 @@ func (f *fakeOtim) Load(ctx context.Context) (*otimizacao.Report, error) {
 func otimReport() *otimizacao.Report {
 	deg := true
 	free := uint64(40)
+	avail := uint64(1 << 30)
 	return &otimizacao.Report{OS: "windows", Supported: true,
 		CPU:      &otimizacao.CPU{Samples: 3, AvgPct: 91, PeakPct: 99, Top: []otimizacao.Process{{Name: "chrome", PID: 7, CPUPct: 50}}},
-		Memory:   &otimizacao.Memory{TotalBytes: 16 << 30, AvailableBytes: 1 << 30, Top: []otimizacao.Process{{Name: "chrome", PID: 7, MemBytes: 2 << 30}}},
+		Memory:   &otimizacao.Memory{TotalBytes: 16 << 30, AvailableBytes: &avail, Top: []otimizacao.Process{{Name: "chrome", PID: 7, MemBytes: 2 << 30}}},
 		Disk:     &otimizacao.Disk{Drive: "C", Name: "Disco Fake", Medium: "HDD", SizeBytes: 1000, FreeBytes: &free},
 		Startup:  &otimizacao.Startup{Total: 14, Items: []otimizacao.StartupItem{{Name: "AppUm", Command: "um.exe"}}},
 		Services: &otimizacao.Services{AutoCount: 90, OutsideCount: 10, Failed: []otimizacao.Service{{Name: "SvcFalhou", ExitCode: 1}}},
@@ -404,5 +405,19 @@ func TestOtimNaAreaMaquinaTabChega(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if m.Active() != 5 {
 		t.Fatalf("Tab de Apps nativos leva à Otimização: %d", m.Active())
+	}
+}
+
+// Todas as áreas sem leitura: a seção mostra o resultado INCONCLUSIVO, não "nenhum gargalo evidente".
+func TestOtimTudoSemLeituraMostraInconclusivo(t *testing.T) {
+	rep := &otimizacao.Report{OS: "windows", Supported: true}
+	for _, a := range []string{"cpu", "memoria", "disco", "inicializacao", "servicos", "boot"} {
+		rep.Skipped = append(rep.Skipped, otimizacao.Skipped{Area: a, Reason: "não foi possível ler"})
+	}
+	tab := newOtim(&fakeOtim{rep: rep}, "windows")
+	otimSettle(t, tab, okey(tab, "c"))
+	all := strings.ToLower(strings.Join(tab.lines, "\n"))
+	if !strings.Contains(all, "inconclusivo: nada foi lido") || strings.Contains(all, "nenhum gargalo") {
+		t.Fatalf("seção:\n%s", all)
 	}
 }

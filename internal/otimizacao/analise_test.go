@@ -50,7 +50,7 @@ func TestLimiarMemoriaEmUso(t *testing.T) {
 		want  bool
 	}{{101, false}, {100, true}, {99, true}} { // 90% em uso = 10% disponível
 		r := okReport()
-		r.Memory = &Memory{TotalBytes: total, AvailableBytes: c.avail}
+		r.Memory = &Memory{TotalBytes: total, AvailableBytes: u64(c.avail)}
 		if got := has(Analyze(r, diagfmt.PT), "memoria", SevWarn); got != c.want {
 			t.Errorf("disponível %d de %d: atenção=%v, quer %v", c.avail, total, got, c.want)
 		}
@@ -69,7 +69,7 @@ func TestLimiarCommitEPaginacao(t *testing.T) {
 		want bool
 	}{{899, false}, {900, true}, {901, true}} {
 		r := okReport()
-		r.Memory = &Memory{TotalBytes: 1000, AvailableBytes: 1000, CommitBytes: c.used, CommitLimit: 1000}
+		r.Memory = &Memory{TotalBytes: 1000, AvailableBytes: u64(1000), CommitBytes: c.used, CommitLimit: 1000}
 		if got := has(Analyze(r, diagfmt.PT), "memoria", SevWarn); got != c.want {
 			t.Errorf("commit %d/1000: %v", c.used, got)
 		}
@@ -79,7 +79,7 @@ func TestLimiarCommitEPaginacao(t *testing.T) {
 		want bool
 	}{{799, false}, {800, true}, {801, true}} {
 		r := okReport()
-		r.Memory = &Memory{TotalBytes: 1000, AvailableBytes: 1000, PageAllocBytes: 1000, PageUsedBytes: c.used}
+		r.Memory = &Memory{TotalBytes: 1000, AvailableBytes: u64(1000), PageAllocBytes: 1000, PageUsedBytes: c.used}
 		if got := has(Analyze(r, diagfmt.PT), "memoria", SevInfo); got != c.want {
 			t.Errorf("paginação %d/1000: %v", c.used, got)
 		}
@@ -232,7 +232,7 @@ func TestOrdemDosAchados(t *testing.T) {
 func everythingReport() *Report {
 	r := okReport()
 	r.CPU = &CPU{Samples: 3, AvgPct: 97, PeakPct: 100, Top: []Process{{Name: "chrome", PID: 1, CPUPct: 60}}}
-	r.Memory = &Memory{TotalBytes: 1000, AvailableBytes: 10, CommitBytes: 990, CommitLimit: 1000, PageAllocBytes: 1000, PageUsedBytes: 900, Top: []Process{{Name: "chrome", PID: 1, MemBytes: 500}}}
+	r.Memory = &Memory{TotalBytes: 1000, AvailableBytes: u64(10), CommitBytes: 990, CommitLimit: 1000, PageAllocBytes: 1000, PageUsedBytes: 900, Top: []Process{{Name: "chrome", PID: 1, MemBytes: 500}}}
 	r.Disk = &Disk{Drive: "C", Medium: "HDD", SizeBytes: 1000, FreeBytes: u64(10), QueueAvg: f64(9), LatencyMs: f64(90)}
 	r.Startup = &Startup{Total: 30, Items: []StartupItem{{Name: "A", Command: "a.exe"}}}
 	r.Services = &Services{AutoCount: 120, OutsideCount: 50, Outside: []Service{{Name: "S1"}}, Failed: []Service{{Name: "F1", ExitCode: 1}}}

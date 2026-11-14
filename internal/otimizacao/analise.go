@@ -101,10 +101,8 @@ func Analyze(r *Report, l Lang) []Finding {
 	add := func(area string, sev Severity, title, detail, action string) {
 		f = append(f, Finding{Area: area, Severity: sev, Title: title, Detail: detail, Action: action})
 	}
-	read := 0
 
 	if c := r.CPU; c != nil {
-		read++
 		if c.AvgPct >= cpuAvgWarn {
 			d := fmt.Sprintf("%s %s, %s %s (%s %d %s; %s %s)", t("média", "average", "media"), pct(c.AvgPct, l), t("pico", "peak", "pico"), pct(c.PeakPct, l),
 				t("amostra de", "sample of", "muestra de"), c.Samples, t("leituras", "readings", "lecturas"), t("limiar", "threshold", "umbral"), pct(cpuAvgWarn, l))
@@ -118,12 +116,12 @@ func Analyze(r *Report, l Lang) []Finding {
 		}
 	}
 
-	if m := r.Memory; m != nil {
-		read++
-		if m.TotalBytes > 0 && m.AvailableBytes > 0 && m.AvailableBytes <= m.TotalBytes {
-			used := m.TotalBytes - m.AvailableBytes
+	if m := r.Memory; m.measured() {
+		// só mede o que foi lido: disponível ausente (nil) não é avaliado; um ZERO real é pressão de memória
+		if m.AvailableBytes != nil && *m.AvailableBytes <= m.TotalBytes {
+			used := m.TotalBytes - *m.AvailableBytes
 			if used*100 >= m.TotalBytes*memUsePct {
-				d := fmt.Sprintf("%s %s %s (%s %s; %s %d%%)", gb(m.AvailableBytes, l), t("disponíveis de", "available of", "disponibles de"), gb(m.TotalBytes, l),
+				d := fmt.Sprintf("%s %s %s (%s %s; %s %d%%)", gb(*m.AvailableBytes, l), t("disponíveis de", "available of", "disponibles de"), gb(m.TotalBytes, l),
 					t("em uso", "in use", "en uso"), pct(float64(used)*100/float64(m.TotalBytes), l), t("limiar", "threshold", "umbral"), memUsePct)
 				if len(m.Top) > 0 {
 					d += "; " + t("maiores agora: ", "largest now: ", "mayores ahora: ") + procList(m.Top, true, l)
@@ -150,8 +148,7 @@ func Analyze(r *Report, l Lang) []Finding {
 		}
 	}
 
-	if d := r.Disk; d != nil {
-		read++
+	if d := r.Disk; d.measured() {
 		name := d.Drive + ":"
 		if d.Name != "" {
 			name += " (" + d.Name + ")"
@@ -193,7 +190,6 @@ func Analyze(r *Report, l Lang) []Finding {
 	}
 
 	if s := r.Startup; s != nil {
-		read++
 		if s.Total > startupMany {
 			add("inicializacao", SevInfo, t("Muitos itens registrados para iniciar com o Windows", "Many items registered to start with Windows", "Muchos elementos registrados para iniciar con Windows"),
 				fmt.Sprintf("%d %s (%s %d); %s", s.Total, t("itens", "items", "elementos"), t("limiar: mais de", "threshold: more than", "umbral: más de"), startupMany,
@@ -207,7 +203,6 @@ func Analyze(r *Report, l Lang) []Finding {
 	}
 
 	if sv := r.Services; sv != nil {
-		read++
 		if len(sv.Failed) > 0 {
 			add("servicos", SevInfo, t("Serviço automático parado com erro", "Automatic service stopped with an error", "Servicio automático detenido con error"),
 				nameList(sv.Failed),
@@ -244,13 +239,13 @@ func Analyze(r *Report, l Lang) []Finding {
 		}
 	}
 
-	if len(f) == 0 {
-		if read == 0 {
-			add("sistema", SevInfo, t("Nada foi lido", "Nothing was read", "No se leyó nada"), t("veja as áreas não lidas abaixo", "see the unread areas below", "vea las áreas no leídas abajo"), "")
-		} else {
-			add("sistema", SevOK, t("Nenhum gargalo evidente nas leituras", "No evident bottleneck in the readings", "Ningún cuello de botella evidente en las lecturas"),
-				t("isto não é garantia de desempenho: são números de um instante", "this is not a performance guarantee: they are numbers from a moment in time", "esto no es garantía de rendimiento: son números de un instante"), "")
-		}
+	if r.readAreas() == 0 {
+		// nada lido NUNCA é "tudo bem": o resultado é inconclusivo (o resumo diz o mesmo)
+		add("sistema", SevInfo, t("Nada foi lido: resultado inconclusivo", "Nothing was read: inconclusive result", "No se leyó nada: resultado inconcluso"),
+			t("nenhuma área teve leitura válida; veja as áreas não lidas abaixo", "no area had a valid reading; see the unread areas below", "ninguna área tuvo lectura válida; vea las áreas no leídas abajo"), "")
+	} else if len(f) == 0 {
+		add("sistema", SevOK, t("Nenhum gargalo evidente nas leituras", "No evident bottleneck in the readings", "Ningún cuello de botella evidente en las lecturas"),
+			t("isto não é garantia de desempenho: são números de um instante", "this is not a performance guarantee: they are numbers from a moment in time", "esto no es garantía de rendimiento: son números de un instante"), "")
 	}
 	sort.SliceStable(f, func(i, j int) bool { return f[i].Severity > f[j].Severity })
 	return f

@@ -61,6 +61,9 @@ func Summary(r *Report, fs []Finding, l Lang) string {
 		fmt.Fprintf(&b, "%s: %d %s, %d %s.\n\n", t("Resultado", "Result", "Resultado"), bad, t("problema(s)", "problem(s)", "problema(s)"), warn, t("atenção", "attention", "atención"))
 	case warn > 0:
 		fmt.Fprintf(&b, "%s: %d %s.\n\n", t("Resultado", "Result", "Resultado"), warn, t("ponto(s) de atenção", "point(s) of attention", "punto(s) de atención"))
+	case r.readAreas() == 0:
+		// nada lido: inconclusivo, nunca "nenhum gargalo"
+		fmt.Fprintf(&b, "%s.\n\n", t("Resultado inconclusivo: nada foi lido", "Result inconclusive: nothing was read", "Resultado inconcluso: no se leyó nada"))
 	default:
 		fmt.Fprintf(&b, "%s: %s.\n\n", t("Resultado", "Result", "Resultado"), t("nenhum gargalo evidente", "no evident bottleneck", "ningún cuello de botella evidente"))
 	}
@@ -85,6 +88,14 @@ func Summary(r *Report, fs []Finding, l Lang) string {
 		"Security: read-only, no administrator and no writes; nothing was changed. Only numbers and documented thresholds, no score; \"what to do\" is text for you to decide.",
 		"Seguridad: solo lectura, sin administrador y sin escritura; no se cambió nada. Solo números y umbrales documentados, sin puntuación; el \"qué hacer\" es texto para que usted decida."))
 	return strings.TrimRight(b.String(), "\n") + "\n"
+}
+
+// sizePtr é nil para tamanho zero (ausente): o relatório diz "sem dado" em vez de "0 B".
+func sizePtr(v uint64) *uint64 {
+	if v == 0 {
+		return nil
+	}
+	return &v
 }
 
 func opt[T any](p *T, f func(T) string, none string) string {
@@ -113,7 +124,7 @@ func Full(r *Report, l Lang) string {
 	}
 	if m := r.Memory; m != nil {
 		h(t("Memória", "Memory", "Memoria"))
-		fmt.Fprintf(&b, "%s: %s | %s: %s\n", t("total", "total", "total"), gb(m.TotalBytes, l), t("disponível", "available", "disponible"), gb(m.AvailableBytes, l))
+		fmt.Fprintf(&b, "%s: %s | %s: %s\n", t("total", "total", "total"), gb(m.TotalBytes, l), t("disponível", "available", "disponible"), opt(m.AvailableBytes, func(v uint64) string { return gb(v, l) }, none))
 		if m.CommitLimit > 0 {
 			fmt.Fprintf(&b, "commit: %s / %s\n", gb(m.CommitBytes, l), gb(m.CommitLimit, l))
 		}
@@ -132,7 +143,7 @@ func Full(r *Report, l Lang) string {
 			medium = t("tipo desconhecido", "unknown type", "tipo desconocido")
 		}
 		fmt.Fprintf(&b, "%s: %s | %s | %s\n", d.Drive+":", d.Name, medium, d.Bus)
-		fmt.Fprintf(&b, "%s: %s / %s\n", t("livre", "free", "libre"), opt(d.FreeBytes, func(v uint64) string { return gb(v, l) }, none), gb(d.SizeBytes, l))
+		fmt.Fprintf(&b, "%s: %s / %s\n", t("livre", "free", "libre"), opt(d.FreeBytes, func(v uint64) string { return gb(v, l) }, none), opt(sizePtr(d.SizeBytes), func(v uint64) string { return gb(v, l) }, none))
 		fmt.Fprintf(&b, "%s: %s (%s %s)\n", t("fila média", "average queue", "cola media"), opt(d.QueueAvg, func(v float64) string { return diagfmt.Number(v, 2, l) }, none), t("pico", "peak", "pico"), opt(d.QueuePeak, func(v float64) string { return diagfmt.Number(v, 2, l) }, none))
 		fmt.Fprintf(&b, "%s: %s\n\n", t("latência média", "average latency", "latencia media"), opt(d.LatencyMs, func(v float64) string { return diagfmt.Number(v, 1, l) + " ms" }, none))
 	}

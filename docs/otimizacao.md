@@ -27,10 +27,24 @@ falha vira "não lido" (com o motivo) e o resto continua.
 |---|---|---|
 | CPU | `Win32_PerfFormattedData_PerfOS_Processor` (`_Total`), 3 leituras com 1 s; processos: `Win32_PerfFormattedData_PerfProc_Process` (percentual do momento, dividido pelos processadores lógicos) | Nada de `Get-Counter`: o caminho do contador é traduzido (não existe em Windows em português); as classes CIM têm nome fixo. O `.CPU` do `Get-Process` é tempo **acumulado**, não diz quem pesa agora. Amostras todas zero = "sem leitura válida", nunca "CPU ociosa" |
 | Memória | `Win32_ComputerSystem.TotalPhysicalMemory`, `Win32_PerfFormattedData_PerfOS_Memory` (disponível, commit e limite), `Win32_PageFileUsage`, `Get-Process` por conjunto de trabalho | "Disponível" inclui o cache reutilizável (o do Gerenciador de Tarefas); o "livre" puro assustaria sem motivo |
-| Disco do sistema | `SystemDrive` -> `Win32_LogicalDisk` (espaço), `Get-Partition` -> `Get-PhysicalDisk` (tipo), `Win32_PerfFormattedData_PerfDisk_PhysicalDisk` da instância do volume (fila e latência) | `Unspecified` (máquina virtual, RAID) é **desconhecido**, nunca HDD |
+| Disco do sistema | `SystemDrive` -> `Win32_LogicalDisk` (espaço), `Get-Partition` -> `Get-PhysicalDisk` (tipo), `Win32_PerfFormattedData_PerfDisk_PhysicalDisk` (fila) e `Win32_PerfRawData_PerfDisk_PhysicalDisk` (latência) da instância do volume | `Unspecified` (máquina virtual, RAID) é **desconhecido**, nunca HDD. Só o `drive` (que o script sempre preenche) não é leitura: sem tamanho e livre, tipo, fila ou latência a área fica em "não lido" |
 | Inicialização | `Win32_StartupCommand` + chaves `Run` de HKCU e HKLM (só leitura; duplicata sai por nome) | Contagem de itens **registrados**. A fonte não diz o peso de cada um nem se o usuário já o desligou em Configurações (`StartupApproved` não é lido: A VERIFICAR); por isso não há "os mais pesados" |
 | Serviços | `Win32_Service` com `StartMode='Auto'` | Conta os fora da pasta do Windows (heurística: a maioria é de terceiros) e lista os parados com `ExitCode` de erro (0 = parada normal e 1077 = nunca tentou iniciar, por gatilho ou início atrasado, não contam) |
 | Boot | `Get-WinEvent` no log `Microsoft-Windows-Diagnostics-Performance/Operational`, evento **100**, o mais recente, campos lidos por nome no XML (`BootTime`, `BootIsDegradation`) | `try/catch` separa os casos: `ok`, `none` (sem evento), `nolog`, `denied` e `error` (com `SilentlyContinue` "sem evento" e "acesso negado" ficam iguais) |
+
+**Latência do disco (contadores brutos).** O `AvgDisksecPerTransfer` das classes `Win32_PerfFormattedData_*` é um inteiro
+(`uint32`) em **segundos**: 30 ms viraria `0` e nunca bateria o limiar de 25 ms. Por isso a latência vem de
+`Win32_PerfRawData_PerfDisk_PhysicalDisk` ([classe](https://learn.microsoft.com/en-us/previous-versions/aa394262(v=vs.85)),
+contador `PERF_AVERAGE_TIMER`), em 3 amostras com 1 s: `AvgDisksecPerTransfer` (N, ticks acumulados),
+`AvgDisksecPerTransfer_Base` (D, transferências acumuladas) e `Frequency_PerfTime` (F, ticks por segundo). Entre a primeira e a
+última amostra: `latência = ((N1 - N0) / F) / (D1 - D0)` segundos por transferência, mostrada em ms (função `latencyMs`). Amostra
+única, base (D) sem aumento, N que voltou ou F <= 0 = **sem leitura** (campo ausente, "sem dado" no relatório completo), nunca
+"0 ms" nem "ok". Os testes exercitam o caminho todo (script -> JSON -> cálculo) com contadores brutos sintéticos: 30 ms bate o
+limiar, 24,9 ms não.
+
+**Presença dos campos.** Dado ausente não é zero. `AvailableBytes` é ponteiro: `avail` ausente fica `nil` (a RAM disponível não
+é avaliada, o relatório diz "sem dado" e a área aparece em "não lido" com o motivo); um **zero real** de RAM disponível é medida e
+indica pressão de memória (achado). Só o total de memória, ou só o `drive` do disco, não são leitura: a área fica sem leitura.
 
 **Boot, com honestidade.** O evento 100 é o aviso de que o Windows iniciou e **uma lentidão foi detectada**; algumas builds não o
 geram e o log pode vir vazio. Por isso "sem evento" e "log ausente" viram **"sem dado"** (com a frase `Isto NÃO significa que o
@@ -60,8 +74,9 @@ memória e de espaço livre são os mesmos do [diagnóstico](diagnostico.md): as
 | Boot com lentidão | o Windows marcou o último boot como degradado (evento 100) | info |
 | Boot sem dado | sem evento ou sem log (nunca "rápido") | info |
 
-Sem nenhum achado e com algo lido: `nenhum gargalo evidente` (com o aviso de que são números de um instante, não garantia). Nada
-lido: um aviso de informação, nunca "tudo certo". A legenda de limiares aparece no painel de detalhe da TUI (`otimizacao.Legend`).
+Sem nenhum achado e com ao menos uma área lida (CPU, memória ou disco com medida, inicialização, serviços ou boot com evento): `nenhum
+gargalo evidente` (com o aviso de que são números de um instante, não garantia). **Nada lido: `Resultado inconclusivo: nada foi lido`**
+(pt/en/es), com o achado `sistema` de informação "Nada foi lido: resultado inconclusivo" no `--json` e na TUI, nunca "tudo certo". A legenda de limiares aparece no painel de detalhe da TUI (`otimizacao.Legend`).
 
 ## O que NÃO faz (lista fixa, em teste de regressão)
 

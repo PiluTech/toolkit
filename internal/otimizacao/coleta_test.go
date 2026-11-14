@@ -18,7 +18,7 @@ var testNow = time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
 
 // Fixtures SINTÉTICAS: nada aqui veio de uma máquina real (nomes e números inventados).
 const (
-	fxPerf     = `{"cpu":[10,92,88],"q":[0.5,3,2],"lat":[0.004,0.03,0.02],"lp":4,"top":[{"Name":"chrome#2","Pid":4242,"Cpu":240},{"Name":"editor","Pid":77,"Cpu":"40"},{"Name":null,"Pid":null,"Cpu":null}]}`
+	fxPerf     = `{"cpu":[10,92,88],"q":[0.5,3,2],"lat":[{"n":"1000000000000","d":"1000","f":"10000000"},{"n":"1000020000000","d":"1100","f":"10000000"},{"n":"1000036000000","d":"1200","f":"10000000"}],"lp":4,"top":[{"Name":"chrome#2","Pid":4242,"Cpu":240},{"Name":"editor","Pid":77,"Cpu":"40"},{"Name":null,"Pid":null,"Cpu":null}]}`
 	fxMem      = `{"total":17179869184,"avail":1073741824,"committed":15032385536,"limit":17179869184,"swap":[{"Alloc":2048,"Used":1900}],"top":[{"Name":"chrome","Pid":4242,"Mem":2147483648},{"Name":"editor","Pid":77,"Mem":"1073741824"}]}`
 	fxDisk     = `{"drive":"C","size":512110190592,"free":30000000000,"name":"Disco Fake","media":"HDD","bus":"SATA"}`
 	fxStartup  = `{"wmi":[{"Name":"AppUm","Cmd":"\"C:\\Programas\\AppUm\\um.exe\" --minimizado","Loc":"HKU\\x\\Run"},{"Name":"AppDois","Cmd":"C:\\Programas\\dois.exe","Loc":"Startup"}],"run":[{"Name":"appum","Cmd":"C:\\Programas\\AppUm\\um.exe","Loc":"HKCU:\\Run"},{"Name":"AppTres","Cmd":"tres.exe /x","Loc":"HKLM:\\Run"}]}`
@@ -67,7 +67,7 @@ func TestColetaWindowsCompleta(t *testing.T) {
 		t.Fatalf("top cpu (o nulo é descartado): %+v", c.Top)
 	}
 	m := r.Memory
-	if m == nil || m.TotalBytes != 17179869184 || m.AvailableBytes != 1073741824 || m.CommitBytes != 15032385536 || m.PageAllocBytes != 2048<<20 || m.PageUsedBytes != 1900<<20 {
+	if m == nil || m.TotalBytes != 17179869184 || m.AvailableBytes == nil || *m.AvailableBytes != 1073741824 || m.CommitBytes != 15032385536 || m.PageAllocBytes != 2048<<20 || m.PageUsedBytes != 1900<<20 {
 		t.Fatalf("memória: %+v", m)
 	}
 	if len(m.Top) != 2 || m.Top[0].Name != "chrome" || m.Top[1].MemBytes != 1073741824 {
@@ -182,7 +182,7 @@ func TestParseTolerante(t *testing.T) {
 	s := fxAll()
 	s[scriptPerf] = `{"cpu":15,"q":null,"lat":"x","lp":null,"top":{"Name":"solo","Pid":"9","Cpu":"8"}}`
 	s[scriptMem] = `{"total":"1048576","avail":null,"committed":null,"limit":null,"swap":null,"top":null}`
-	s[scriptDisk] = `{"drive":"C","size":null,"free":null,"name":null,"media":"Unspecified","bus":null}`
+	s[scriptDisk] = `{"drive":"C","size":1000,"free":500,"name":null,"media":"Unspecified","bus":null}`
 	s[scriptStartup] = `{"wmi":null,"run":{"Name":"UmSo","Cmd":null,"Loc":null}}`
 	s[scriptServices] = `{"N":"Solo","D":null,"S":null,"E":null,"P":null}`
 	s[scriptBoot] = `{"status":"ok","t":"lixo","boot":null,"degr":null}`
@@ -194,10 +194,10 @@ func TestParseTolerante(t *testing.T) {
 	if len(r.CPU.Top) != 1 || r.CPU.Top[0].Name != "solo" || r.CPU.Top[0].PID != 9 || r.CPU.Top[0].CPUPct != 8 {
 		t.Fatalf("top com objeto único: %+v", r.CPU.Top)
 	}
-	if r.Memory == nil || r.Memory.TotalBytes != 1048576 || r.Memory.AvailableBytes != 0 {
-		t.Fatalf("memória sem disponível: %+v", r.Memory)
+	if r.Memory != nil || !hasSkipped(r, "memoria") {
+		t.Fatalf("memória só com o total não é leitura (ausente não é zero): %+v %+v", r.Memory, r.Skipped)
 	}
-	if r.Disk == nil || r.Disk.Medium != "" || r.Disk.FreeBytes != nil || r.Disk.QueueAvg != nil {
+	if r.Disk == nil || r.Disk.Medium != "" || r.Disk.FreeBytes == nil || r.Disk.QueueAvg != nil {
 		t.Fatalf("Unspecified é desconhecido, nunca HDD: %+v", r.Disk)
 	}
 	if r.Startup == nil || r.Startup.Total != 1 {
@@ -323,5 +323,197 @@ func TestListasCurtas(t *testing.T) {
 	r, _ := runWin(t, s, Deps{Lang: diagfmt.PT})
 	if r.Services.AutoCount != 200 || r.Services.OutsideCount != 200 || len(r.Services.Outside) > maxList || len(r.Services.Failed) > maxList {
 		t.Fatalf("a contagem é inteira e a lista é curta: %d %d %d %d", r.Services.AutoCount, r.Services.OutsideCount, len(r.Services.Outside), len(r.Services.Failed))
+	}
+}
+
+// ---- latência do disco pelos contadores BRUTOS (PERF_AVERAGE_TIMER) ----
+
+// perfRawJSON monta o JSON do script de desempenho com amostras brutas {n, d, f} do disco (n = ticks acumulados,
+// d = transferências acumuladas, f = ticks por segundo). Sintético.
+func perfRawJSON(samples ...[3]string) string {
+	var parts []string
+	for _, s := range samples {
+		parts = append(parts, `{"n":"`+s[0]+`","d":"`+s[1]+`","f":"`+s[2]+`"}`)
+	}
+	return `{"cpu":[10,20,30],"q":[0.5,0.5,0.5],"lat":[` + strings.Join(parts, ",") + `],"lp":4,"top":[]}`
+}
+
+func latencyOf(t *testing.T, perf string) *float64 {
+	t.Helper()
+	s := fxAll()
+	s[scriptPerf] = perf
+	r, _ := runWin(t, s, Deps{Lang: diagfmt.PT})
+	if r.Disk == nil {
+		t.Fatalf("o disco devia ter sido lido: %+v", r.Skipped)
+	}
+	return r.Disk.LatencyMs
+}
+
+// Frequência 10 MHz; em 200 transferências, 6e7 ticks = 6 s /10e6... = 0,030 s por operação = 30 ms (bate o limiar de 25 ms).
+// O valor formatado do CIM seria um uint32 em SEGUNDOS: 0,030 viraria 0 e nunca bateria o limiar.
+func TestLatenciaDoDiscoPelosContadoresBrutos(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		perf  string
+		want  float64
+		fires bool
+	}{
+		{"30 ms", perfRawJSON([3]string{"1000000000000", "1000", "10000000"}, [3]string{"1000030000000", "1100", "10000000"}, [3]string{"1000060000000", "1200", "10000000"}), 30, true},
+		{"24,9 ms", perfRawJSON([3]string{"1000000000000", "1000", "10000000"}, [3]string{"1000024900000", "1100", "10000000"}, [3]string{"1000049800000", "1200", "10000000"}), 24.9, false},
+	} {
+		lat := latencyOf(t, c.perf)
+		if lat == nil || math.Abs(*lat-c.want) > 0.001 {
+			t.Fatalf("%s: latência = %v, quer %v ms", c.name, lat, c.want)
+		}
+		s := fxAll()
+		s[scriptPerf] = c.perf
+		r, _ := runWin(t, s, Deps{Lang: diagfmt.PT})
+		got := false
+		for _, f := range Analyze(r, diagfmt.PT) {
+			if f.Area == "disco" && strings.Contains(f.Title, "lento para responder") {
+				got = true
+			}
+		}
+		if got != c.fires {
+			t.Errorf("%s: achado de latência = %v, quer %v", c.name, got, c.fires)
+		}
+	}
+}
+
+// Amostra única, base sem variação, contador que volta atrás ou frequência zero: SEM LEITURA, nunca "0 ms" nem "ok".
+func TestLatenciaSemLeituraNuncaVira0ms(t *testing.T) {
+	for name, perf := range map[string]string{
+		"amostra única":   perfRawJSON([3]string{"1000000000000", "1000", "10000000"}),
+		"base zero":       perfRawJSON([3]string{"1000000000000", "1000", "10000000"}, [3]string{"1000030000000", "1000", "10000000"}),
+		"contador voltou": perfRawJSON([3]string{"1000030000000", "1100", "10000000"}, [3]string{"1000000000000", "1200", "10000000"}),
+		"frequência zero": perfRawJSON([3]string{"1", "10", "0"}, [3]string{"2", "20", "0"}),
+		"sem lista":       `{"cpu":[10,20,30],"q":[1],"lat":null,"lp":4,"top":[]}`,
+		"valor antigo":    `{"cpu":[10,20,30],"q":[1],"lat":[0,0,0],"lp":4,"top":[]}`,
+	} {
+		if lat := latencyOf(t, perf); lat != nil {
+			t.Errorf("%s: devia ser sem leitura, veio %.3f ms", name, *lat)
+		}
+	}
+}
+
+// O script lê os contadores BRUTOS (os formatados são inteiros em segundos) e o teste de contrato dos scripts continua valendo.
+func TestScriptPerfLeContadoresBrutosDeLatencia(t *testing.T) {
+	for _, w := range []string{"Win32_PerfRawData_PerfDisk_PhysicalDisk", "AvgDisksecPerTransfer_Base", "Frequency_PerfTime"} {
+		if !strings.Contains(scriptPerf, w) {
+			t.Errorf("o script de desempenho precisa de %s", w)
+		}
+	}
+	if strings.Contains(scriptPerf, "$d.AvgDisksecPerTransfer") {
+		t.Error("o AvgDisksecPerTransfer formatado é inteiro em segundos: não pode alimentar a latência")
+	}
+}
+
+// ---- presença dos campos: ausente não é zero ----
+
+func collectWith(t *testing.T, over map[string]string) (*Report, []Finding) {
+	t.Helper()
+	s := fxAll()
+	for k, v := range over {
+		s[k] = v
+	}
+	r, _ := runWin(t, s, Deps{Lang: diagfmt.PT})
+	return r, Analyze(r, diagfmt.PT)
+}
+
+func TestMemoriaDisponivelAusenteNaoEAvaliada(t *testing.T) {
+	r, fs := collectWith(t, map[string]string{scriptMem: `{"total":17179869184,"avail":null,"committed":null,"limit":null,"swap":null,"top":null}`})
+	for _, f := range fs {
+		if f.Area == "memoria" {
+			t.Errorf("sem RAM disponível não há achado de memória (nem 'disponível 0'): %+v", f)
+		}
+	}
+	if r.Memory != nil && r.Memory.AvailableBytes != nil {
+		t.Errorf("disponível ausente tem de continuar ausente: %v", *r.Memory.AvailableBytes)
+	}
+	if !hasSkipped(r, "memoria") {
+		t.Errorf("a leitura que faltou tem de aparecer em Skipped: %+v", r.Skipped)
+	}
+	if strings.Contains(Full(r, diagfmt.PT), "disponível: 0") {
+		t.Error("o relatório completo não diz 'disponível 0' para dado ausente")
+	}
+}
+
+func TestMemoriaDisponivelZeroRealEPressao(t *testing.T) {
+	r, fs := collectWith(t, map[string]string{scriptMem: `{"total":17179869184,"avail":0,"committed":null,"limit":null,"swap":null,"top":null}`})
+	if r.Memory == nil || r.Memory.AvailableBytes == nil || *r.Memory.AvailableBytes != 0 {
+		t.Fatalf("o zero real é uma medida: %+v", r.Memory)
+	}
+	if !has(fs, "memoria", SevWarn) {
+		t.Errorf("RAM disponível 0 de verdade é pressão de memória: %+v", fs)
+	}
+}
+
+func TestDiscoSoComDriveNaoEAreaLida(t *testing.T) {
+	r, fs := collectWith(t, map[string]string{
+		scriptDisk: `{"drive":"C","size":null,"free":null,"name":null,"media":null,"bus":null}`,
+		scriptPerf: `{"cpu":[10,20,30],"q":[],"lat":[],"lp":4,"top":[]}`,
+	})
+	if r.Disk != nil {
+		t.Fatalf("só com 'drive' (sem tamanho, livre, tipo, fila ou latência) a área não foi lida: %+v", r.Disk)
+	}
+	if !hasSkipped(r, "disco") {
+		t.Errorf("faltou o Skipped do disco: %+v", r.Skipped)
+	}
+	for _, f := range fs {
+		if f.Area == "disco" {
+			t.Errorf("sem medida não há achado de disco: %+v", f)
+		}
+	}
+}
+
+// Relatório montado à mão: o mesmo vale na análise (Disk só com Drive e Memory só com o total não contam como lidos).
+func TestAnaliseNaoContaAreaSemMedida(t *testing.T) {
+	r := okReport()
+	r.Disk = &Disk{Drive: "C"}
+	r.Memory = &Memory{TotalBytes: 1000}
+	fs := Analyze(r, diagfmt.PT)
+	if has(fs, "sistema", SevOK) {
+		t.Errorf("nenhuma medida válida: não pode ser SevOK: %+v", fs)
+	}
+	if !has(fs, "sistema", SevInfo) {
+		t.Errorf("deve dizer que o resultado é inconclusivo: %+v", fs)
+	}
+}
+
+// ---- resultado inconclusivo ----
+
+func TestTodasAsConsultasFalhandoEInconclusivo(t *testing.T) {
+	for _, c := range []struct {
+		l    diagfmt.Lang
+		want string
+	}{
+		{diagfmt.PT, "inconclusivo: nada foi lido"},
+		{diagfmt.EN, "inconclusive: nothing was read"},
+		{diagfmt.ES, "inconcluso: no se leyó nada"},
+	} {
+		f := exectest.New(t)
+		for sc := range fxAll() {
+			f.On(psCmd(sc, timeoutOf(sc)).String(), exectest.Exit(1, ""))
+		}
+		r := Collect(context.Background(), "windows", Deps{Runner: f, Lang: c.l, Now: func() time.Time { return testNow }})
+		out := Summary(r, Analyze(r, c.l), c.l)
+		if !strings.Contains(out, c.want) {
+			t.Errorf("%v: faltou %q:\n%s", c.l, c.want, out)
+		}
+		for _, bad := range []string{"nenhum gargalo", "no evident", "ningún cuello"} {
+			if strings.Contains(strings.ToLower(out), bad) {
+				t.Errorf("%v: nada foi lido, não pode dizer %q:\n%s", c.l, bad, out)
+			}
+		}
+	}
+}
+
+// Com ao menos uma área relevante lida e sem achado, continua "nenhum gargalo evidente".
+func TestAlgoLidoSemAchadoContinuaSemGargalo(t *testing.T) {
+	r := okReport()
+	r.CPU = &CPU{Samples: 3, AvgPct: 10, PeakPct: 20}
+	out := Summary(r, Analyze(r, diagfmt.PT), diagfmt.PT)
+	if !strings.Contains(out, "nenhum gargalo evidente") || strings.Contains(out, "inconclusivo") {
+		t.Errorf("área lida e sem achado:\n%s", out)
 	}
 }

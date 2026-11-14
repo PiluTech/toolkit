@@ -3,6 +3,7 @@ package otimizacao
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -14,6 +15,13 @@ import (
 //     português); as classes CIM Win32_PerfFormattedData_* têm nome fixo em qualquer idioma;
 //   - o CPU por processo vem de PerfProc_Process (percentual do momento, somado entre núcleos); o `.CPU` do Get-Process é
 //     tempo ACUMULADO e não diz quem está pesando agora;
+//   - a latência do disco NÃO vem do contador formatado: Win32_PerfFormattedData_PerfDisk_*.AvgDisksecPerTransfer é um inteiro
+//     em SEGUNDOS (30 ms viraria 0). Vem dos contadores BRUTOS (Win32_PerfRawData_PerfDisk_PhysicalDisk): AvgDisksecPerTransfer
+//     (ticks acumulados), AvgDisksecPerTransfer_Base (transferências acumuladas) e Frequency_PerfTime (ticks por segundo), em
+//     3 amostras. Fórmula do PERF_AVERAGE_TIMER: ((N1 - N0) / F) / (D1 - D0) segundos por transferência, em milissegundos
+//     (latencyMs). Amostra única, base sem variação, contador que voltou ou F <= 0 = SEM LEITURA, nunca "0 ms".
+//     Fontes: https://learn.microsoft.com/en-us/previous-versions/aa394262(v=vs.85) e a página de cálculo do
+//     PERF_AVERAGE_TIMER (docs/otimizacao.md);
 //   - o evento 100 de boot é lido com try/catch para separar "sem evento" de "acesso negado" (SilentlyContinue os confunde).
 const (
 	psPrefs = "$ErrorActionPreference='SilentlyContinue';$ProgressPreference='SilentlyContinue'\n"
@@ -23,7 +31,8 @@ const (
 		`$sd=[string]$env:SystemDrive;$cpu=@();$q=@();$lat=@()` + "\n" +
 		`for($i=0;$i -lt 3;$i++){` +
 		`$c=Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor|Where-Object{$_.Name -eq '_Total'};if($c){$cpu+=[double]$c.PercentProcessorTime};` +
-		`$d=Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk|Where-Object{$_.Name -like ('*'+$sd+'*')}|Select-Object -First 1;if($d){$q+=[double]$d.AvgDiskQueueLength;$lat+=[double]$d.AvgDisksecPerTransfer};` +
+		`$d=Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk|Where-Object{$_.Name -like ('*'+$sd+'*')}|Select-Object -First 1;if($d){$q+=[double]$d.AvgDiskQueueLength};` +
+		`$w=Get-CimInstance Win32_PerfRawData_PerfDisk_PhysicalDisk|Where-Object{$_.Name -like ('*'+$sd+'*')}|Select-Object -First 1;if($w){$lat+=@{n=[string]$w.AvgDisksecPerTransfer;d=[string]$w.AvgDisksecPerTransfer_Base;f=[string]$w.Frequency_PerfTime}};` +
 		`if($i -lt 2){Start-Sleep -Seconds 1}}` + "\n" +
 		`$lp=[int](Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors` + "\n" +
 		`$top=@(Get-CimInstance Win32_PerfFormattedData_PerfProc_Process|Where-Object{$_.Name -ne '_Total' -and $_.Name -ne 'Idle' -and $_.IDProcess -ne $PID}|Sort-Object PercentProcessorTime -Descending|Select-Object -First 5|ForEach-Object{@{Name=[string]$_.Name;Pid=$_.IDProcess;Cpu=$_.PercentProcessorTime}})` + "\n" +
@@ -149,6 +158,10 @@ func collectWindows(ctx context.Context, d Deps, r *Report) {
 		skip("memoria", "não foi possível ler a memória; rode em um PowerShell normal",
 			"could not read the memory; run from a regular PowerShell",
 			"no se pudo leer la memoria; ejecute en un PowerShell normal")
+	} else if r.Memory != nil && r.Memory.AvailableBytes == nil {
+		skip("memoria", "a RAM disponível não foi lida (o resto da memória foi); nada foi avaliado sobre ela",
+			"the available RAM was not read (the rest of the memory was); nothing was assessed about it",
+			"la RAM disponible no se leyó (el resto de la memoria sí); no se evaluó nada sobre ella")
 	}
 	if !cancelled("disco") && !area(scriptDisk, readTimeout, func(v any) error { return readDisk(v, r, perf) }) {
 		skip("disco", "não foi possível ler o disco do sistema; rode em um PowerShell normal",
@@ -194,9 +207,32 @@ func collectWindows(ctx context.Context, d Deps, r *Report) {
 // perfSample é a amostra do script de desempenho: CPU total, fila e latência do disco do sistema e os processos.
 type perfSample struct {
 	cpuSamples []float64
-	queue, lat []float64
+	queue      []float64
+	lat        []rawLat
 	logical    int
 	top        []Process
+}
+
+// rawLat é uma amostra dos contadores brutos do disco: n = ticks acumulados (AvgDisksecPerTransfer), d = transferências
+// acumuladas (AvgDisksecPerTransfer_Base) e f = ticks por segundo (Frequency_PerfTime).
+type rawLat struct{ n, d, f float64 }
+
+// latencyMs aplica a fórmula do PERF_AVERAGE_TIMER entre a primeira e a última amostra: ((N1-N0)/F)/(D1-D0) segundos por
+// transferência, em ms. Menos de 2 amostras, D sem aumento, N que voltou ou F <= 0 = sem leitura (nil), nunca 0 ms.
+func (p perfSample) latencyMs() *float64 {
+	if len(p.lat) < 2 {
+		return nil
+	}
+	a, b := p.lat[0], p.lat[len(p.lat)-1]
+	dn, dd := b.n-a.n, b.d-a.d
+	if b.f <= 0 || dn < 0 || dd <= 0 {
+		return nil
+	}
+	ms := dn / b.f / dd * 1000
+	if math.IsNaN(ms) || math.IsInf(ms, 0) {
+		return nil
+	}
+	return &ms
 }
 
 func readPerf(v any) (perfSample, error) {
@@ -204,7 +240,15 @@ func readPerf(v any) (perfSample, error) {
 	if m == nil {
 		return perfSample{}, errNoData
 	}
-	p := perfSample{cpuSamples: numList(m["cpu"]), queue: numList(m["q"]), lat: numList(m["lat"])}
+	p := perfSample{cpuSamples: numList(m["cpu"]), queue: numList(m["q"])}
+	for _, e := range asList(m["lat"]) { // só amostra COMPLETA (n, d e f presentes); número solto (formato antigo) não é leitura
+		n, ok1 := num(e["n"])
+		d, ok2 := num(e["d"])
+		f, ok3 := num(e["f"])
+		if ok1 && ok2 && ok3 {
+			p.lat = append(p.lat, rawLat{n, d, f})
+		}
+	}
 	p.logical, _ = inum(m["lp"])
 	if p.logical <= 0 {
 		p.logical = 1 // sem a contagem de processadores o percentual por processo não é dividido (não se inventa número)
@@ -262,7 +306,10 @@ func readMemory(v any, r *Report) error {
 		return errNoData
 	}
 	mem := &Memory{TotalBytes: total}
-	mem.AvailableBytes, _ = unum(m["avail"])
+	// PRESENÇA importa: "avail" ausente é dado ausente (nil), nunca "0 B disponíveis"; um zero real é uma medida.
+	if av, ok := unum(m["avail"]); ok {
+		mem.AvailableBytes = &av
+	}
 	mem.CommitBytes, _ = unum(m["committed"])
 	mem.CommitLimit, _ = unum(m["limit"])
 	for _, e := range asList(m["swap"]) {
@@ -283,6 +330,9 @@ func readMemory(v any, r *Report) error {
 	sort.SliceStable(mem.Top, func(i, j int) bool { return mem.Top[i].MemBytes > mem.Top[j].MemBytes })
 	if len(mem.Top) > maxTop {
 		mem.Top = mem.Top[:maxTop]
+	}
+	if !mem.measured() { // só o total: nada a avaliar, a área fica sem leitura
+		return errNoData
 	}
 	r.Memory = mem
 	return nil
@@ -305,7 +355,9 @@ func readDisk(v any, r *Report, p perfSample) error {
 	case "HDD":
 		d.Medium = "HDD"
 	}
-	d.SizeBytes, _ = unum(m["size"])
+	if sz, ok := unum(m["size"]); ok && sz > 0 {
+		d.SizeBytes = sz
+	}
 	if f, ok := unum(m["free"]); ok {
 		d.FreeBytes = &f
 	}
@@ -318,13 +370,9 @@ func readDisk(v any, r *Report, p perfSample) error {
 		avg := sum / float64(len(p.queue))
 		d.QueueAvg, d.QueuePeak = &avg, &peak
 	}
-	if len(p.lat) > 0 {
-		var sum float64
-		for _, l := range p.lat {
-			sum += l
-		}
-		ms := sum / float64(len(p.lat)) * 1000 // o contador dá segundos por operação
-		d.LatencyMs = &ms
+	d.LatencyMs = p.latencyMs()
+	if !d.measured() { // só o "drive" (que o script sempre preenche) não é leitura: a área fica sem leitura
+		return errNoData
 	}
 	r.Disk = d
 	return nil

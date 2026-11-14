@@ -208,3 +208,34 @@ func (r *otimRecorder) Run(_ context.Context, c exec.Cmd) (exec.Result, error) {
 }
 
 func (r *otimRecorder) LookPath(string) (string, error) { return "", errors.New("não achado") }
+
+// Todas as consultas falhando (coletor real, Runner que sai com erro): o resultado é INCONCLUSIVO, nunca "nenhum gargalo".
+func TestOtimizacaoTudoFalhandoEInconclusivo(t *testing.T) {
+	deps := otimDeps(t, "windows", nil, nil)
+	deps.Otim.Collect = nil
+	deps.NewRunner = func() exec.Runner { return &otimRecorder{} }
+	out, _, err := runOtim(t, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	low := strings.ToLower(out)
+	if !strings.Contains(low, "resultado inconclusivo: nada foi lido") || strings.Contains(low, "nenhum gargalo") {
+		t.Errorf("texto:\n%s", out)
+	}
+	jout, _, err := runOtim(t, deps, "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Findings []struct{ Area, Severity, Title string }
+	}
+	if err := json.Unmarshal([]byte(jout), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Findings) != 1 || doc.Findings[0].Area != "sistema" || doc.Findings[0].Severity != "info" || !strings.Contains(strings.ToLower(doc.Findings[0].Title), "inconclusivo") {
+		t.Errorf("o achado do JSON é o inconclusivo (info), nunca ok: %+v", doc.Findings)
+	}
+	if strings.Contains(strings.ToLower(jout), "nenhum gargalo") {
+		t.Errorf("o JSON não diz que não há gargalo:\n%s", jout)
+	}
+}
