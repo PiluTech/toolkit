@@ -88,7 +88,7 @@ func TestRootWithoutArgsOpensTUIOnlyWithTerminal(t *testing.T) {
 	if strings.Join(titles, ",") != "Início,Instalar,Máquina,Segurança,Rede,Histórico" {
 		t.Fatalf("áreas: %v", titles)
 	}
-	if strings.Join(secs, ",") != "Início,Apps+Receitas,Diagnóstico+Apps nativos,Privacidade,Análise,Execuções" {
+	if strings.Join(secs, ",") != "Início,Apps+Receitas,Diagnóstico+Apps nativos+Otimização,Privacidade,Análise,Execuções" {
 		t.Fatalf("seções: %v", secs)
 	}
 	for _, a := range areas {
