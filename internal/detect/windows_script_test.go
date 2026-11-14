@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -119,9 +120,29 @@ func TestWindowsAppPathsNaoContornaPublisherDoCatalogo(t *testing.T) {
 	if _, found := find(t, New(winStub(u("HKLM", "Outra coisa", "1", "Outra Empresa"), good), Options{GOOS: "windows"}), a); found {
 		t.Fatal("publisher divergente + App Paths não pode detectar")
 	}
-	// Com Uninstall do publisher certo, o App Paths vale (mesmo se o DisplayName diferir).
-	if _, found := find(t, New(winStub(u("HKLM", "Google Chrome Beta Renomeado", "1", "Google LLC"), good), Options{GOOS: "windows"}), a); !found {
-		t.Fatal("App Paths com Uninstall do mesmo publisher deveria valer")
+	// Outro programa do MESMO publisher (Google Drive, Google LLC) não prova que o chrome.exe é o app: sem
+	// vínculo entre o publisher e o executável, o fallback do App Paths é recusado.
+	for _, other := range []string{"Google Drive", "Google Chrome Beta Renomeado"} {
+		if _, found := find(t, New(winStub(u("HKLM", other, "1", "Google LLC"), good), Options{GOOS: "windows"}), a); found {
+			t.Fatalf("%q do mesmo publisher autorizou o App Paths do chrome.exe", other)
+		}
+	}
+	// O Uninstall do próprio app, com nome e publisher certos, continua detectando.
+	if _, found := find(t, New(winStub(u("HKLM", "Google Chrome", "1", "Google LLC")), Options{GOOS: "windows"}), a); !found {
+		t.Fatal("Uninstall com nome e publisher certos deveria detectar")
+	}
+}
+
+// A unidade tem de ser LOCAL (DriveType Fixed) antes de qualquer acesso ao arquivo: Test-Path num destino de rede
+// mapeado (Z:) já toca a rede. A verificação estática vale em qualquer SO; o teste executável fica abaixo.
+func TestWindowsScriptValidaUnidadeLocalAntesDoTestPath(t *testing.T) {
+	d := strings.Index(uninstallScript, "[IO.DriveInfo]")
+	tp := strings.Index(uninstallScript, "Test-Path")
+	if d < 0 || tp < 0 || d > tp {
+		t.Fatalf("DriveInfo (%d) deve vir antes do Test-Path (%d)", d, tp)
+	}
+	if !strings.Contains(uninstallScript, "'Fixed'") {
+		t.Fatal("só unidade Fixed é local")
 	}
 }
 
@@ -197,7 +218,8 @@ function Get-ChildItem{param([string]$Path)
   Key 'vazio.exe' @{}
   Key 'rede.exe' @{''='\\servidor\s\rede.exe'}
   Key 'rel.exe' @{''='rel.exe'}
-  Key 'pasta.exe' @{''='C:\Pasta\pasta.exe'}}
+  Key 'pasta.exe' @{''='C:\Pasta\pasta.exe'}
+  Key 'mapeado.exe' @{''='Z:\Rede\mapeado.exe'}}
  'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths'{throw (New-Object System.Management.Automation.ItemNotFoundException 'ausente')}
  default{throw ('caminho inesperado: '+$Path)}}};
 function Test-Path{param([string]$LiteralPath,[string]$PathType)
@@ -207,12 +229,18 @@ function Test-Path{param([string]$LiteralPath,[string]$PathType)
 
 func shell(t *testing.T) string {
 	t.Helper()
+	if runtime.GOOS != "windows" {
+		t.Skip("o script usa [IO.DriveInfo] do Windows: o teste executável roda só no runner Windows do CI")
+	}
 	for _, n := range []string{"pwsh", "powershell"} {
 		if p, err := exec.LookPath(n); err == nil {
 			return p
 		}
 	}
-	t.Skip("sem pwsh/powershell nesta máquina: roda no runner Windows do CI")
+	if runtime.GOOS == "windows" {
+		t.Fatal("PowerShell ausente no Windows: o teste executável do script não pode ser pulado aqui")
+	}
+	t.Skip("o script usa [IO.DriveInfo] do Windows: o teste executável roda só no runner Windows do CI")
 	return ""
 }
 
@@ -251,12 +279,13 @@ func TestWindowsScriptRealExecutadoComCmdletsFalsos(t *testing.T) {
 	if strings.Join(gci, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("Get-ChildItem -Path recebeu\n%s\nesperado\n%s", strings.Join(gci, "\n"), strings.Join(want, "\n"))
 	}
-	// Só o chrome.exe (local absoluto .exe, com a variável expandida) vai ao Test-Path, como arquivo (Leaf).
+	// Só o chrome.exe (local absoluto .exe, com a variável expandida) vai ao Test-Path, como arquivo (Leaf); o
+	// destino em Z: (unidade que não é Fixed) é recusado ANTES, sem chegar ao acesso ao arquivo.
 	if strings.Join(tp, "\n") != `C:\Fake\chrome.exe|Leaf`+"\n"+`C:\Pasta\pasta.exe|Leaf` {
 		t.Fatalf("Test-Path recebeu: %q", tp)
 	}
 	// O resultado completo: chrome.exe existe; o das pastas/UNC/relativo/sem valor não conta.
-	for exe, want := range map[string]bool{"chrome.exe": true, "vazio.exe": false, "rede.exe": false, "rel.exe": false, "pasta.exe": false} {
+	for exe, want := range map[string]bool{"chrome.exe": true, "vazio.exe": false, "rede.exe": false, "rel.exe": false, "pasta.exe": false, "mapeado.exe": false} {
 		_, got := find(t, New(s, Options{GOOS: "windows"}), winApp(t, "app_path: "+exe))
 		if got != want {
 			t.Errorf("%s: found=%v, esperado %v", exe, got, want)

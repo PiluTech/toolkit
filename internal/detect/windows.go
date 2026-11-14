@@ -22,7 +22,9 @@ const windowsPowerShell = `C:\Windows\System32\WindowsPowerShell\v1.0\powershell
 // origem: HKLM, HKLM-WOW64 (WOW6432Node) ou HKCU. "atualização" é 1 quando há ParentKeyName ou ReleaseType
 // (patch, hotfix). "caminho" é o valor padrão da subchave de App Paths, sem aspas externas e com as variáveis de
 // ambiente expandidas ([Environment]::ExpandEnvironmentVariables, só isso); "folha" é 1 quando esse caminho é
-// local absoluto (X:\...), termina em .exe e é um ARQUIVO que existe (Test-Path -PathType Leaf; nada é executado).
+// local absoluto (X:\...), termina em .exe, está em unidade LOCAL (DriveType Fixed, conferido ANTES de qualquer
+// acesso: letra mapeada para a rede não passa e o Test-Path nem roda) e é um ARQUIVO que existe (Test-Path
+// -PathType Leaf; nada é executado).
 // O script é texto FIXO e ASCII: nada do catálogo entra nele (o casamento é feito em Go), então não há injeção.
 //
 // Os caminhos do registro são literais COMPLETOS, sem concatenação: no PowerShell a vírgula tem precedência
@@ -49,7 +51,8 @@ const uninstallScript = `$ErrorActionPreference='Stop';` +
 	`foreach($r in $a){$s='ok';try{foreach($k in @(Get-ChildItem -Path $r.P)){try{$p='';$l='0';` +
 	`$v=$k.GetValue('',$null,'DoNotExpandEnvironmentNames');` +
 	`if($v -is [string]){$p=[Environment]::ExpandEnvironmentVariables($v.Trim().Trim('"').Trim());` +
-	`if(($p -match '^[A-Za-z]:\\[^\\]') -and ($p -match '\.exe$')){if(Test-Path -LiteralPath $p -PathType Leaf){$l='1'}}};` +
+	`if(($p -match '^[A-Za-z]:\\[^\\]') -and ($p -match '\.exe$')){$dt='';try{$dt=[string][IO.DriveInfo]::new($p.Substring(0,1)).DriveType}catch{};` +
+	`if($dt -eq 'Fixed'){if(Test-Path -LiteralPath $p -PathType Leaf){$l='1'}}}};` +
 	`'A'+$t+$r.N+$t+(C $k.PSChildName)+$t+(C $p)+$t+$l}catch{$s='falhou'}}` +
 	`}catch [System.Management.Automation.ItemNotFoundException]{$s='ausente'}catch{$s='falhou'};` +
 	`'S'+$t+'A'+$t+$r.N+$t+$s};` +
@@ -116,7 +119,6 @@ func (d *Detector) findWindows(ctx context.Context, spec catalog.Detect) (Found,
 	exe := strings.TrimSpace(spec.AppPath)
 	var (
 		viaPath *Found
-		pubSeen bool // há entrada de Uninstall (de app, não atualização) com o publisher exigido
 	)
 	status := map[rootKey]string{}
 	for _, line := range strings.Split(string(res.Stdout), "\n") {
@@ -130,9 +132,6 @@ func (d *Detector) findWindows(ctx context.Context, spec catalog.Detect) (Found,
 			if label == "" || name == "" || f[5] == "1" || f[6] == "1" {
 				continue
 			}
-			if pub != "" && strings.EqualFold(strings.TrimSpace(f[4]), pub) {
-				pubSeen = true
-			}
 			if !MatchDisplayName(name, want) {
 				continue
 			}
@@ -141,7 +140,7 @@ func (d *Detector) findWindows(ctx context.Context, spec catalog.Detect) (Found,
 			}
 			// O Uninstall traz a versão e tem prioridade sobre o App Paths.
 			return Found{Where: `Programas e recursos do Windows [` + label + `] ("` + clean(name, 100) + `")`, Version: clean(f[3], 64)}, true
-		case len(f) == 5 && f[0] == "A" && exe != "" && viaPath == nil:
+		case len(f) == 5 && f[0] == "A" && exe != "" && pub == "" && viaPath == nil:
 			label := originLabel(f[1])
 			// Só vale a subchave do exe pedido com valor padrão apontando para um .exe local que EXISTE (a
 			// folha vem do Test-Path do script; o formato é conferido de novo aqui).
@@ -150,9 +149,9 @@ func (d *Detector) findWindows(ctx context.Context, spec catalog.Detect) (Found,
 			}
 		}
 	}
-	// O publisher exigido pelo catálogo não é contornado pelo App Paths: ele só complementa um Uninstall do
-	// mesmo publisher.
-	if viaPath != nil && (pub == "" || pubSeen) {
+	// App Paths não traz publisher: com publisher exigido pelo catálogo o fallback é recusado (outro programa do
+	// mesmo publisher não prova que o executável é o app); só o Uninstall com nome e publisher certos vale.
+	if viaPath != nil {
 		return *viaPath, true
 	}
 	var rs [][]rootKey
