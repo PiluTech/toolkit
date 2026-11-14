@@ -38,7 +38,7 @@ type Tab interface {
 // Reloader é implementada pelas abas que mostram o estado do sistema: depois de uma execução elas o releem.
 type Reloader interface{ Reload() tea.Cmd }
 
-// ResultKind é o tipo de um resultado: dá o símbolo e a palavra da faixa (✓ feito, ! parcial, ✗ falhou, i info).
+// ResultKind é o tipo de um resultado: dá o símbolo e a palavra da faixa (✓ feito, ! parcial, ✗ falhou, i info, ! pendente).
 type ResultKind int
 
 // Tipos de resultado.
@@ -47,6 +47,7 @@ const (
 	ResultPartial
 	ResultError
 	ResultInfo
+	ResultPending // a ação não terminou: espera algo (ex.: reinício); nunca é "feito"
 )
 
 // Result é o resultado de uma ação, mostrado na FAIXA da própria tela até a pessoa fechá-la (docs/tui.md).

@@ -82,10 +82,20 @@ func (t *LogTab) Outcome() *Result {
 		}
 	}
 	head := "Instalação concluída"
-	if stopped > 0 {
+	switch {
+	case stopped > 0:
 		head = "Execução interrompida"
+	case len(reboot) > 0:
+		head = "Pendente de reinício" // a execução NÃO terminou: há receita esperando reinício
 	}
-	parts := []string{fmt.Sprintf("%d ok", ok)}
+	// A pendência de reinício vem PRIMEIRO no título: a faixa compacta (uma linha) corta o fim, nunca o começo.
+	var parts []string
+	if len(reboot) > 0 {
+		parts = append(parts, fmt.Sprintf("%d aguardando reinício", len(reboot)))
+	}
+	if ok > 0 || len(reboot) == 0 {
+		parts = append(parts, fmt.Sprintf("%d ok", ok))
+	}
 	if len(failed) > 0 {
 		parts = append(parts, fmt.Sprintf("%d falharam", len(failed)))
 	}
@@ -94,10 +104,12 @@ func (t *LogTab) Outcome() *Result {
 	}
 	r := &Result{Kind: ResultOK, Title: head + ": " + strings.Join(parts, ", ")}
 	switch {
-	case len(failed) > 0 && ok == 0:
+	case len(failed) > 0 && ok == 0 && len(reboot) == 0:
 		r.Kind = ResultError
 	case len(failed) > 0 || stopped > 0:
 		r.Kind = ResultPartial
+	case len(reboot) > 0:
+		r.Kind = ResultPending
 	}
 	if len(failed) > 0 {
 		r.Lines = append(r.Lines, "Falharam: "+strings.Join(failed, ", "))

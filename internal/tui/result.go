@@ -25,6 +25,8 @@ func kindLook(th Theme, k ResultKind) (sym, word string, p Paint) {
 		return SymWarn, "parcial", th.Warn()
 	case ResultError:
 		return SymFail, "falhou", th.Err()
+	case ResultPending:
+		return SymWarn, "pendente", th.Warn()
 	}
 	return "i", "info", th.Muted()
 }

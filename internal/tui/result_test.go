@@ -3,11 +3,13 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // stubResultTab é uma aba mínima que implementa Resulter (e pode capturar teclas).
@@ -352,4 +354,67 @@ func TestNovaExecucaoSubstituiAFaixaAnterior(t *testing.T) {
 		t.Fatalf("a faixa antiga some quando outra execução começa: %v", m.results)
 	}
 	pump(t, m)
+}
+
+// logWith monta um LogTab terminado com os itens nos estados dados.
+func logWith(statuses ...ItemStatus) *LogTab {
+	lt := NewLogTab(Theme{Mono: true, NoMotion: true}, "")
+	names := make([]string, len(statuses))
+	for i := range statuses {
+		names[i] = fmt.Sprintf("Item%d", i+1)
+	}
+	lt.Apply(Event{Kind: EventItems, Items: names})
+	for i, st := range statuses {
+		lt.Apply(Event{Kind: EventItemDone, Index: i, Status: st})
+	}
+	lt.Apply(Event{Kind: EventDone})
+	return lt
+}
+
+// Lupa #68: ItemReboot é PENDENTE (a receita espera reinício), nunca "feito / concluída".
+func TestOutcomeSoReinicioNaoEConcluida(t *testing.T) {
+	r := logWith(ItemReboot).Outcome()
+	if r == nil || r.Kind == ResultOK || strings.Contains(r.Title, "concluída") || strings.Contains(r.Title, "0 ok") {
+		t.Fatalf("só reinício não pode ser concluído: %+v", r)
+	}
+	if !strings.Contains(r.Title, "reinício") || !strings.Contains(r.Title, "1") {
+		t.Errorf("o título deve dizer a quantidade aguardando reinício: %q", r.Title)
+	}
+	if !strings.Contains(strings.Join(r.Lines, "\n"), "Item1") {
+		t.Errorf("a linha deve nomear o item pendente: %v", r.Lines)
+	}
+}
+
+func TestOutcomeOKMaisReinicioEPendente(t *testing.T) {
+	r := logWith(ItemOK, ItemOK, ItemReboot).Outcome()
+	if r == nil || r.Kind == ResultOK || strings.Contains(r.Title, "concluída") {
+		t.Fatalf("ok + reinício continua pendente: %+v", r)
+	}
+	if !strings.Contains(r.Title, "1 aguardando reinício") || !strings.Contains(r.Title, "2 ok") {
+		t.Errorf("título: %q", r.Title)
+	}
+}
+
+func TestOutcomeFalhaMaisReinicioMencionaOsDois(t *testing.T) {
+	r := logWith(ItemOK, ItemFailed, ItemReboot).Outcome()
+	if r == nil || r.Kind != ResultPartial || !strings.Contains(r.Title, "reinício") || !strings.Contains(r.Title, "falharam") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+// A faixa COMPACTA (janela < 20 linhas) preserva a pendência de reinício no título.
+func TestFaixaCompactaPreservaAguardandoReinicio(t *testing.T) {
+	for _, st := range [][]ItemStatus{{ItemReboot}, {ItemOK, ItemReboot}} {
+		r := logWith(st...).Outcome()
+		for _, w := range []int{60, 80} {
+			lines := renderResult(Theme{Mono: true, NoMotion: true}, *r, w, 16)
+			if len(lines) != 1 {
+				t.Fatalf("compacta é uma linha: %d", len(lines))
+			}
+			txt := ansi.Strip(lines[0])
+			if !strings.Contains(txt, "reinício") || strings.Contains(txt, "feito") || strings.Contains(txt, "concluída") {
+				t.Errorf("w=%d %v: compacta perdeu o reinício ou diz feito: %q", w, st, txt)
+			}
+		}
+	}
 }
