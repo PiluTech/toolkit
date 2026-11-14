@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
+	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -263,8 +264,7 @@ func macAPFSPhysical(text string) map[string][]string {
 // map[string]any, []any e valores simples. Só o que o diskutil emite; qualquer coisa fora disso é erro.
 func macParsePlist(text string) (any, error) {
 	dec := xml.NewDecoder(strings.NewReader(text))
-	dec.Strict = false
-	dec.Entity = xml.HTMLEntity
+	dec.Strict = true
 	var parse func(start xml.StartElement) (any, error)
 	parse = func(start xml.StartElement) (any, error) {
 		switch start.Name.Local {
@@ -327,13 +327,44 @@ func macParsePlist(text string) (any, error) {
 			return s, nil
 		}
 	}
+	// XML ESTRITO: o plist precisa fechar (</plist>) e terminar (só espaços depois); uma saída truncada, mesmo logo depois
+	// de um dict completo, é erro e o mapa fica vazio (sem prova, nada se junta).
+	var root any
 	for {
 		tok, err := dec.Token()
 		if err != nil {
 			return nil, err
 		}
 		if st, ok := tok.(xml.StartElement); ok && st.Name.Local != "plist" {
-			return parse(st)
+			if root, err = parse(st); err != nil {
+				return nil, err
+			}
+			break
+		}
+	}
+	closed := false
+	for {
+		tok, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			if !closed {
+				return nil, errors.New("plist truncado: falta </plist>")
+			}
+			return root, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		switch t := tok.(type) {
+		case xml.EndElement:
+			if t.Name.Local == "plist" {
+				closed = true
+			}
+		case xml.CharData:
+			if closed && strings.TrimSpace(string(t)) != "" {
+				return nil, errors.New("plist com lixo depois do fim")
+			}
+		case xml.StartElement:
+			return nil, errors.New("plist com conteúdo depois do documento")
 		}
 	}
 }

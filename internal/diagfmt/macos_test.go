@@ -252,6 +252,32 @@ func TestMacDisksIdentidadeFisicaComprovada(t *testing.T) {
 	}
 }
 
+// XML estrito (Lupa #56): um plist truncado DEPOIS do dict completo, sem </plist>, não vale; lixo depois do fim também não.
+func TestMacAPFSPlistEstritoExigeFecharOPlist(t *testing.T) {
+	full := macAPFSPlist("disk3", "disk0s2")
+	if m := macAPFSPhysical(full); fmt.Sprint(m["disk3"]) != "[disk0]" {
+		t.Fatalf("o plist completo vale: %v", m)
+	}
+	if m := macAPFSPhysical(full + "\n\n"); len(m) != 1 {
+		t.Errorf("espaços depois do fim são ok: %v", m)
+	}
+	trunc := strings.TrimSuffix(full, "</plist>")
+	if m := macAPFSPhysical(trunc); len(m) != 0 {
+		t.Errorf("truncado depois do dict completo (sem </plist>) não vale: %v", m)
+	}
+	if m := macAPFSPhysical(full + "<dict></dict>"); len(m) != 0 {
+		t.Errorf("conteúdo depois do documento não vale: %v", m)
+	}
+	if m := macAPFSPhysical(full + "lixo"); len(m) != 0 {
+		t.Errorf("lixo depois do fim não vale: %v", m)
+	}
+	// e sem o mapa não há fusão por modelo (o interno e o Storage ficam como duas visões)
+	raw := macSec(`{"SPNVMeDataType":[{"_items":[{"_name":"SSD X1","bsd_name":"disk0","size_in_bytes":500277792768,"smart_status":"Verified"}]}],"SPStorageDataType":[{"bsd_name":"disk3s5","physical_drive":{"device_name":"SSD X1","protocol":"x","smart_status":"Verified"}}]}`, trunc)
+	if got, err := macDisksFor(raw); err != nil || strings.Count(got, "Disco: ") != 2 {
+		t.Errorf("plist truncado = sem prova = sem fusão (%v):\n%s", err, got)
+	}
+}
+
 func TestMacAPFSPhysicalMap(t *testing.T) {
 	m := macAPFSPhysical(macAPFSPlist("disk3", "disk0s2", "disk8", "disk6s1"))
 	if fmt.Sprint(m["disk3"]) != "[disk0]" || fmt.Sprint(m["disk8"]) != "[disk6]" || len(m) != 2 {

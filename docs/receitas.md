@@ -229,8 +229,10 @@ a visão de volumes (Storage) só se junta a um disco NVMe/SATA com identidade F
 pelo mapa do `diskutil apfs list -plist` (a receita emite as seções `### profiler` e `### apfs`: `disk3` -> `disk0s2` ->
 `disk0`). Ter o MESMO MODELO nunca prova nada (um externo igual ao interno é outro disco). Sem prova o volume vira disco
 próprio, um por disco físico (`disk6s1` e `disk6s2` são do `disk6`; `disk6` e `disk7` são dois), e sem `bsd_name` fica
-sozinho; sem o mapa APFS (comando ausente ou ilegível) um volume de contêiner não se junta a ninguém e o disco interno pode
-aparecer também como disco do Storage. As receitas continuam só de leitura e sem
+sozinho. O mapa APFS é um complemento OPCIONAL: o `diskutil` só entra na seção `### apfs` quando termina com sucesso (ausente
+ou com erro, a seção sai vazia, a etapa NÃO falha e o resumo sai só com o profiler; só a falha do `system_profiler` é a falha
+da etapa). O plist é lido com XML estrito (precisa fechar `</plist>` e terminar: truncado, mesmo depois de um dict completo, não
+vale). Sem o mapa um volume de contêiner não se junta a ninguém e o disco interno pode aparecer também como disco do Storage. As receitas continuam só de leitura e sem
 administrador. Cada etapa do Log da TUI sai como `✓ Memória` (no lugar de `etapa modulos: done`).
 
 Testes: `internal/diagfmt/*_test.go` (saídas falsas: código JEDEC desconhecido, slot vazio, 2+ módulos, formatos truncados,
