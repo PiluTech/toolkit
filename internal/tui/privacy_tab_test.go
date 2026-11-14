@@ -254,8 +254,8 @@ func TestPrivacyTabAplicarPedeConfirmacao(t *testing.T) {
 	if tab.Capturing() {
 		t.Error("terminou: não captura mais")
 	}
-	if !strings.Contains(tab.Status(), "Aplicado: 1 mudança(s)") || !strings.Contains(tab.View(100, 16), `C:\b.json`) {
-		t.Errorf("resultado: status=%q view=%s", tab.Status(), tab.View(100, 16))
+	if !strings.Contains(tab.Status(), "Aplicado: 1 mudança(s)") || tab.Result() == nil || !strings.Contains(strings.Join(tab.Result().Lines, "|"), `C:\b.json`) {
+		t.Errorf("resultado: status=%q result=%+v", tab.Status(), tab.Result())
 	}
 	if be.loads < 2 {
 		t.Error("depois de aplicar o estado é relido")
@@ -377,8 +377,8 @@ func TestPrivacyTabErroDoPlanoEDaAplicacao(t *testing.T) {
 		applyRes: PrivResult{Applied: 1}, applyErr: errors.New("HKLM\\x: acesso negado")}
 	tab = privTab(t, be)
 	pkey(tab, "a", "s")
-	if !strings.Contains(tab.Status(), "erro: HKLM") || !strings.Contains(tab.View(100, 16), "antes da falha: 1") {
-		t.Errorf("status=%q view=%s", tab.Status(), tab.View(100, 16))
+	if !strings.Contains(tab.Status(), "erro: HKLM") || tab.Result() == nil || !strings.Contains(strings.Join(tab.Result().Lines, "|"), "Antes da falha: 1") {
+		t.Errorf("status=%q result=%+v", tab.Status(), tab.Result())
 	}
 	be.applyErr = ErrPrivNeedsAdmin
 	be.applyRes = PrivResult{}
@@ -434,7 +434,7 @@ func TestPrivacyTabDesfazerNadaARestaurar(t *testing.T) {
 		t.Fatalf("view=%s", v)
 	}
 	pkey(tab, "s")
-	if !strings.Contains(tab.Status(), "nada a restaurar") {
+	if !strings.Contains(tab.Status(), "Nada a restaurar") {
 		t.Errorf("status=%q", tab.Status())
 	}
 }

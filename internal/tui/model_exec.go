@@ -147,6 +147,22 @@ func (m *Model) execute() tea.Cmd {
 	ctx, cancel := context.WithCancel(parent)
 	ch := make(chan Event, 64)
 	m.cancel, m.events, m.mode, m.review, m.runDone = cancel, ch, modeRun, nil, ctx.Done()
+	m.origins = m.origins[:0]
+	for i, t := range m.tabs {
+		var n int
+		switch x := t.(type) {
+		case *AppsTab:
+			n = len(x.Marked())
+		case *RecipesTab:
+			n = len(x.Marked())
+		case *DiagTab:
+			n = len(x.Marked())
+		}
+		if n > 0 {
+			m.origins = append(m.origins, i)
+			delete(m.results, i) // a faixa da execução anterior dá lugar à desta
+		}
+	}
 	if _, i := m.logTab(); i >= 0 {
 		m.active = i
 	}
@@ -245,4 +261,14 @@ func (m *Model) finishRun() {
 	if l, _ := m.logTab(); l != nil && l.Running() {
 		l.Apply(Event{Kind: EventDone}) // o executor fechou o canal sem EventDone: fecha o resumo
 	}
+	// o resultado vai para a faixa das abas de ORIGEM (a raiz é a dona: Apps/Receitas/Diagnóstico não conhecem a execução)
+	if l, _ := m.logTab(); l != nil {
+		if out := l.Outcome(); out != nil {
+			for _, i := range m.origins {
+				cp := *out
+				m.results[i] = &cp
+			}
+		}
+	}
+	m.origins = nil
 }

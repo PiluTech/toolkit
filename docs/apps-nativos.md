@@ -64,6 +64,8 @@ A 6ª aba (`6`, curta "Nativos") usa o mesmo núcleo do comando (mesmo catálogo
 
 Garantias do backend da TUI: o plano é de USO ÚNICO com ID opaco (a confirmação aplica só o plano mostrado, descarta os demais e recusa com `ErrNatStalePlan` se o sistema ou a seleção mudou); `Esc` durante a preparação do plano cancela e uma resposta tardia nunca abre a confirmação; leitura e plano rodam em `tea.Cmd` assíncrono; todo texto externo passa por `textsafe`. Fora do Windows a aba diz que os apps nativos só existem no Windows (no macOS os apps do sistema ficam em volume protegido; no Linux esta versão não remove pacotes da distribuição) e nenhuma tecla muda nada.
 
+**Faixa de resultado** (`internal/tui/result.go`): ao remover, a aba mostra a faixa até a pessoa teclar `x`: quantos apps saíram, `Backup em <caminho>` e `Para reinstalar: tecle i`. Falha no meio vira `! parcial` (quantos saíram antes da falha); recusa (administrador, plano mudou) diz que nada foi alterado.
+
 ## Limites
 
 - Sem desfazer automático (veja acima).

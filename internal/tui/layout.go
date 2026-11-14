@@ -15,12 +15,14 @@ import (
 //
 //	1       abas + versão
 //	2       régua
-//	3..H-3  corpo da aba (H-5 linhas)
+//	3..    faixa de resultado da aba ativa, quando há (result.go)
+//	..H-3  corpo da aba (H-5 linhas, menos as da faixa)
 //	H-2     régua (com "↓ mais N linhas" à direita quando há rolagem)
 //	H-1     linha de estado
 //	H       barra de teclas
 func (m *Model) screen() string {
-	bodyH := m.h - 5
+	strip := m.strip()
+	bodyH := m.h - 5 - len(strip)
 	var body string
 	reviewMore := 0
 	switch {
@@ -41,6 +43,7 @@ func (m *Model) screen() string {
 
 	rows := make([]string, 0, m.h)
 	rows = append(rows, m.header(), m.rule(0))
+	rows = append(rows, strip...)
 	rows = append(rows, lines...)
 	more := reviewMore
 	if m.modal == modalNone && m.mode != modeReview {
