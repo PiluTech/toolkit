@@ -36,7 +36,7 @@ O toolkit é CLI + TUI de terminal (Bubble Tea), não site nem app gráfico. Por
 
 ## Achados de acessibilidade
 
-### A1 · Cores de aviso, OK e dica não atingem 4,5:1 em temas claros comuns — M
+### A1 · Cores de aviso, OK e dica não atingem 4,5:1 em temas claros comuns — M (corrigido na Fase 1: a cor ficou só no símbolo)
 - **Onde:** `internal/tui/theme.go` (`pick(light, dark)`): em fundo claro `Warn`=ANSI 3 (amarelo), `OK`=ANSI 2 (verde),
   `Muted`=ANSI 8 (dicas, horários, cabeçalho de colunas).
 - **Medido** (seção abaixo, 16 cores de cada esquema + script): Terminal.app Basic (padrão atual do macOS) Muted 3,81,
@@ -81,7 +81,7 @@ O toolkit é CLI + TUI de terminal (Bubble Tea), não site nem app gráfico. Por
   `TOOLKIT_ACCESSIBLE=1` / `--accessible`, e `--no-tui` já existe): sem tela alternativa, texto linear, sem spinner
   (A2), anúncio de mudança de aba e de fim de execução em linha própria. Esforço: M–G.
 
-### A5 · Sem teste automatizado de contraste nem de nomes/estados — M
+### A5 · Sem teste automatizado de contraste nem de nomes/estados — M (corrigido na Fase 1: `internal/tui/theme_test.go`)
 - **Problema:** a skill pede "medir, não estimar", e hoje o contraste não tem teste. O modo `NO_COLOR` tem teste de
   layout, mas não há teste que prove "todo estado tem símbolo E palavra" para todas as telas.
 - **Corrigir:** (a) o teste de contraste do A1; (b) teste de tabela que percorre os estados (`ok`, `falhou`,
@@ -167,7 +167,9 @@ literais acentuados fora dele (contagem de linhas com literal acentuado, testes 
 - **Onde:** `internal/tui/apps.go:714` (`columns`): estado 24 (32 a partir de 100 colunas), versão 10 e via 7 são
   larguras fixas; só o nome é flexível (mínimo 12). `cell` corta com `…` (`apps.go:838`). Em 60–69 colunas a versão
   vai junto do estado (22) e some a coluna via. Hoje cabe porque os textos pt-BR são curtos ("não instalado",
-  "instalado (fora do Homebrew)" só a partir de 100 colunas).
+  "instalado (fora do Homebrew)" só a partir de 100 colunas). Abaixo disso o texto CAI para a forma curta
+  "instalado (fora)" (`externalText`, `apps.go:790`: usa o longo só se `lipgloss.Width` couber na coluna): a queda
+  também precisa de teste nos três idiomas, porque o curto traduzido tem outro tamanho e é ele que carrega o estado.
 - **Problema:** a skill exige ~35% de folga para as traduções. Frases como "installed (outside Homebrew)",
   "no se pudo verificar" ou os cabeçalhos "INSTALLED"/"INSTALADO" passam das larguras e viram `…`, perdendo a palavra
   que carrega o estado (e o estado nunca pode depender só do símbolo).
