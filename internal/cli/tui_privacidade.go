@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 
 	"github.com/PiluTech/toolkit/internal/privacidade"
@@ -23,6 +24,34 @@ type privacyBackend struct {
 	deps Deps
 	mu   sync.Mutex
 	env  *privEnv
+	// prepared é o plano que a TUI mostrou ao usuário (de uso único): Apply e Undo só agem se o plano recalculado agora for
+	// IDÊNTICO a ele (mesmo perfil, escopo, texto, pendências e, no desfazer, o mesmo backup); senão recusam com
+	// ErrPrivStalePlan, sem mudar nada.
+	prepared *privPrepared
+}
+
+type privPrepared struct {
+	undo     bool
+	profile  tui.PrivProfile
+	onlyUser bool
+	text     string
+	pending  int
+	backup   *privacidade.Backup
+}
+
+func (b *privacyBackend) prepare(p *privPrepared) {
+	b.mu.Lock()
+	b.prepared = p
+	b.mu.Unlock()
+}
+
+// take devolve e CONSOME o plano preparado (uso único).
+func (b *privacyBackend) take() *privPrepared {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	p := b.prepared
+	b.prepared = nil
+	return p
 }
 
 func (b *privacyBackend) getEnv(ctx context.Context) (privEnv, error) {
@@ -109,13 +138,21 @@ func (b *privacyBackend) Plan(ctx context.Context, p tui.PrivProfile, onlyUser b
 		return tui.PrivPlan{}, err
 	}
 	text := plan.Format(e.lang)
+	b.prepare(&privPrepared{profile: p, onlyUser: onlyUser, text: text, pending: plan.Pending()})
 	return tui.PrivPlan{Text: textsafe.Multiline(text), Pending: plan.Pending(), NeedsAdmin: plan.NeedsAdmin(), IsAdmin: e.sys.IsAdmin(ctx)}, nil
 }
 
 func (b *privacyBackend) Apply(ctx context.Context, p tui.PrivProfile, onlyUser bool) (tui.PrivResult, error) {
+	prep := b.take()
+	if prep == nil || prep.undo || prep.profile != p || prep.onlyUser != onlyUser {
+		return tui.PrivResult{}, tui.ErrPrivStalePlan
+	}
 	plan, e, err := b.build(ctx, p, onlyUser)
 	if err != nil {
 		return tui.PrivResult{}, err
+	}
+	if plan.Format(e.lang) != prep.text || plan.Pending() != prep.pending {
+		return tui.PrivResult{}, tui.ErrPrivStalePlan // o sistema mudou desde o plano mostrado
 	}
 	if plan.Pending() == 0 {
 		return tui.PrivResult{}, nil
@@ -132,14 +169,19 @@ func (b *privacyBackend) UndoPlan(ctx context.Context) (tui.PrivPlan, error) {
 	if err != nil {
 		return tui.PrivPlan{}, err
 	}
-	plan, _, err := privacidade.BuildUndo(ctx, e.sys, e.store, e.lang)
+	plan, bk, err := privacidade.BuildUndo(ctx, e.sys, e.store, e.lang)
 	if err != nil {
 		return tui.PrivPlan{}, tuiPrivErr(err)
 	}
+	b.prepare(&privPrepared{undo: true, text: formatUndo(plan), pending: plan.Pending(), backup: bk})
 	return tui.PrivPlan{Text: textsafe.Multiline(formatUndo(plan)), Pending: plan.Pending(), NeedsAdmin: plan.NeedsAdmin(), IsAdmin: e.sys.IsAdmin(ctx)}, nil
 }
 
 func (b *privacyBackend) Undo(ctx context.Context) (tui.PrivResult, error) {
+	prep := b.take()
+	if prep == nil || !prep.undo {
+		return tui.PrivResult{}, tui.ErrPrivStalePlan
+	}
 	e, err := b.getEnv(ctx)
 	if err != nil {
 		return tui.PrivResult{}, err
@@ -147,6 +189,9 @@ func (b *privacyBackend) Undo(ctx context.Context) (tui.PrivResult, error) {
 	plan, bk, err := privacidade.BuildUndo(ctx, e.sys, e.store, e.lang)
 	if err != nil {
 		return tui.PrivResult{}, tuiPrivErr(err)
+	}
+	if formatUndo(plan) != prep.text || plan.Pending() != prep.pending || !reflect.DeepEqual(bk, prep.backup) {
+		return tui.PrivResult{}, tui.ErrPrivStalePlan // o backup ou o sistema mudou desde o plano mostrado
 	}
 	if plan.Pending() == 0 { // tudo já está como antes: só o backup é removido (como o comando)
 		return tui.PrivResult{Nothing: true}, tuiPrivErr(e.store.Remove())

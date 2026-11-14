@@ -279,32 +279,39 @@ func TestTUIGetsBannerFromCache(t *testing.T) {
 	}
 }
 
+// Determinístico: a consulta fica BLOQUEADA até a TUI abrir (Run) e só então é liberada; o resultado TEM de chegar pelo
+// canal Updates (Latest começa vazio).
 func TestTUIReceivesLateResultThroughChannel(t *testing.T) {
-	e := newCheckEnv(t, nil) // sem cache: a consulta dispara
-	var updates <-chan tui.UpdateInfo
+	release := make(chan struct{})
+	e := newCheckEnv(t, func(ctx context.Context) (update.Release, error) {
+		select {
+		case <-release:
+		case <-ctx.Done():
+			return update.Release{}, ctx.Err()
+		}
+		return update.Release{Tag: "v0.2.0", Notes: "novidades da 0.2", URL: "https://github.com/PiluTech/toolkit/releases/tag/v0.2.0"}, nil
+	})
+	var got tui.UpdateInfo
+	var latestAtStart string
 	e.deps.Interactive = func() bool { return true }
 	e.deps.TUI = TUIDeps{StdoutIsTerminal: func() bool { return true }, Term: func() string { return "xterm" },
 		Run: func(_ context.Context, o tui.Options, _ ...tui.Tab) error {
-			updates = o.Updates
-			// A consulta pode terminar ANTES de a TUI abrir (então a versão já vem em Latest, sem passar pelo canal) ou
-			// DEPOIS (chega pelo canal). Os dois caminhos são corretos; o que não pode é perder o resultado.
-			if o.Latest != "" {
-				if o.Latest != "v0.2.0" || o.LatestNotes != "novidades da 0.2" {
-					t.Errorf("update que chegou antes da TUI: %+v", o)
-				}
-				return nil
-			}
+			latestAtStart = o.Latest
+			close(release) // só agora a consulta termina
 			select {
-			case u := <-updates:
-				if u.Tag != "v0.2.0" || u.Notes != "novidades da 0.2" {
-					t.Errorf("update tardio: %+v", u)
-				}
-			case <-time.After(3 * time.Second):
-				t.Error("o resultado da consulta não chegou à TUI")
+			case got = <-o.Updates:
+			case <-time.After(5 * time.Second):
+				t.Error("o resultado da consulta não chegou à TUI pelo canal")
 			}
 			return nil
 		}}
 	e.run(t)
+	if latestAtStart != "" {
+		t.Errorf("sem cache a faixa começa vazia: %q", latestAtStart)
+	}
+	if got.Tag != "v0.2.0" || got.Notes != "novidades da 0.2" {
+		t.Errorf("update tardio: %+v", got)
+	}
 }
 
 func TestTUIUpdateRequestedRunsUpdate(t *testing.T) {

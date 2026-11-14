@@ -16,6 +16,9 @@ import (
 var (
 	// ErrPrivNeedsAdmin: o plano tem itens de administrador e o processo não é administrador (nada foi mudado).
 	ErrPrivNeedsAdmin = errors.New("privacidade: exige administrador")
+	// ErrPrivStalePlan: a aplicação não corresponde ao plano que foi mostrado (o sistema ou o backup mudou, ou não há plano
+	// preparado): nada foi alterado e é preciso ver o plano de novo.
+	ErrPrivStalePlan = errors.New("privacidade: o plano mudou")
 	// ErrPrivNoBackup: não há backup para desfazer.
 	ErrPrivNoBackup = errors.New("privacidade: sem backup")
 )
@@ -131,7 +134,8 @@ type PrivacyTab struct {
 
 	busy    privBusy
 	seq     int
-	view    bool // mostrando um plano
+	cancel  context.CancelFunc // cancela a preparação do plano em andamento (Esc)
+	view    bool               // mostrando um plano
 	kind    privKind
 	plan    PrivPlan
 	profile PrivProfile // perfil do plano mostrado
@@ -202,6 +206,10 @@ func (t *PrivacyTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 			return t, nil // plano atrasado de uma tecla anterior
 		}
 		t.busy = busyNone
+		if t.cancel != nil {
+			t.cancel()
+			t.cancel = nil
+		}
 		t.onPlan(msg)
 	case privDoneMsg:
 		t.onDone(msg)
@@ -265,6 +273,9 @@ func (t *PrivacyTab) onDone(m privDoneMsg) {
 		verb = "Restaurado"
 	}
 	switch {
+	case m.err != nil && errors.Is(m.err, ErrPrivStalePlan):
+		t.setNotice("O sistema ou o backup mudou desde o plano mostrado: nada foi alterado. Veja o plano de novo (p, a ou d) antes de confirmar.", true)
+		t.result = ""
 	case m.err != nil && errors.Is(m.err, ErrPrivNeedsAdmin):
 		t.setNotice("Precisa de administrador: nada foi alterado. Abra o terminal como administrador e tente de novo.", true)
 		t.result = ""
@@ -288,6 +299,17 @@ func (t *PrivacyTab) onDone(m privDoneMsg) {
 
 // key trata as teclas. Mudar o sistema só acontece depois do plano na tela e do "s" (ou "y") na confirmação.
 func (t *PrivacyTab) key(k string) tea.Cmd {
+	if t.busy == busyPlan && (k == "esc" || k == "escape") {
+		// Esc cancela a PREPARAÇÃO do plano: invalida a resposta (seq) e o contexto; uma aplicação já iniciada não é cancelável.
+		t.seq++
+		if t.cancel != nil {
+			t.cancel()
+			t.cancel = nil
+		}
+		t.busy, t.asking, t.view = busyNone, false, false
+		t.setNotice("Preparação do plano cancelada: nada foi alterado.", false)
+		return nil
+	}
 	if t.loading || t.busy != busyNone || !t.usable() {
 		return nil
 	}
@@ -349,7 +371,9 @@ func (t *PrivacyTab) scrollKey(k string) {
 func (t *PrivacyTab) planCmd(kind privKind) tea.Cmd {
 	t.busy = busyPlan
 	t.seq++
-	seq, be, ctx, p, only := t.seq, t.be, t.ctx, t.profileNow(), t.onlyUser
+	pctx, cancel := context.WithCancel(t.ctx)
+	t.cancel = cancel
+	seq, be, ctx, p, only := t.seq, t.be, pctx, t.profileNow(), t.onlyUser
 	t.profile, t.only = p, only
 	return tea.Batch(func() tea.Msg {
 		var plan PrivPlan

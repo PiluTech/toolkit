@@ -50,6 +50,9 @@ func TestPrivacyBackendLoadEstados(t *testing.T) {
 			t.Errorf("%s: %s (nada aplicado ainda)", s.Title, s.State)
 		}
 	}
+	if _, err := b.Plan(context.Background(), tui.PrivBasico, false); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := b.Apply(context.Background(), tui.PrivBasico, false); err != nil {
 		t.Fatal(err)
 	}
@@ -99,9 +102,15 @@ func TestPrivacyBackendAplicarEDesfazer(t *testing.T) {
 	if _, err := b.UndoPlan(ctx); !errors.Is(err, tui.ErrPrivNoBackup) {
 		t.Fatalf("sem backup: %v", err)
 	}
+	if _, err := b.Plan(ctx, tui.PrivRecomendado, false); err != nil {
+		t.Fatal(err)
+	}
 	res, err := b.Apply(ctx, tui.PrivRecomendado, false)
 	if err != nil || res.Applied == 0 {
 		t.Fatalf("res=%+v err=%v", res, err)
+	}
+	if _, err := b.Plan(ctx, tui.PrivRecomendado, false); err != nil {
+		t.Fatal(err)
 	}
 	if again, err := b.Apply(ctx, tui.PrivRecomendado, false); err != nil || again.Applied != 0 {
 		t.Fatalf("idempotente: %+v %v", again, err)
@@ -204,5 +213,124 @@ func TestNewPrivacyTabWindowsSemAdminAvisa(t *testing.T) {
 	scr = screenOf(t, deps, key("j"), key("a"), key("s"))
 	if sys.writes != 0 || st.b != nil || !strings.Contains(scr, "nada foi alterado") {
 		t.Errorf("recomendado sem admin deveria recusar:\n%s", scr)
+	}
+}
+
+// Lupa #66 (1): o "s" aplica EXATAMENTE o plano mostrado; se o sistema mudou entre o plano e a aplicação, recusa.
+func TestPrivacyBackendAplicarSemPlanoPreparadoRecusa(t *testing.T) {
+	sys, st := newPrivSys(true), &privStore{}
+	b := privBackend(t, sys, st, "windows")
+	if _, err := b.Apply(context.Background(), tui.PrivRecomendado, false); !errors.Is(err, tui.ErrPrivStalePlan) {
+		t.Fatalf("sem plano preparado deve recusar: %v", err)
+	}
+	if sys.writes != 0 || st.b != nil {
+		t.Fatalf("nada pode mudar: writes=%d backup=%v", sys.writes, st.b)
+	}
+}
+
+func TestPrivacyBackendMudarSystemEntrePlanoEAplicarRecusa(t *testing.T) {
+	sys, st := newPrivSys(true), &privStore{}
+	b := privBackend(t, sys, st, "windows")
+	ctx := context.Background()
+	if _, err := b.Plan(ctx, tui.PrivRecomendado, false); err != nil {
+		t.Fatal(err)
+	}
+	// alguém muda o sistema depois de o plano ser mostrado
+	for k, tk := range sys.tasks {
+		tk.Enabled = false
+		_ = k
+		break
+	}
+	sys.edit = privacidade.EditionEnterprise
+	if _, err := b.Apply(ctx, tui.PrivRecomendado, false); !errors.Is(err, tui.ErrPrivStalePlan) {
+		t.Fatalf("plano divergente deve recusar: %v", err)
+	}
+	if sys.writes != 0 || st.b != nil {
+		t.Fatalf("nada pode mudar: writes=%d backup=%v", sys.writes, st.b)
+	}
+}
+
+func TestPrivacyBackendPlanoDeUsoUnico(t *testing.T) {
+	sys, st := newPrivSys(true), &privStore{}
+	b := privBackend(t, sys, st, "windows")
+	ctx := context.Background()
+	if _, err := b.Plan(ctx, tui.PrivBasico, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Apply(ctx, tui.PrivBasico, false); err != nil {
+		t.Fatal(err)
+	}
+	w := sys.writes
+	if _, err := b.Apply(ctx, tui.PrivBasico, false); !errors.Is(err, tui.ErrPrivStalePlan) {
+		t.Fatalf("o plano é de uso único: %v", err)
+	}
+	if sys.writes != w {
+		t.Fatal("segunda aplicação não pode escrever")
+	}
+}
+
+func TestPrivacyBackendPlanoDeOutroPerfilNaoAplica(t *testing.T) {
+	sys, st := newPrivSys(true), &privStore{}
+	b := privBackend(t, sys, st, "windows")
+	ctx := context.Background()
+	if _, err := b.Plan(ctx, tui.PrivBasico, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Apply(ctx, tui.PrivRecomendado, false); !errors.Is(err, tui.ErrPrivStalePlan) {
+		t.Fatalf("perfil diferente do plano mostrado: %v", err)
+	}
+	if sys.writes != 0 {
+		t.Fatal("nada pode mudar")
+	}
+}
+
+// Lupa #66 (1): trocar o backup entre UndoPlan e Undo nunca restaura outro plano em silêncio.
+func TestPrivacyBackendTrocarBackupEntreUndoPlanEUndoRecusa(t *testing.T) {
+	sys, st := newPrivSys(true), &privStore{}
+	b := privBackend(t, sys, st, "windows")
+	ctx := context.Background()
+	if _, err := b.Plan(ctx, tui.PrivRecomendado, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Apply(ctx, tui.PrivRecomendado, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.UndoPlan(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// o backup é trocado por outro (um valor original diferente) depois do plano de desfazer
+	orig := st.b
+	swapped := *orig
+	swapped.Entries = map[string]privacidade.Entry{}
+	for k, v := range orig.Entries {
+		v.Existed = !v.Existed
+		swapped.Entries[k] = v
+		break
+	}
+	st.b = &swapped
+	w := sys.writes
+	if _, err := b.Undo(ctx); !errors.Is(err, tui.ErrPrivStalePlan) {
+		t.Fatalf("backup trocado deve recusar: %v", err)
+	}
+	if sys.writes != w || st.b == nil {
+		t.Fatalf("nada pode mudar nem o backup ser removido: writes=%d->%d backup=%v", w, sys.writes, st.b)
+	}
+}
+
+func TestPrivacyBackendUndoSemUndoPlanRecusa(t *testing.T) {
+	sys, st := newPrivSys(true), &privStore{}
+	b := privBackend(t, sys, st, "windows")
+	ctx := context.Background()
+	if _, err := b.Plan(ctx, tui.PrivBasico, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Apply(ctx, tui.PrivBasico, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Undo(ctx); !errors.Is(err, tui.ErrPrivStalePlan) {
+		t.Fatalf("sem UndoPlan deve recusar: %v", err)
+	}
+	if st.b == nil {
+		t.Fatal("o backup não pode ser removido")
 	}
 }

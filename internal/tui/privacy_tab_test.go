@@ -475,3 +475,68 @@ func TestPrivacyTabPalavraLongaNaoPerdeConteudo(t *testing.T) {
 		t.Errorf("o caminho foi cortado com reticências:\n%s", v)
 	}
 }
+
+// blockPriv bloqueia Plan/UndoPlan até o teste liberar (resposta tardia).
+type blockPriv struct {
+	fakePriv
+	release chan struct{}
+	started chan struct{}
+}
+
+func (b *blockPriv) Plan(ctx context.Context, p PrivProfile, only bool) (PrivPlan, error) {
+	b.started <- struct{}{}
+	<-b.release
+	return b.fakePriv.Plan(ctx, p, only)
+}
+func (b *blockPriv) UndoPlan(ctx context.Context) (PrivPlan, error) {
+	b.started <- struct{}{}
+	<-b.release
+	return b.fakePriv.UndoPlan(ctx)
+}
+
+// Lupa #66 (2): Esc durante a preparação do plano cancela; a resposta tardia não abre a confirmação nem muda nada.
+func TestPrivacyEscDuranteOPlanoDescartaARespostaTardia(t *testing.T) {
+	for _, key := range []string{"a", "d"} {
+		be := &blockPriv{fakePriv: fakePriv{info: privSample(true), plan: PrivPlan{Text: planText, Pending: 2}, undoPlan: PrivPlan{Text: planText, Pending: 2}}, release: make(chan struct{}), started: make(chan struct{}, 1)}
+		tab := NewPrivacyTab(context.Background(), be, Theme{Mono: true, NoMotion: true})
+		privRun(tab, tab.Init())
+		_, cmd := tab.Update(tea.KeyPressMsg{Code: rune(key[0]), Text: key})
+		done := make(chan tea.Msg, 1)
+		go func() { done <- privFirstPlanMsg(cmd) }()
+		<-be.started
+		tab.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+		if tab.busy != busyNone {
+			t.Fatalf("%s: Esc deve cancelar a preparação: busy=%v", key, tab.busy)
+		}
+		close(be.release)
+		if m := <-done; m != nil {
+			tab.Update(m)
+		}
+		if tab.asking || tab.view {
+			t.Fatalf("%s: a resposta tardia não pode abrir a confirmação (asking=%v view=%v)", key, tab.asking, tab.view)
+		}
+		if len(be.applies) != 0 || be.undoCalls != 0 {
+			t.Fatalf("%s: nada pode mudar", key)
+		}
+	}
+}
+
+// privFirstPlanMsg roda o comando do plano (o que executa o backend) e devolve a mensagem de plano.
+func privFirstPlanMsg(cmd tea.Cmd) tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	switch m := cmd().(type) {
+	case tea.BatchMsg:
+		for _, c := range m {
+			if r := c(); r != nil {
+				if _, ok := r.(privPlanMsg); ok {
+					return r
+				}
+			}
+		}
+		return nil
+	default:
+		return m
+	}
+}
