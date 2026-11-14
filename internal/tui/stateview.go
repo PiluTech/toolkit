@@ -85,14 +85,14 @@ func StateError(th Theme, w, h int, what string, err error, steps ...string) []s
 }
 
 // StateErrorAfterChange é o erro de RELEITURA depois de uma ação que já mudou o sistema (aplicar, restaurar, remover):
-// nunca diz "Nada foi alterado" (seria falso). Diz que não deu para atualizar a leitura e que o resultado da ação e o
-// backup continuam valendo.
+// nunca diz "Nada foi alterado" (seria falso) e não promete backup (o Desfazer bem-sucedido o apaga). Diz só que não deu
+// para atualizar a leitura e que as alterações já feitas continuam valendo.
 func StateErrorAfterChange(th Theme, w, h int, what string, err error, steps ...string) []string {
 	lead := "Não foi possível atualizar a leitura"
 	if what = safeWhat(what, ""); what != "" {
 		lead += " de " + what
 	}
-	lead += ". As alterações já feitas continuam valendo (o backup guarda os valores originais)."
+	lead += ". As alterações já feitas continuam valendo."
 	b := stateBlock{title: th.Err().Render(titleError), lead: []string{lead}, steps: safeAll(steps)}
 	if err != nil {
 		b.detail = errorLines(err)

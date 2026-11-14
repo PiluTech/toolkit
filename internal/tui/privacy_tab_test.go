@@ -632,3 +632,23 @@ func TestPrivacidadeErroDeLeituraSemAcaoContinuaDizendoNadaFoiAlterado(t *testin
 		t.Errorf("sem ação, vale a cauda:\n%s", out)
 	}
 }
+
+// Lupa #71 (2): o Desfazer bem-sucedido APAGA o backup; se a releitura falhar depois, a tela não promete um backup que
+// não existe mais (nem com a faixa, nem depois do x).
+func TestPrivacidadeDesfazerOKReleituraFalhaNaoPrometeBackup(t *testing.T) {
+	be := &fakePriv{info: privSample(true), undoPlan: PrivPlan{Text: "O que será restaurado\n  x -> y\n", Pending: 1}, undoRes: PrivResult{Applied: 1}}
+	tab := privTab(t, be)
+	be.loadErr = errors.New("reg.exe: acesso negado")
+	pkey(tab, "d", "s")
+	for _, when := range []string{"com a faixa", "depois do x"} {
+		out := stripANSI(tab.View(80, 24))
+		low := strings.ToLower(out)
+		if strings.Contains(low, "backup guarda") || strings.Contains(out, "Nada foi alterado") {
+			t.Errorf("%s: promete backup inexistente ou nega a alteração:\n%s", when, out)
+		}
+		if !strings.Contains(out, "atualizar a leitura") {
+			t.Errorf("%s: deve dizer que não deu para atualizar a leitura:\n%s", when, out)
+		}
+		tab.Dismiss()
+	}
+}
