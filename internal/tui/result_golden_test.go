@@ -36,7 +36,7 @@ func TestGoldenFaixaAppsNativosOK(t *testing.T) {
 	for _, sz := range goldenSizes() {
 		be := &fakeNat{info: natSample(true), plan: NatPlan{ID: "p", Text: natPlanText, Pending: 2, IsAdmin: true}, applyRes: NatResult{Removed: 2, BackupPath: `C:\ProgramData\toolkit\backups\apps-nativos-20261114-1200.json`}}
 		tab := natTab(t, be)
-		nkey(tab, "c", "r", "s")
+		nkey(tab, "t", "r", "s")
 		golden(t, fmt.Sprintf("faixa_nat_ok_%dx%d", sz[0], sz[1]), sized(goldenOpts(), sz[0], sz[1], tab).render())
 	}
 }

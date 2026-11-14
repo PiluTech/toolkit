@@ -335,7 +335,7 @@ func TestNewAppsNativosTabSemAdminAvisaETodosUsuarios(t *testing.T) {
 	if !strings.Contains(scr, "não é administrador") {
 		t.Errorf("sem aviso:\n%s", scr)
 	}
-	scr = natScreen(t, deps, nk("u"))
+	scr = natScreen(t, deps, nk("m"))
 	if strings.Contains(scr, "[x] todos os usuários") || !strings.Contains(scr, "exige administrador") {
 		t.Errorf("u sem admin:\n%s", scr)
 	}

@@ -262,7 +262,7 @@ func TestPrivacidadeRestauradoEFaixa(t *testing.T) {
 func TestAppsNativosRemovidosViraFaixa(t *testing.T) {
 	be := &fakeNat{info: natSample(true), plan: NatPlan{ID: "p", Text: natPlanText, Pending: 2, IsAdmin: true}, applyRes: NatResult{Removed: 2, BackupPath: "C:\\bk\\nat.json"}}
 	tab := natTab(t, be)
-	nkey(tab, "c", "r", "s")
+	nkey(tab, "t", "r", "s")
 	r := tab.Result()
 	if r == nil || r.Kind != ResultOK || !strings.Contains(r.Title, "2") {
 		t.Fatalf("resultado: %+v", r)

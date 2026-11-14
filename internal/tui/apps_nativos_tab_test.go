@@ -134,7 +134,7 @@ func TestNativeAppsTabListaEstadosEPerfis(t *testing.T) {
 		}
 	}
 	got := strings.Join(hintLabels(tab), "|")
-	for _, want := range []string{"espaço marcar", "p ver plano", "r remover", "b básico", "c completo", "u todos os usuários", "i reinstalar"} {
+	for _, want := range []string{"espaço marcar", "p ver plano", "r remover…", "b básico", "t todos", "m todos os usuários", "i como reinstalar"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("teclas sem %q: %s", want, got)
 		}
@@ -159,7 +159,7 @@ func TestNativeAppsTabMarcaComEspacoEPerfis(t *testing.T) {
 	if got := strings.Join(tab.selection().Apps, ","); got != "bing-weather,skype" {
 		t.Fatalf("perfil básico: %s", got)
 	}
-	nkey(tab, "c")
+	nkey(tab, "t")
 	if len(tab.selection().Apps) != 4 {
 		t.Fatalf("perfil completo: %v", tab.selection().Apps)
 	}
@@ -170,18 +170,18 @@ func TestNativeAppsTabMarcaComEspacoEPerfis(t *testing.T) {
 
 func TestNativeAppsTabTodosUsuariosExigeAdmin(t *testing.T) {
 	tab := natTab(t, &fakeNat{info: natSample(false)})
-	nkey(tab, "u")
+	nkey(tab, "m")
 	if tab.allUsers || !strings.Contains(tab.Status(), "exige administrador") || !strings.HasPrefix(tab.Status(), SymWarn) {
 		t.Fatalf("sem admin não liga: allUsers=%v status=%q", tab.allUsers, tab.Status())
 	}
 	adm := natTab(t, &fakeNat{info: natSample(true)})
-	nkey(adm, "u")
+	nkey(adm, "m")
 	if !adm.allUsers || !strings.Contains(strings.Join(hintLabels(adm), "|"), "todos os usuários ✓") || !strings.Contains(adm.View(100, 20), "todos os usuários e o provisionamento") {
 		t.Fatalf("com admin liga: %v", hintLabels(adm))
 	}
-	nkey(adm, "u")
+	nkey(adm, "m")
 	if adm.allUsers {
-		t.Error("segundo u desliga")
+		t.Error("segundo m desliga")
 	}
 }
 
@@ -217,7 +217,7 @@ func TestNativeAppsTabRemoverPedeConfirmacaoEUsaOIDDoPlano(t *testing.T) {
 	be := &fakeNat{info: natSample(true), plan: NatPlan{ID: "plano-7", Text: natPlanText, Pending: 1, IsAdmin: true}, applyRes: NatResult{Removed: 1, BackupPath: `C:\b.json`}}
 	tab := natTab(t, be)
 	nkey(tab, "space", "r")
-	if v := tab.View(100, 24); !tab.Capturing() || !strings.Contains(tab.Status(), "s confirma") || !strings.Contains(v, "REMOVER 1 APP(S)") || !strings.Contains(v, ">[ Cancelar ]<") {
+	if v := tab.View(100, 24); !tab.Capturing() || !strings.Contains(tab.Status(), "Confirmação aberta") || !strings.Contains(v, "REMOVER 1 APP(S)") || !strings.Contains(v, ">[ Cancelar ]<") {
 		t.Fatalf("confirmação: capturing=%v status=%q\n%s", tab.Capturing(), tab.Status(), v)
 	}
 	if len(be.applies) != 0 {
@@ -363,7 +363,7 @@ func TestNativeAppsTabForaDoWindowsSemTeclasDeMudanca(t *testing.T) {
 	if len(tab.Keys()) != 0 {
 		t.Errorf("teclas fora do Windows: %v", tab.Keys())
 	}
-	nkey(tab, "space", "b", "c", "u", "p", "r", "i", "s")
+	nkey(tab, "space", "b", "c", "t", "m", "u", "p", "r", "i", "s")
 	if len(be.plans)+len(be.applies)+be.reinstN != 0 || tab.Capturing() || len(tab.marked) != 0 {
 		t.Error("fora do Windows nenhuma tecla faz nada")
 	}

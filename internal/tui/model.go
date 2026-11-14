@@ -73,6 +73,8 @@ type Model struct {
 	updFocus   int  // botão do modal de versão nova: 0 Fechar (padrão), 1 Atualizar
 	wantUpdate bool // o usuário escolheu Atualizar: o Run devolve ErrUpdateRequested
 	updScroll  int
+	helpScroll int // rolagem da ajuda "?"
+	helpMore   int // linhas da ajuda abaixo da dobra (régua)
 
 	// resultados de execuções por índice de aba (a faixa da aba de origem); origins são as abas que tinham marcados
 	results map[int]*Result
@@ -231,6 +233,18 @@ func (m *Model) global(k string) (tea.Model, tea.Cmd, bool) {
 		switch k {
 		case "esc", "?", "enter", "q":
 			m.modal = modalNone
+		case "up", "k":
+			m.helpScroll = max(m.helpScroll-1, 0)
+		case "down", "j":
+			m.helpScroll++
+		case "pgup":
+			m.helpScroll = max(m.helpScroll-max(m.h-8, 1), 0)
+		case "pgdown", "space", " ":
+			m.helpScroll += max(m.h-8, 1)
+		case "g", "home":
+			m.helpScroll = 0
+		case "G", "end":
+			m.helpScroll = 1 << 20 // helpBody limita ao fim
 		case "ctrl+c":
 			m.quit = true
 			return m, tea.Quit, true
@@ -242,7 +256,7 @@ func (m *Model) global(k string) (tea.Model, tea.Cmd, bool) {
 		m.quit = true
 		return m, tea.Quit, true
 	case "?":
-		m.modal = modalHelp
+		m.modal, m.helpScroll = modalHelp, 0
 		return m, nil, true
 	case "u":
 		if m.opts.Latest == "" {

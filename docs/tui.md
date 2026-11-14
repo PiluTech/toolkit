@@ -193,26 +193,49 @@ O vazio de uma BUSCA (`Nada com "xyz". Esc limpa a busca.`) e os estados por ite
 
 ## Teclas
 
-| Tecla | Onde | O que faz |
+**Legenda única** (`internal/tui/keys.go`): a barra de teclas do rodapé (`Tab.Keys()`), a tela `?` e esta tabela nascem da mesma fonte. Mesma letra = mesmo sentido em todas as seções; o teste `TestVocabularioDeTeclasIgualEmTodasAsSecoes` percorre as seções reais (montadas por `NewWithAreas`) e reprova letra fora da legenda ou com outro rótulo. Rótulo com reticências (`aplicar…`, `desfazer…`, `remover…`) avisa que a tecla abre uma confirmação: nada muda antes de você confirmar.
+
+Em qualquer lugar (globais):
+
+| Tecla | O que faz |
+|---|---|
+| 0 a 5 (modo áreas; 1 a N no legado) | vai direto para a área: Início, Instalar, Máquina, Segurança, Rede, Histórico. No Início os números escolhem o objetivo (a seção os usa para si) |
+| Tab / Shift+Tab | próxima seção da área / anterior (nunca sai da área; na Revisão e nas confirmações troca o botão em foco) |
+| ↑ ↓ j k | move o cursor ou rola |
+| g G / PgUp PgDn | início, fim, página |
+| → l / ← h | foco nas etapas ou no relatório / volta à lista (Receitas, Diagnóstico) |
+| / | busca onde há lista (letras e números vão ao filtro, inclusive q, j, 1; só Enter, Esc e setas são comandos); Esc limpa |
+| Enter | abre, revisa os marcados (sem marcados, o item sob o cursor) ou aciona o botão em foco (começa em Cancelar) |
+| Esc | volta um nível ou cancela: modal, busca, foco, Revisão, confirmação; na raiz não faz nada |
+| x | fecha a faixa de resultado |
+| ? | ajuda (abre e fecha); ↑↓ rolam; Esc, ? ou q fecham |
+| q / Ctrl+C | sai; durante a execução pergunta "Interromper? O item atual é encerrado e a fila é descartada. [s/N]" |
+
+Ações por sentido (a mesma letra em todas as seções):
+
+| Tecla | Sentido | Onde |
 |---|---|---|
-| Tab / Shift+Tab | Navegar, Executar, Resumo | próxima aba / anterior (na Revisão troca o botão em foco) |
-| 1 a 4 | idem (modo legado) | Apps, Receitas, Diagnóstico, Log |
-| 0 a 5 | modo áreas | Início, Instalar, Máquina, Segurança, Rede, Histórico (Tab e Shift+Tab trocam de seção na área) |
-| ↑ ↓ j k | tudo | move o cursor ou rola |
-| g / G / PgUp / PgDn | listas e rolagens | início, fim, página |
-| → l / ← h | Receitas, Diagnóstico | foco nas etapas ou no relatório / volta à lista |
-| d | Diagnóstico | liga/desliga o modo detalhes: o relatório mostra também a saída original (crua) de cada etapa, depois do resumo (a dica da barra vira `d detalhes ✓`; vale para os diagnósticos marcados na próxima execução). A dica de busca `/` cede o lugar à do `d` nesta aba (a tecla `/` continua valendo) |
-| Espaço | Apps, Receitas, Diagnóstico | marca ou desmarca; bloqueado durante a execução, com aviso na linha de estado |
-| v | Apps, em app com `▾` | abre a lista de versões |
-| / | Apps, Receitas, Diagnóstico | busca; com ela ativa letras e números vão ao filtro (inclusive q, j, 1) e só Enter, Esc e setas são comandos |
-| Enter | Navegar | abre a Revisão dos marcados; sem marcados, revisa o item sob o cursor |
-| Enter | Revisão, modais | aciona o botão em foco (começa em Voltar); no modal, escolhe |
-| s | Revisão e perguntas `[s/N]` | executa / responde sim |
-| f | Log | liga/desliga seguir o fim; rolar para cima desliga sozinho |
-| u | quando há versão nova | abre as notas; Fechar é o padrão, "Atualizar" sai da TUI e roda `toolkit update`; indisponível durante a execução |
-| ? | tudo | ajuda |
-| Esc | tudo | volta um nível: modal, busca, foco no painel, Revisão; na raiz não faz nada |
-| q / Ctrl+C | tudo | sai; durante a execução pergunta "Interromper? O item atual é encerrado e a fila é descartada. [s/N]" |
+| a | aplicar… (abre confirmação) | Privacidade |
+| d | desfazer… (abre confirmação) | Privacidade |
+| p | ver plano (só leitura) | Privacidade, Apps nativos |
+| c | ler de novo (recarrega) | Diagnóstico, visão Máquina |
+| r | remover… (abre confirmação) | Apps nativos |
+| m | alterna o escopo ou a visão: `só usuário` (Privacidade), `todos os usuários` (Apps nativos, exige administrador), `máquina` / `receitas` (Diagnóstico) | Privacidade, Apps nativos, Diagnóstico |
+| i | como reinstalar (só texto; nada é executado) | Apps nativos |
+| b | marca o perfil básico | Apps nativos |
+| t | marca todo o catálogo (o perfil completo) | Apps nativos |
+| e | detalhes: o relatório traz também a saída original (crua) de cada etapa; a dica vira `e detalhes ✓` | Diagnóstico |
+| v | lista de versões (app com `▾`) | Apps |
+| Espaço | marca ou desmarca (bloqueado durante a execução, com aviso na linha de estado) | Apps, Receitas, Diagnóstico, Apps nativos |
+| s | executa na Revisão, confirma uma confirmação e responde sim a `[s/N]` | Revisão, confirmações, perguntas |
+| f | liga/desliga seguir o fim do log (rolar para cima desliga sozinho) | Execuções, execução |
+| u | notas da versão nova (só quando há; Fechar é o padrão, "Atualizar" sai da TUI e roda `toolkit update`); indisponível durante a execução | global |
+
+Decisões da fase 6: (1) em Apps nativos o perfil completo passou de `c` para `t` (o `c` é "ler de novo" em todas as seções) e o `u` "todos os usuários" passou para `m` (o `u` é global da versão nova e ganhava da seção); `b` continua o básico. (2) No Diagnóstico os detalhes passaram de `d` para `e` (o `d` é desfazer). (3) A dica de teclas da confirmação fica SÓ na barra; a linha de estado diz o estado ("Confirmação aberta: nada muda até você confirmar."), sem repetir as teclas. Comportamento seguro (confirmação, planos por ID, Esc nas preparações) inalterado.
+
+### Tela de ajuda `?`
+
+Gerada (`layout.go helpBody`, `keys.go`): três blocos, na ordem **Nesta seção: <nome>** (as teclas da seção ativa com uma frase cada, na ordem da barra, via `SectionHelper.HelpKeys()` ou, sem ele, as dicas da barra; vem primeiro para que em 80x24 as ações da seção não fiquem abaixo da dobra), **Em qualquer lugar** (as globais acima) e **Como ler a tela** (símbolos `✓ ! ✗ i ○ -`, faixa de resultado, `admin: sim/não`, confirmação com foco `>[ ]<`). Quebra na largura (nunca corta com reticências) e rola com ↑↓ j k, PgUp/PgDn, g/G; "↓ mais N linhas" na régua. Cabe em 80x24 e 60x16; em Mono os títulos vão em MAIÚSCULAS. Goldens: `ajuda_{apps,maquina,priv}_{80x24,120x40,60x16}.golden`.
 
 ## Abaixo de 80 colunas e redimensionamento
 

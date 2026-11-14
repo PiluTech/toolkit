@@ -31,7 +31,7 @@ func (m *Model) screen() string {
 	reviewMore := 0
 	switch {
 	case m.modal == modalHelp:
-		body = m.helpBody()
+		body = m.helpBody(bodyH)
 	case m.modal == modalUpdate:
 		body = m.updateBody(bodyH)
 	case m.mode == modeReview && m.review != nil:
@@ -50,7 +50,10 @@ func (m *Model) screen() string {
 	rows = append(rows, strip...)
 	rows = append(rows, lines...)
 	more := reviewMore
-	if m.modal == modalNone && m.mode != modeReview {
+	switch {
+	case m.modal == modalHelp:
+		more = m.helpMore
+	case m.modal == modalNone && m.mode != modeReview:
 		more = m.tabs[m.active].More()
 	}
 	rows = append(rows, m.rule(more), m.statusLine(), m.keyBar())
@@ -193,13 +196,13 @@ func (m *Model) keyBar() string {
 	var hints []KeyHint
 	switch {
 	case m.modal == modalHelp:
-		hints = []KeyHint{{"Esc", "fechar"}}
-		tail = []KeyHint{{"q", "sair"}}
+		hints = []KeyHint{{"↑↓", "rolar"}, {"?/Esc/q", "fechar"}}
+		tail = nil
 	case m.modal == modalUpdate:
 		hints = []KeyHint{{"Tab", "botão"}, {"a", "atualizar"}, {"Enter", "acionar"}, {"Esc", "fechar"}, {"↑↓", "rolar"}}
 		tail = []KeyHint{{"q", "sair"}}
 	case m.mode == modeReview:
-		hints = []KeyHint{{"Tab", "botão"}, {"s", "executar"}, {"Enter", "acionar"}, {"Esc", "voltar"}, {"↑↓", "rolar"}}
+		hints = []KeyHint{{"Tab", "botão"}, act("s").as("executar").Hint(), {"Enter", "acionar"}, {"Esc", "voltar"}, {"↑↓", "rolar"}}
 		tail = []KeyHint{{"q", "sair"}}
 	case m.mode == modeRun:
 		hints = []KeyHint{{"Tab", "abas (leitura)"}, {"↑↓", "itens"}, {"f", "seguir o fim"}}
@@ -238,42 +241,104 @@ func (m *Model) tooSmall() string {
 	return strings.Join(StateTooSmall(m.theme, m.w, max(m.h, 1), MinWidth, MinHeight), "\n")
 }
 
-// helpBody: a tabela de teclas, no lugar do corpo (modal sem caixa flutuante).
-func (m *Model) helpBody() string {
-	rows := [][2]string{
-		{"Tab / Shift+Tab", "próxima aba / anterior"},
-		{"1 a 6", "Apps, Receitas, Diagnóstico, Log, Privacidade, Apps nativos"},
-	}
+// helpBody é a ajuda "?" no lugar do corpo (modal sem caixa flutuante), GERADA da legenda única (keys.go) e das teclas
+// da seção ativa: "Nesta seção: <nome>" PRIMEIRO (em 80x24 as ações da seção não podem ficar abaixo da dobra), depois
+// "Em qualquer lugar" e "Como ler a tela". O texto quebra na largura (nada é
+// cortado com reticências) e rola quando não cabe (helpScroll; helpMore alimenta o "↓ mais N linhas" da régua).
+func (m *Model) helpBody(h int) string {
+	all := m.helpLines()
+	m.helpScroll = max(min(m.helpScroll, max(len(all)-h, 0)), 0)
+	end := min(m.helpScroll+max(h, 1), len(all))
+	m.helpMore = len(all) - end
+	return strings.Join(all[m.helpScroll:end], "\n")
+}
+
+// areaTitles são os nomes que a tecla de número alcança: as áreas (modo áreas) ou as abas (modo legado).
+func (m *Model) areaTitles() []string {
+	var out []string
 	if m.areaMode {
-		titles := make([]string, len(m.areas))
-		for i, a := range m.areas {
-			titles[i] = a.Title
+		for _, a := range m.areas {
+			out = append(out, textsafe.Line(a.Title))
 		}
-		rows = [][2]string{
-			{"Tab Shift+Tab", "seções da área (não sai dela)"},
-			{"0 a " + itoa(len(m.areas)-1), strings.Join(titles, ", ")},
+		return out
+	}
+	for _, t := range m.tabs {
+		out = append(out, textsafe.Line(t.Title()))
+	}
+	return out
+}
+
+// helpLines monta todas as linhas da ajuda na largura atual.
+func (m *Model) helpLines() []string {
+	th, w := m.theme, m.w
+	var out []string
+	title := func(s string) { out = append(out, " "+th.Title().Render(titleCase(th, s))) }
+	// row: a tecla numa coluna fixa e o texto ao lado, com recuo na quebra
+	row := func(key, text string) {
+		const kw = 9
+		pad := strings.Repeat(" ", kw+2)
+		lead := " " + padRight(key, kw) + " "
+		lines := wrap(textsafe.Line(text), max(w-len(pad), 10), 0)
+		for i, l := range lines {
+			if i == 0 {
+				out = append(out, lead+l)
+			} else {
+				out = append(out, pad+l)
+			}
 		}
 	}
-	rows = append(rows, [][2]string{
-		{"↑ ↓  j k", "mover o cursor ou rolar"},
-		{"g / G  PgUp / PgDn", "início, fim, página"},
-		{"→ l  ← h", "foco nas etapas / volta à lista (Receitas, Diagnóstico)"},
-		{"espaço", "marcar ou desmarcar"},
-		{"v", "lista de versões (app com versões)"},
-		{"/", "buscar (Esc limpa)"},
-		{"Enter", "revisar o que está marcado"},
-		{"s", "executar na Revisão / responder sim"},
-		{"f", "seguir o fim do log"},
-		{"u", "notas da versão nova (quando há)"},
-		{"Esc", "volta um nível: modal, busca, Revisão"},
-		{"q  Ctrl+C", "sair (durante a execução pergunta antes)"},
-	}...)
-	var b strings.Builder
-	b.WriteString(" " + m.theme.Title().Render(titleCase(m.theme, "Teclas")) + "\n\n")
-	for _, r := range rows {
-		b.WriteString(" " + padRight(r[0], 20) + " " + r[1] + "\n")
+	para := func(s string) {
+		for _, l := range wrap(textsafe.Line(s), max(w-1, 10), 1) {
+			out = append(out, " "+l)
+		}
 	}
-	return b.String()
+
+	tab := m.tabs[m.active]
+	title("Nesta seção: " + textsafe.Line(tab.Title()))
+	keys := helpKeysOf(tab)
+	if len(keys) == 0 {
+		para("Esta seção só mostra informações: valem só as teclas de qualquer lugar.")
+	}
+	confirms := false
+	for _, k := range keys {
+		lab := k.Label
+		if k.Confirms {
+			lab += "…"
+			confirms = true
+		}
+		text := k.Help
+		if lab != "" {
+			text = lab + " — " + k.Help
+		}
+		row(k.Key, text)
+	}
+	if confirms {
+		para("… no fim do nome: a tecla abre uma confirmação, e nada muda antes de você confirmar.")
+	}
+	out = append(out, "")
+
+	title("Em qualquer lugar")
+	for _, g := range globalKeys(m.areaMode, m.areaTitles()) {
+		row(g.Key, g.Help)
+	}
+	out = append(out, "")
+
+	title("Como ler a tela")
+	for _, l := range howToRead() {
+		para(l)
+	}
+	return out
+}
+
+// howToRead são as linhas do bloco "Como ler a tela": símbolos, faixa de resultado, administrador e confirmação.
+func howToRead() []string {
+	return []string{
+		SymOK + " feito ou instalado.  " + SymWarn + " atenção ou parcial.  " + SymFail + " falhou.  i informação.  " + SymPending + " pendente.  " + SymSkipped + " pulado. Todo estado tem símbolo e palavra: a cor nunca é a única pista.",
+		"Faixa de resultado: aparece logo abaixo do cabeçalho com o que foi feito e como desfazer; fica até você fechá-la com x.",
+		SymMore + " mais N linhas: há mais texto abaixo; role com ↓ ou PgDn.",
+		"admin: sim ou não, na linha das seções: se este terminal é administrador. Ação que exige administrador fica indisponível sem ele; o toolkit nunca pede senha nem eleva sozinho.",
+		"Confirmação: o botão em foco aparece como >[ ]<, o foco começa em Cancelar, só Enter no botão ou s confirmam e Esc cancela.",
+	}
 }
 
 // titleCase: em Mono os títulos vão em MAIÚSCULAS (sem negrito para diferenciá-los).

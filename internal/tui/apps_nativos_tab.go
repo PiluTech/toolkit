@@ -282,7 +282,7 @@ func (t *NativeAppsTab) buildConfirm() *Confirm {
 	c.Warn = "Não há desfazer automático: o toolkit não reinstala apps."
 	switch {
 	case blocked:
-		c.Warn += " Este plano tem itens que exigem administrador e este terminal não é: nada será alterado. Cancele e abra o terminal como administrador (botão direito, \"Executar como administrador\"), ou cancele e desligue \"todos os usuários\" (u). O toolkit nunca eleva sozinho."
+		c.Warn += " Este plano tem itens que exigem administrador e este terminal não é: nada será alterado. Cancele e abra o terminal como administrador (botão direito, \"Executar como administrador\"), ou cancele e desligue \"todos os usuários\" (m). O toolkit nunca eleva sozinho."
 	case p.NeedsAdmin:
 		c.Warn += " Parte da remoção exige administrador (este terminal é)."
 	}
@@ -383,9 +383,9 @@ func (t *NativeAppsTab) key(k string) tea.Cmd {
 		}
 	case "b":
 		t.markWhere(func(a NatApp) bool { return a.Basic })
-	case "c":
+	case "t":
 		t.markWhere(func(NatApp) bool { return true })
-	case "u":
+	case "m":
 		t.toggleAllUsers()
 	case "p":
 		return t.planCmd(natView)
@@ -488,11 +488,21 @@ func (t *NativeAppsTab) Keys() []KeyHint {
 	case t.view:
 		return []KeyHint{{"↑↓", "rolar"}, {"Esc", "voltar"}}
 	}
-	all := "todos os usuários"
-	if t.allUsers {
-		all += " ✓"
+	return []KeyHint{{"↑↓", "mover"}, {"espaço", "marcar"}, act("p").Hint(), act("r").Hint(), act("b").Hint(), act("t").Hint(), act("m").as("todos os usuários").on(t.allUsers).Hint(), act("i").Hint()}
+}
+
+// HelpKeys implementa SectionHelper: as teclas da seção, uma frase por tecla (legenda única em keys.go).
+func (t *NativeAppsTab) HelpKeys() []KeyDef {
+	return []KeyDef{
+		navDef("↑↓", "", "move o cursor pela lista."),
+		act("espaço").says("marca ou desmarca o app sob o cursor."),
+		act("b").says("marca o perfil básico (os apps mais seguros de tirar)."),
+		act("t").says("marca todo o catálogo (o perfil completo)."),
+		act("m").as("todos os usuários").says("liga e desliga o escopo \"todos os usuários e o provisionamento\" (administrador)."),
+		act("p").says("mostra o plano do que está marcado, sem remover nada."),
+		act("r").says("remove os marcados depois da confirmação (sem desfazer automático)."),
+		act("i").says("mostra, só como texto, como reinstalar; nada é executado."),
 	}
-	return []KeyHint{{"↑↓", "mover"}, {"espaço", "marcar"}, {"p", "ver plano"}, {"r", "remover"}, {"b", "básico"}, {"c", "completo"}, {"u", all}, {"i", "reinstalar"}}
 }
 
 // Status implementa Tab: a dica de teclas da confirmação, o aviso ou o resultado.

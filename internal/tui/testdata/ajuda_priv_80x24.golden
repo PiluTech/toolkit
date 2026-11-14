@@ -1,0 +1,24 @@
+  0 Início  1 Instalar  2 Máquina [3 Segurança] 4 Rede  5 Histórico      v0.1.0
+ Segurança › [Privacidade]                                           admin: não
+────────────────────────────────────────────────────────────────────────────────
+ NESTA SEÇÃO: PRIVACIDADE
+ ↑↓        perfil — escolhe o perfil de privacidade (do mais leve ao mais
+           forte).
+ p         ver plano — mostra o plano do perfil: o que muda, sem alterar nada.
+ a         aplicar… — aplica o perfil depois da confirmação; o backup e como
+           desfazer aparecem antes.
+ d         desfazer… — desfaz o que o toolkit aplicou, a partir do backup,
+           depois da confirmação.
+ m         só usuário — liga e desliga "só usuário": aplica só ao usuário atual,
+           sem tocar na máquina.
+ … no fim do nome: a tecla abre uma confirmação, e nada muda antes de você
+  confirmar.
+
+ EM QUALQUER LUGAR
+ 0-5       área: Início, Instalar, Máquina, Segurança, Rede, Histórico.
+ Tab       próxima seção da área; Shift+Tab, a anterior.
+ ↑↓ j k    move o cursor ou rola.
+ g G       início ou fim; PgUp e PgDn, uma página.
+────────────────────────────────────────────────────────────── ↓ mais 20 linhas
+ Ajuda
+ ↑↓ rolar  ?/Esc/q fechar

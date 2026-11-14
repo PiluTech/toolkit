@@ -1,24 +1,24 @@
- toolkit  [1 Apps]  2 Receitas   3 Diagnóstico   4 Log                   v0.1.0 
+ toolkit  [1 Apps]  2 Receitas   3 Diagnóstico   4 Log                   v0.1.0
 ────────────────────────────────────────────────────────────────────────────────
- TECLAS
+ NESTA SEÇÃO: APPS
+ ↑↓        mover — move o cursor (ou rola o texto).
+ espaço    marcar — marca ou desmarca o item.
+ /         buscar — busca na lista; Esc limpa.
+ Enter     revisar — abre ou revisa.
 
- Tab / Shift+Tab      próxima aba / anterior
- 1 a 6                Apps, Receitas, Diagnóstico, Log, Privacidade, Apps nativ…
- ↑ ↓  j k             mover o cursor ou rolar
- g / G  PgUp / PgDn   início, fim, página
- → l  ← h             foco nas etapas / volta à lista (Receitas, Diagnóstico)
- espaço               marcar ou desmarcar
- v                    lista de versões (app com versões)
- /                    buscar (Esc limpa)
- Enter                revisar o que está marcado
- s                    executar na Revisão / responder sim
- f                    seguir o fim do log
- u                    notas da versão nova (quando há)
- Esc                  volta um nível: modal, busca, Revisão
- q  Ctrl+C            sair (durante a execução pergunta antes)
+ EM QUALQUER LUGAR
+ 1-4       aba: Apps, Receitas, Diagnóstico, Log.
+ Tab       próxima aba; Shift+Tab, a anterior.
+ ↑↓ j k    move o cursor ou rola.
+ g G       início ou fim; PgUp e PgDn, uma página.
+ ← → h l   foco nas etapas ou volta à lista.
+ /         busca onde há lista; Esc limpa.
+ Enter     abre, revisa ou aciona o botão em foco.
+ Esc       volta um nível ou cancela.
+ x         fecha a faixa de resultado.
+ ?         esta ajuda.
+ q         sai (Ctrl+C também); na execução pergunta antes.
 
-
-
-────────────────────────────────────────────────────────────────────────────────
- Ajuda                                                                          
- Esc fechar  q sair
+────────────────────────────────────────────────────────────── ↓ mais 12 linhas
+ Ajuda
+ ↑↓ rolar  ?/Esc/q fechar

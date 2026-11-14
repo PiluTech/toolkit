@@ -263,7 +263,7 @@ func (t *DiagTab) View(w, h int) string {
 // Keys implementa Tab.
 func (t *DiagTab) Keys() []KeyHint {
 	if t.machine {
-		return []KeyHint{{"↑↓", "rolar"}, {"c", "recarregar"}, {"m", "receitas"}, {"Esc", "voltar"}}
+		return []KeyHint{{"↑↓", "rolar"}, act("c").Hint(), act("m").as("receitas").Hint(), {"Esc", "voltar"}}
 	}
 	keys := t.rec.Keys()
 	if t.rec.Capturing() || t.rec.focus {
@@ -279,8 +279,22 @@ func (t *DiagTab) Keys() []KeyHint {
 		}
 		out = append(out, k)
 	}
-	out = append(out, KeyHint{"m", "máquina"})
+	out = append(out, act("m").as("máquina").Hint())
 	return append(out, etapas...)
+}
+
+// HelpKeys implementa SectionHelper: as teclas da seção, uma frase por tecla (legenda única em keys.go).
+func (t *DiagTab) HelpKeys() []KeyDef {
+	if t.machine {
+		return []KeyDef{
+			navDef("↑↓", "rolar", "rola o relatório da máquina."),
+			act("c").says("lê a máquina outra vez (só leitura)."),
+			act("m").as("receitas").says("volta às receitas de diagnóstico."),
+			navDef("Esc", "voltar", "volta às receitas."),
+		}
+	}
+	out := t.rec.HelpKeys()
+	return append(out, act("m").as("máquina").says("alterna para a visão Máquina: o que o sistema informa (só leitura); m ou Esc volta."))
 }
 
 // Status implementa Tab.
@@ -292,9 +306,9 @@ func (t *DiagTab) Status() string {
 	case t.loading:
 		return "Lendo a máquina…"
 	case t.err != nil:
-		return "Falhou. c tenta de novo."
+		return "Falhou. c lê de novo."
 	case t.loaded:
-		return "Máquina — dados como o sistema informou; c recarrega"
+		return "Máquina — dados como o sistema informou; c lê de novo"
 	}
 	return ""
 }

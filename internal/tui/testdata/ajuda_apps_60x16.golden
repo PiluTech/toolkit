@@ -1,0 +1,16 @@
+  0 Iníc [1 Inst › Apps] 2 Máq  3 Seg  4 Rede  5 Hist v0.1.0
+────────────────────────────────────────────────────────────
+ NESTA SEÇÃO: APPS
+ ↑↓        mover — move o cursor pela lista.
+ espaço    marcar — marca ou desmarca o app para a Revisão.
+ /         buscar — filtra por nome, id ou categoria; Enter
+           fixa, Esc limpa.
+ Enter     revisar — abre a Revisão dos marcados (sem
+           marcados, do app sob o cursor); nada roda antes
+           do plano e do s.
+ v         versões — abre a lista de versões (apps marcados
+           com ▾).
+
+────────────────────────────────────────── ↓ mais 29 linhas
+ Ajuda
+ ↑↓ rolar  ?/Esc/q fechar

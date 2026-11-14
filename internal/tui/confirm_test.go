@@ -108,7 +108,7 @@ func TestConfirmBotaoDesabilitadoNaoAtiva(t *testing.T) {
 	if r := c.Update("enter"); r == ConfirmAccept {
 		t.Fatal("Enter aceitou botão indisponível")
 	}
-	if h := c.Hint(); strings.Contains(h, "s confirma") {
+	if h := c.Hint(); strings.Contains(h, "pode confirmar") || strings.Contains(h, "s confirma") {
 		t.Errorf("a dica oferece s: %q", h)
 	}
 	if v := strings.Join(c.View(monoTheme, 80, 20), "\n"); !strings.Contains(v, "( Aplicar: sem administrador )") || !strings.Contains(v, ">[ Cancelar ]<") {

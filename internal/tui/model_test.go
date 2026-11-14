@@ -182,7 +182,7 @@ func TestUnhandledKeysGoToActiveTab(t *testing.T) {
 func TestHelpModalAndQuit(t *testing.T) {
 	m := sized(Options{Mono: true}, 80, 24, fakes()...)
 	press(m, '?', 0, "?")
-	if out := m.render(); !strings.Contains(out, "TECLAS") || !strings.Contains(out, "Esc fechar") {
+	if out := m.render(); !strings.Contains(out, "EM QUALQUER LUGAR") || !strings.Contains(out, "Esc/q fechar") {
 		t.Fatalf("ajuda:\n%s", out)
 	}
 	// dentro do modal, Tab não troca de aba
@@ -191,7 +191,7 @@ func TestHelpModalAndQuit(t *testing.T) {
 		t.Fatal("o modal consome as teclas")
 	}
 	press(m, tea.KeyEscape, 0, "")
-	if strings.Contains(m.render(), "TECLAS") {
+	if strings.Contains(m.render(), "EM QUALQUER LUGAR") {
 		t.Fatal("Esc deve fechar a ajuda")
 	}
 	if cmd := press(m, 'q', 0, "q"); cmd == nil || !m.Quitting() {
