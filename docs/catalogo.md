@@ -113,6 +113,17 @@ discord:
     linux:   { desktop_id: discord.desktop, snap: discord }
 ```
 
+## Apps do catálogo embutido
+
+Navegadores: Firefox, Brave, Google Chrome. Escritório: LibreOffice. Utilitários: 7-Zip, PeaZip. Os ids vêm de páginas públicas (winget-pkgs, API do
+Homebrew, Flathub); o que não foi confirmado fica de fora (PeaZip no macOS, LibreOffice por apt/dnf). Brave, Chrome, LibreOffice e PeaZip no Linux entram só por
+flatpak (apt/dnf exigiriam repositório de terceiros).
+
+- **Chrome e hash divergente.** O instalador do winget aponta para uma URL do fabricante cujo conteúdo muda a cada versão. Se o manifesto ainda não acompanhou,
+  a instalação falha com "hash divergente". É o comportamento correto: o toolkit nunca usa `--ignore-security-hash`. Tente de novo depois que o manifesto for
+  atualizado.
+- Licenças de Brave, LibreOffice e PeaZip ainda a confirmar na fonte de cada projeto (`docs/plano-seguranca-e-tui.md`, pendência 11).
+
 ## Campos por provider
 
 | provider | Campos obrigatórios | Opcionais | Versões |

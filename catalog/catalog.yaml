@@ -82,3 +82,44 @@ apps:
       - { provider: pacman, package: p7zip }
     detect:
       windows: { display_name: 7-Zip }
+
+  # Navegadores, escritório e compactadores (PR10). Só ids verificados em páginas públicas (winget-pkgs, API do
+  # Homebrew, Flathub). Linux só por flatpak: apt/dnf exigiriam repositório de terceiros (Brave, Chrome) ou o nome
+  # do pacote ainda não foi confirmado (LibreOffice). PeaZip no macOS fica de fora até o cask ser confirmado.
+  # O Chrome pode falhar com "hash divergente": a URL do fabricante muda de conteúdo a cada versão e o manifesto
+  # demora a acompanhar. O toolkit nunca contorna isso (sem --ignore-security-hash): espere o manifesto atualizar.
+  brave:
+    name: Brave
+    category: navegadores
+    windows: [{ provider: winget, id: Brave.Brave }]
+    macos:   [{ provider: brew, cask: brave-browser }]
+    linux:   [{ provider: flatpak, id: com.brave.Browser }]
+    detect:
+      macos:   { app_bundle: "Brave Browser.app", bundle_id: com.brave.Browser }
+      windows: { display_name: Brave }
+
+  chrome:
+    name: Google Chrome
+    category: navegadores
+    windows: [{ provider: winget, id: Google.Chrome }]
+    macos:   [{ provider: brew, cask: google-chrome }]
+    linux:   [{ provider: flatpak, id: com.google.Chrome }]
+    detect:
+      macos:   { app_bundle: "Google Chrome.app", bundle_id: com.google.Chrome }
+      windows: { display_name: Google Chrome }
+
+  libreoffice:
+    name: LibreOffice
+    category: escritorio
+    windows: [{ provider: winget, id: TheDocumentFoundation.LibreOffice }]
+    macos:   [{ provider: brew, cask: libreoffice }]
+    linux:   [{ provider: flatpak, id: org.libreoffice.LibreOffice }]
+    detect:
+      macos:   { app_bundle: LibreOffice.app, bundle_id: org.libreoffice.script }
+      windows: { display_name: LibreOffice }
+
+  peazip:
+    name: PeaZip
+    category: utilitarios
+    windows: [{ provider: winget, id: Giorgiotani.Peazip }]
+    linux:   [{ provider: flatpak, id: io.github.peazip.PeaZip }]
