@@ -16,8 +16,8 @@ import (
 
 const (
 	linLsblk = `{"blockdevices":[
- {"name":"nvme0n1","size":512110190592,"type":"disk","rota":false,"model":"Fake NVMe 512","tran":"nvme"},
- {"name":"sda","size":"1000204886016","type":"disk","rota":"1","model":"Fake HDD 1TB","tran":"sata"},
+ {"name":"nvme0n1","size":512110190592,"type":"disk","rota":false,"model":"Fake NVMe 512","tran":"nvme","serial":"SN-FAKE-NVME-1"},
+ {"name":"sda","size":"1000204886016","type":"disk","rota":"1","model":"Fake HDD 1TB","tran":"sata","serial":"Not Specified"},
  {"name":"loop0","size":1000,"type":"loop","rota":false,"model":null,"tran":null}]}`
 	linDf = `Filesystem     Avail          1B-blocks
 /dev/nvme0n1p2 100000000000 200000000000
@@ -80,12 +80,25 @@ func (f linFS) deps(r exec.Runner) Deps {
 
 func linFullFS() linFS {
 	return linFS{
-		"/sys/class/dmi/id/sys_vendor":   "FakeCorp\n",
-		"/sys/class/dmi/id/product_name": "Laptop 1\n",
-		"/sys/class/dmi/id/bios_version": "1.2.3\n",
-		"/proc/cpuinfo":                  linCPU,
-		"/proc/uptime":                   "3600.50 100.0\n",
-		"/proc/meminfo":                  linMeminfo,
+		"/sys/class/dmi/id/sys_vendor":     "FakeCorp\n",
+		"/sys/class/dmi/id/product_name":   "Laptop 1\n",
+		"/sys/class/dmi/id/bios_version":   "1.2.3\n",
+		"/proc/cpuinfo":                    linCPU,
+		"/proc/uptime":                     "3600.50 100.0\n",
+		"/proc/sys/kernel/hostname":        "HOST-FAKE\n",
+		"/sys/class/dmi/id/product_serial": "SN-FAKE-0001\n",
+		"/sys/class/dmi/id/product_uuid":   "00000000-0000-4000-8000-000000000001\n",
+
+		"/sys/class/net/eth0/address":        "02:00:00:00:00:01\n",
+		"/sys/class/net/eth0/device/vendor":  "0x8086\n",
+		"/sys/class/net/wlan0/address":       "02:00:00:00:00:02\n",
+		"/sys/class/net/wlan0/device/vendor": "0x8086\n",
+		"/sys/class/net/lo/address":          "00:00:00:00:00:00\n",
+		"/sys/class/net/docker0/address":     "02:00:00:00:00:03\n",
+		"/sys/class/net/veth1/address":       "02:00:00:00:00:04\n",
+		"/sys/class/net/br-abc/address":      "02:00:00:00:00:05\n",
+		"/sys/class/net/tun0/address":        "02:00:00:00:00:06\n",
+		"/proc/meminfo":                      linMeminfo,
 
 		"/sys/class/power_supply/BAT0/capacity":           "80\n",
 		"/sys/class/power_supply/BAT0/status":             "Discharging\n",
@@ -113,7 +126,7 @@ func linFullRunner(t *testing.T) *exectest.FakeRunner {
 	for _, n := range []string{"lsblk", "df", "lspci", "journalctl", "dmesg"} {
 		f.WithPath(n, "/usr/bin/"+n)
 	}
-	f.On("/usr/bin/lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN", exectest.Exit(0, linLsblk))
+	f.On("/usr/bin/lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN,SERIAL", exectest.Exit(0, linLsblk))
 	f.On("/usr/bin/df -B1 --output=source,avail,size", exectest.Exit(0, linDf))
 	f.On("/usr/bin/lspci -mm", exectest.Exit(0, linLspci))
 	f.On("/usr/bin/journalctl -p err -b --no-pager -q -o short-iso -n 300", exectest.Exit(0, linJournalOut))
@@ -207,20 +220,139 @@ func TestLinCaminhoFeliz(t *testing.T) {
 	linNoMutation(t, f)
 }
 
-func TestLinNaoLeSerialNemUUID(t *testing.T) {
-	fs := linFullFS()
-	fs["/sys/class/dmi/id/product_serial"] = "SERIAL123"
-	fs["/sys/class/dmi/id/product_uuid"] = "UUID-XYZ"
-	read := []string{}
-	d := fs.deps(linFullRunner(t))
+func TestLinLeIdentificadores(t *testing.T) {
+	r := &Report{}
+	collectLinux(context.Background(), linFullFS().deps(linFullRunner(t)), r)
+	h := r.Hardware
+	if h.Hostname != "HOST-FAKE" || h.Serial != "SN-FAKE-0001" || h.UUID != "00000000-0000-4000-8000-000000000001" {
+		t.Errorf("identificadores: %+v", h)
+	}
+	if len(r.NICs) != 2 || r.NICs[0] != (NIC{"eth0", "02:00:00:00:00:01"}) || r.NICs[1] != (NIC{"wlan0", "02:00:00:00:00:02"}) {
+		t.Errorf("NICs (só físicas, por nome): %+v", r.NICs)
+	}
+	if r.Disks[0].Serial != "SN-FAKE-NVME-1" {
+		t.Errorf("serial do disco: %+v", r.Disks[0])
+	}
+	if r.Disks[1].Serial != "" {
+		t.Errorf("placeholder do disco vira vazio: %q", r.Disks[1].Serial)
+	}
+}
+
+func TestLinSerialCaiParaPlacaEPlaceholders(t *testing.T) {
+	for _, ph := range []string{"Not Specified", "To Be Filled By O.E.M.", "Default string", "0000000000", "", "  "} {
+		fs := linFullFS()
+		fs["/sys/class/dmi/id/product_serial"] = ph + "\n"
+		fs["/sys/class/dmi/id/board_serial"] = "BOARD-FAKE-9\n"
+		r := &Report{}
+		collectLinux(context.Background(), fs.deps(linFullRunner(t)), r)
+		if r.Hardware.Serial != "BOARD-FAKE-9" {
+			t.Errorf("placeholder %q devia cair para board_serial: %q", ph, r.Hardware.Serial)
+		}
+		delete(fs, "/sys/class/dmi/id/board_serial")
+		r = &Report{}
+		collectLinux(context.Background(), fs.deps(linFullRunner(t)), r)
+		if r.Hardware.Serial != "" {
+			t.Errorf("placeholder %q devia virar vazio: %q", ph, r.Hardware.Serial)
+		}
+	}
+}
+
+func linDenied(d Deps) Deps {
 	orig := d.ReadFile
-	d.ReadFile = func(p string) ([]byte, error) { read = append(read, p); return orig(p) }
+	d.ReadFile = func(p string) ([]byte, error) {
+		switch p {
+		case "/sys/class/dmi/id/product_serial", "/sys/class/dmi/id/product_uuid", "/sys/class/dmi/id/board_serial":
+			return nil, os.ErrPermission
+		}
+		return orig(p)
+	}
+	return d
+}
+
+func TestLinIdentificadoresSemAdmin(t *testing.T) {
+	d := linDenied(linFullFS().deps(linFullRunner(t)))
 	r := &Report{}
 	collectLinux(context.Background(), d, r)
-	for _, p := range read {
-		if strings.Contains(p, "serial") || strings.Contains(p, "uuid") {
-			t.Errorf("leu campo proibido: %s", p)
+	var sk *Skipped
+	for i := range r.Skipped {
+		if r.Skipped[i].Area == "identificadores" {
+			sk = &r.Skipped[i]
 		}
+	}
+	if sk == nil || !sk.NeedsAdmin || !strings.Contains(sk.Reason, "sudo toolkit diagnostico") {
+		t.Fatalf("esperava Skipped identificadores com NeedsAdmin: %+v", r.Skipped)
+	}
+	if r.Hardware.Serial != "" || r.Hardware.UUID != "" || r.Hardware.Hostname != "HOST-FAKE" {
+		t.Errorf("hardware: %+v", r.Hardware)
+	}
+}
+
+func TestLinIdentificadoresComAdminNaoExposto(t *testing.T) {
+	fs := linFullFS()
+	delete(fs, "/sys/class/dmi/id/product_serial")
+	delete(fs, "/sys/class/dmi/id/product_uuid")
+	d := fs.deps(linFullRunner(t))
+	d.Admin = true
+	r := &Report{}
+	collectLinux(context.Background(), d, r)
+	if linSkipped(r, "identificadores") {
+		t.Errorf("com admin e vazio é não exposto, sem Skipped: %+v", r.Skipped)
+	}
+}
+
+const linSmartNVMe = `{"smart_status":{"passed":true},"power_on_time":{"hours":1234},"temperature":{"current":41},
+"nvme_smart_health_information_log":{"percentage_used":7,"temperature":41}}`
+const linSmartATA = `{"smart_status":{"passed":false},"power_on_time":{"hours":999},"temperature":{"current":30},
+"ata_smart_attributes":{"table":[{"id":9,"name":"Power_On_Hours","raw":{"value":999}},{"id":5,"name":"Reallocated_Sector_Ct","raw":{"value":12}}]}}`
+
+func TestLinSmartComAdmin(t *testing.T) {
+	f := linFullRunner(t)
+	f.WithPath("smartctl", "/usr/bin/smartctl")
+	f.On("/usr/bin/smartctl --json=o -H -A /dev/nvme0n1", exectest.Exit(0, linSmartNVMe))
+	f.On("/usr/bin/smartctl --json=o -H -A /dev/sda", exectest.Exit(4, linSmartATA)) // bit de status, saída válida
+	d := linFullFS().deps(f)
+	d.Admin = true
+	r := &Report{}
+	collectLinux(context.Background(), d, r)
+	if linSkipped(r, "smart") {
+		t.Fatalf("smart foi lido: %+v", r.Skipped)
+	}
+	nv, hd := r.Disks[0], r.Disks[1]
+	if nv.Health != HealthOK || nv.HealthRaw != "PASSED" || nv.WearPct == nil || *nv.WearPct != 7 || nv.PowerOnHours == nil || *nv.PowerOnHours != 1234 {
+		t.Errorf("nvme: %+v", nv)
+	}
+	if hd.Health != HealthBad || hd.HealthRaw != "FAILED" || hd.ReallocatedSectors == nil || *hd.ReallocatedSectors != 12 || hd.PowerOnHours == nil || *hd.PowerOnHours != 999 {
+		t.Errorf("hdd: %+v", hd)
+	}
+	linNoMutation(t, f)
+}
+
+func linSmartSkip(r *Report) (Skipped, bool) {
+	for _, s := range r.Skipped {
+		if s.Area == "smart" {
+			return s, true
+		}
+	}
+	return Skipped{}, false
+}
+
+func TestLinSmartAdminSemSmartctl(t *testing.T) {
+	d := linFullFS().deps(linFullRunner(t))
+	d.Admin = true
+	r := &Report{}
+	collectLinux(context.Background(), d, r)
+	s, ok := linSmartSkip(r)
+	if !ok || s.NeedsAdmin || !strings.Contains(s.Reason, "smartmontools") {
+		t.Errorf("smart: %+v %v", s, ok)
+	}
+}
+
+func TestLinSmartSemAdminPedeSudo(t *testing.T) {
+	r := &Report{}
+	collectLinux(context.Background(), linFullFS().deps(linFullRunner(t)), r)
+	s, ok := linSmartSkip(r)
+	if !ok || !s.NeedsAdmin || !strings.Contains(s.Reason, "sudo toolkit diagnostico") {
+		t.Errorf("smart: %+v %v", s, ok)
 	}
 }
 
@@ -249,13 +381,13 @@ func TestLinAreasIndependentes(t *testing.T) {
 	// cada área falha sozinha e as outras seguem
 	cases := map[string]func(fs linFS, f *exectest.FakeRunner){
 		"hardware": func(fs linFS, _ *exectest.FakeRunner) {
-			for _, k := range []string{"/sys/class/dmi/id/sys_vendor", "/sys/class/dmi/id/product_name", "/sys/class/dmi/id/bios_version", "/proc/cpuinfo", "/proc/uptime"} {
+			for _, k := range []string{"/sys/class/dmi/id/sys_vendor", "/sys/class/dmi/id/product_name", "/sys/class/dmi/id/bios_version", "/proc/cpuinfo", "/proc/uptime", "/proc/sys/kernel/hostname"} {
 				delete(fs, k)
 			}
 		},
 		"memoria": func(fs linFS, _ *exectest.FakeRunner) { delete(fs, "/proc/meminfo") },
 		"discos": func(_ linFS, f *exectest.FakeRunner) {
-			f.On("/usr/bin/lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN", exectest.Exit(1, ""))
+			f.On("/usr/bin/lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN,SERIAL", exectest.Exit(1, ""))
 		},
 	}
 	for area, brk := range cases {
@@ -268,7 +400,7 @@ func TestLinAreasIndependentes(t *testing.T) {
 				for _, n := range []string{"lsblk", "df", "lspci", "journalctl"} {
 					f.WithPath(n, "/usr/bin/"+n)
 				}
-				f.On("/usr/bin/lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN", exectest.Exit(1, ""))
+				f.On("/usr/bin/lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN,SERIAL", exectest.Exit(1, ""))
 				f.On("/usr/bin/lspci -mm", exectest.Exit(0, linLspci))
 				f.On("/usr/bin/journalctl -p err -b --no-pager -q -o short-iso -n 300", exectest.Exit(0, linJournalOut))
 				f.On(`/usr/bin/journalctl --no-pager -q -o short-iso --since "30 days ago" -g "Kernel panic|Oops:|segfault at|Out of memory: Killed process" -n 300`, exectest.Exit(0, linCrashOut))
@@ -316,7 +448,7 @@ func TestLinFallbackGPUPorSysfs(t *testing.T) {
 	for _, n := range []string{"lsblk", "df"} {
 		f.WithPath(n, "/usr/bin/"+n)
 	}
-	f.On("/usr/bin/lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN", exectest.Exit(0, `{"blockdevices":[]}`))
+	f.On("/usr/bin/lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN,SERIAL", exectest.Exit(0, `{"blockdevices":[]}`))
 	f.On("/usr/bin/df -B1 --output=source,avail,size", exectest.Exit(0, linDf))
 	r := &Report{}
 	collectLinux(context.Background(), fs.deps(f), r)
@@ -368,7 +500,7 @@ func TestLinEventosSemAcesso(t *testing.T) {
 func TestLinErroDeExecucaoNaoQuebra(t *testing.T) {
 	f := exectest.New(t)
 	f.WithPath("lsblk", "/usr/bin/lsblk")
-	f.On("/usr/bin/lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN", exectest.Reply{Err: errors.New("boom")})
+	f.On("/usr/bin/lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN,SERIAL", exectest.Reply{Err: errors.New("boom")})
 	r := &Report{}
 	collectLinux(context.Background(), linFS{}.deps(f), r)
 	if !linSkipped(r, "discos") {
@@ -381,7 +513,7 @@ func TestLinSaidasInvalidas(t *testing.T) {
 	for _, out := range bad {
 		f := exectest.New(t)
 		f.WithPath("lsblk", "/usr/bin/lsblk")
-		f.On("/usr/bin/lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN", exectest.Exit(0, out))
+		f.On("/usr/bin/lsblk -b -d -J -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN,SERIAL", exectest.Exit(0, out))
 		r := &Report{}
 		collectLinux(context.Background(), linFS{}.deps(f), r)
 		if len(r.Disks) != 0 {

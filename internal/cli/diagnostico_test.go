@@ -373,3 +373,26 @@ func TestDiagnosticoJSONEscapaDELESuplementaresSemAlterarODado(t *testing.T) {
 		t.Errorf("evento alterado: %+v", doc.Report.Events)
 	}
 }
+
+// O comando detecta se roda como administrador/root (injetável) e passa a decisão ao coletor; o toolkit nunca eleva sozinho.
+func TestDiagnosticoPassaOEstadoDeAdminAoColetor(t *testing.T) {
+	for _, admin := range []bool{false, true} {
+		var got diagnostico.Deps
+		deps := diagDeps(t, nil)
+		deps.Diag.IsAdmin = func(context.Context, string, exec.Runner) bool { return admin }
+		deps.Diag.Collect = func(_ context.Context, _ string, d diagnostico.Deps) *diagnostico.Report {
+			got = d
+			return &diagnostico.Report{OS: "linux", Admin: d.Admin, Skipped: []diagnostico.Skipped{{Area: "smart", Reason: "exige root", NeedsAdmin: true}}}
+		}
+		out, _, err := runDiag(t, deps)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Admin != admin {
+			t.Errorf("admin=%v: o coletor recebeu Admin=%v", admin, got.Admin)
+		}
+		if gain := strings.Contains(out, "Com administrador o diagnóstico também lê: saúde SMART dos discos"); gain == admin {
+			t.Errorf("admin=%v: a linha do que se ganha com admin deve aparecer só sem admin (apareceu=%v):\n%s", admin, gain, out)
+		}
+	}
+}

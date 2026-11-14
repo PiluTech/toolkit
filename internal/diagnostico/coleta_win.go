@@ -16,16 +16,18 @@ import (
 
 // Coletor do Windows: cada área é um script de PowerShell de LEITURA (sem administrador, só ASCII, JSON compacto)
 // e uma função que lê o JSON com tolerância (campos nulos, números como texto, objeto único no lugar de lista).
-// Nada aqui lê número de série, UUID, MAC, usuário, hostname ou IP.
+// O toolkit é uma ferramenta de análise: série, UUID, MAC e nome da máquina são lidos e mostrados como o sistema informa.
+// Nada aqui eleva: com Deps.Admin (terminal aberto como administrador) roda, a mais, uma leitura só de LEITURA que
+// sem admin não sai; sem admin tudo funciona e o que ficou de fora vira Skipped com NeedsAdmin.
 
 const (
 	winPrefs = "$ErrorActionPreference='SilentlyContinue';$ProgressPreference='SilentlyContinue'\n"
 
 	winScriptHW = winPrefs +
-		`$cs=Get-CimInstance Win32_ComputerSystem;$os=Get-CimInstance Win32_OperatingSystem;$b=Get-CimInstance Win32_BIOS` + "\n" +
+		`$cs=Get-CimInstance Win32_ComputerSystem;$os=Get-CimInstance Win32_OperatingSystem;$b=Get-CimInstance Win32_BIOS;$p=Get-CimInstance Win32_ComputerSystemProduct` + "\n" +
 		`$cpu=@(Get-CimInstance Win32_Processor|ForEach-Object{@{Name=[string]$_.Name;Cores=$_.NumberOfCores;Threads=$_.NumberOfLogicalProcessors}})` + "\n" +
 		`$up=$null;if($os.LastBootUpTime){$up=[int]((Get-Date)-$os.LastBootUpTime).TotalSeconds}` + "\n" +
-		`@{cs=@{Manufacturer=[string]$cs.Manufacturer;Model=[string]$cs.Model;TotalPhysicalMemory=$cs.TotalPhysicalMemory};cpu=$cpu;bios=[string]$b.SMBIOSBIOSVersion;uptimeSec=$up}|ConvertTo-Json -Compress -Depth 4`
+		`@{cs=@{Manufacturer=[string]$cs.Manufacturer;Model=[string]$cs.Model;Name=[string]$cs.Name;TotalPhysicalMemory=$cs.TotalPhysicalMemory};cpu=$cpu;bios=[string]$b.SMBIOSBIOSVersion;serial=[string]$b.SerialNumber;uuid=[string]$p.UUID;uptimeSec=$up}|ConvertTo-Json -Compress -Depth 4`
 
 	winScriptMem = winPrefs +
 		`$os=Get-CimInstance Win32_OperatingSystem` + "\n" +
@@ -33,7 +35,7 @@ const (
 		`@{total=$os.TotalVisibleMemorySize;free=$os.FreePhysicalMemory;swap=$pf}|ConvertTo-Json -Compress -Depth 4`
 
 	winScriptDisks = winPrefs +
-		`$d=@(Get-PhysicalDisk|ForEach-Object{@{Id=[string]$_.DeviceId;Name=[string]$_.FriendlyName;Media=[string]$_.MediaType;Bus=[string]$_.BusType;Health=[string]$_.HealthStatus;Size=$_.Size}})` + "\n" +
+		`$d=@(Get-PhysicalDisk|ForEach-Object{@{Id=[string]$_.DeviceId;Serial=[string]$_.SerialNumber;Name=[string]$_.FriendlyName;Media=[string]$_.MediaType;Bus=[string]$_.BusType;Health=[string]$_.HealthStatus;Size=$_.Size}})` + "\n" +
 		`$p=@(Get-Partition|Where-Object{$_.DriveLetter}|ForEach-Object{@{Disk=$_.DiskNumber;Letter=[string]$_.DriveLetter}})` + "\n" +
 		`$v=@(Get-Volume|Where-Object{$_.DriveLetter}|ForEach-Object{@{Letter=[string]$_.DriveLetter;Free=$_.SizeRemaining}})` + "\n" +
 		`@{disks=$d;parts=$p;vols=$v}|ConvertTo-Json -Compress -Depth 4`
@@ -41,6 +43,15 @@ const (
 	winScriptSmart = winPrefs +
 		`$r=@(Get-PhysicalDisk|ForEach-Object{$c=$_|Get-StorageReliabilityCounter;if($c){@{Id=[string]$_.DeviceId;Temp=$c.Temperature;Wear=$c.Wear;Hours=$c.PowerOnHours}}})` + "\n" +
 		`ConvertTo-Json -Compress -Depth 4 -InputObject $r`
+
+	// Só roda com Deps.Admin. Leitura: erros de leitura do contador de confiabilidade (o Windows não expõe "setores realocados").
+	winScriptSmartAdmin = winPrefs +
+		`$r=@(Get-PhysicalDisk|ForEach-Object{$c=$_|Get-StorageReliabilityCounter;if($c){@{Id=[string]$_.DeviceId;ReadErr=$c.ReadErrorsTotal;ReadUnc=$c.ReadErrorsUncorrected}}})` + "\n" +
+		`ConvertTo-Json -Compress -Depth 4 -InputObject $r`
+
+	winScriptNICs = winPrefs +
+		`$n=@(Get-NetAdapter -Physical|ForEach-Object{@{Name=[string]$_.Name;Mac=[string]$_.MacAddress}})` + "\n" +
+		`ConvertTo-Json -Compress -Depth 4 -InputObject $n`
 
 	winScriptBattery = winPrefs +
 		`$b=@(Get-CimInstance Win32_Battery)|Select-Object -First 1` + "\n" +
@@ -94,6 +105,14 @@ func collectWindows(ctx context.Context, d Deps, r *Report) {
 	skip := func(area, pt, en, es string) {
 		r.Skipped = append(r.Skipped, Skipped{Area: area, Reason: diagfmt.T(d.Lang, pt, en, es)})
 	}
+	// skipAdmin: área que sem admin sai "não lida" (NeedsAdmin e a instrução); com admin e ainda sem dado, o hardware/firmware não a expõe.
+	skipAdmin := func(area, ptA, enA, esA, ptN, enN, esN string) {
+		if d.Admin {
+			r.Skipped = append(r.Skipped, Skipped{Area: area, Reason: diagfmt.T(d.Lang, ptN, enN, esN)})
+			return
+		}
+		r.Skipped = append(r.Skipped, Skipped{Area: area, Reason: diagfmt.T(d.Lang, ptA, enA, esA), NeedsAdmin: true})
+	}
 	winArea(ctx, d, r, "hardware", winScriptHW, winHardware, func() {
 		skip("hardware", "não foi possível ler o hardware (PowerShell/CIM indisponível); rode o diagnóstico em um PowerShell normal",
 			"could not read the hardware (PowerShell/CIM unavailable); run the diagnosis from a regular PowerShell",
@@ -112,20 +131,38 @@ func collectWindows(ctx context.Context, d Deps, r *Report) {
 	})
 	if len(r.Disks) > 0 {
 		winArea(ctx, d, r, "smart", winScriptSmart, winSmart(diskIDs), func() {
-			skip("smart", "o SMART (temperatura, desgaste, horas ligado) não pôde ser lido sem permissão: abra o PowerShell como administrador e rode o diagnóstico de novo",
-				"SMART data (temperature, wear, power-on hours) could not be read without permission: open PowerShell as administrator and run the diagnosis again",
-				"no se pudo leer SMART (temperatura, desgaste, horas encendido) sin permiso: abra PowerShell como administrador y ejecute el diagnóstico de nuevo")
+			skipAdmin("smart",
+				"o SMART (temperatura, desgaste, horas ligado) não pôde ser lido sem permissão: abra o terminal como administrador e rode de novo",
+				"SMART data (temperature, wear, power-on hours) could not be read without permission: open the terminal as administrator and run again",
+				"no se pudo leer SMART (temperatura, desgaste, horas encendido) sin permiso: abra el terminal como administrador y ejecute de nuevo",
+				"este disco ou driver não expõe o SMART (temperatura, desgaste, horas ligado), mesmo como administrador",
+				"this disk or driver does not expose SMART data (temperature, wear, power-on hours), even as administrator",
+				"este disco o controlador no expone SMART (temperatura, desgaste, horas encendido), ni siquiera como administrador")
 		})
 	}
+	if d.Admin && len(r.Disks) > 0 {
+		// Só com admin: soma dos erros de leitura em ReallocatedSectors. Sem dado = nada a registrar (não é Skipped: o
+		// contador é opcional e já há o item "smart").
+		winArea(ctx, d, r, "smart-erros", winScriptSmartAdmin, winSmartErrors(diskIDs), func() {})
+	}
+	winArea(ctx, d, r, "rede", winScriptNICs, winNICs, func() {
+		skip("rede", "não foi possível listar as placas de rede; rode o diagnóstico em um PowerShell normal",
+			"could not list the network adapters; run the diagnosis from a regular PowerShell",
+			"no se pudieron listar los adaptadores de red; ejecute el diagnóstico en un PowerShell normal")
+	})
 	winArea(ctx, d, r, "bateria", winScriptBattery, winBattery, func() {
 		skip("bateria", "não foi possível ler a bateria; rode o diagnóstico em um PowerShell normal",
 			"could not read the battery; run the diagnosis from a regular PowerShell",
 			"no se pudo leer la batería; ejecute el diagnóstico en un PowerShell normal")
 	})
 	winArea(ctx, d, r, "temperatura", winScriptTemp, winTemps, func() {
-		skip("temperatura", "a temperatura não é exposta por esta máquina sem permissão (sensor ACPI ausente ou restrito): abra o PowerShell como administrador ou use a ferramenta do fabricante",
-			"temperature is not exposed by this machine without permission (ACPI sensor missing or restricted): open PowerShell as administrator or use the vendor tool",
-			"la temperatura no está expuesta por este equipo sin permiso (sensor ACPI ausente o restringido): abra PowerShell como administrador o use la herramienta del fabricante")
+		skipAdmin("temperatura",
+			"a temperatura não pôde ser lida sem permissão (sensor ACPI restrito): abra o terminal como administrador e rode de novo",
+			"temperature could not be read without permission (restricted ACPI sensor): open the terminal as administrator and run again",
+			"no se pudo leer la temperatura sin permiso (sensor ACPI restringido): abra el terminal como administrador y ejecute de nuevo",
+			"este equipamento não expõe a temperatura (sensor ACPI ausente), mesmo como administrador; use a ferramenta do fabricante",
+			"this machine does not expose temperature (ACPI sensor missing), even as administrator; use the vendor tool",
+			"este equipo no expone la temperatura (sensor ACPI ausente), ni siquiera como administrador; use la herramienta del fabricante")
 	})
 	winArea(ctx, d, r, "gpu", winScriptGPU, winGPUs, func() {
 		skip("gpu", "não foi possível ler a placa de vídeo; rode o diagnóstico em um PowerShell normal",
@@ -297,7 +334,9 @@ func winHardware(_ Deps, r *Report, v any) error {
 	h := &r.Hardware
 	if cs := winMap(m["cs"]); cs != nil {
 		h.Vendor, h.Model = winStr(cs["Manufacturer"]), winStr(cs["Model"])
+		h.Hostname = winStr(cs["Name"])
 	}
+	h.Serial, h.UUID = winClean(m["serial"]), winClean(m["uuid"])
 	for i, c := range winList(m["cpu"]) {
 		if i == 0 {
 			h.CPU = winStr(c["Name"])
@@ -371,7 +410,7 @@ func winDisksRead(ids *[]string, r *Report, v any) error {
 	}
 	list := winList(m["disks"])
 	for _, dm := range list {
-		dk := Disk{Name: winStr(dm["Name"]), HealthRaw: winStr(dm["Health"])}
+		dk := Disk{Name: winStr(dm["Name"]), Serial: winClean(dm["Serial"]), HealthRaw: winStr(dm["Health"])}
 		switch strings.ToUpper(winStr(dm["Media"])) {
 		case "SSD":
 			dk.Medium = "SSD"
@@ -444,6 +483,61 @@ func winSmart(ids []string) func(Deps, *Report, any) error {
 		}
 		return nil
 	}
+}
+
+// winSmartErrors soma ReadErrorsTotal e ReadErrorsUncorrected em Disk.ReallocatedSectors. É uma APROXIMAÇÃO: o Windows não expõe
+// o atributo SMART "Reallocated Sectors"; os erros de leitura do contador de confiabilidade são o que há de mais próximo.
+func winSmartErrors(ids []string) func(Deps, *Report, any) error {
+	return func(_ Deps, r *Report, v any) error {
+		found := false
+		for _, row := range winList(v) {
+			id := winStr(row["Id"])
+			a, okA := winUint(row["ReadErr"])
+			b, okB := winUint(row["ReadUnc"])
+			if id == "" || (!okA && !okB) || a+b > math.MaxInt32 {
+				continue
+			}
+			for i := range r.Disks {
+				if i < len(ids) && ids[i] == id {
+					n := int(a + b)
+					r.Disks[i].ReallocatedSectors = &n
+					found = true
+				}
+			}
+		}
+		if !found {
+			return errWinNoData
+		}
+		return nil
+	}
+}
+
+func winNICs(_ Deps, r *Report, v any) error {
+	if _, ok := v.([]any); !ok && winMap(v) == nil {
+		return errWinNoData
+	}
+	for _, row := range winList(v) {
+		n := NIC{Name: winStr(row["Name"]), MAC: winStr(row["Mac"])}
+		if n.Name == "" && n.MAC == "" {
+			continue
+		}
+		r.NICs = append(r.NICs, n)
+	}
+	return nil
+}
+
+// winClean devolve o texto do firmware sem os valores de fábrica sem informação (vazio, "To Be Filled By O.E.M.",
+// "Default string", só zeros) como "" (= não lido).
+func winClean(v any) string {
+	s := winStr(v)
+	switch strings.ToLower(s) {
+	case "", "to be filled by o.e.m.", "default string":
+		return ""
+	}
+	if strings.Trim(s, "0- ") == "" {
+		return ""
+	}
+	return s
 }
 
 func winBattery(d Deps, r *Report, v any) error {

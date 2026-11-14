@@ -22,6 +22,10 @@ const (
 	macVMStat   = "/usr/bin/vm_stat"
 	macLog      = "/usr/bin/log"
 	macPmset    = "/usr/bin/pmset"
+	macScutil   = "/usr/sbin/scutil"
+	macHostname = "/bin/hostname"
+	macNetSetup = "/usr/sbin/networksetup"
+	macPowerMet = "/usr/bin/powermetrics"
 )
 
 const (
@@ -34,7 +38,7 @@ const (
 
 var macDirs = []string{"/Library/Logs/DiagnosticReports"} // a pasta do usuário entra com Home()
 
-// collectDarwin preenche r com o estado da máquina (macOS). Só leitura, sem root: o que exige root vira Skipped.
+// collectDarwin preenche r com o estado da máquina (macOS). Só leitura, nunca eleva: o que exige root só é lido quando Deps.Admin é verdadeiro; senão vira Skipped com NeedsAdmin.
 func collectDarwin(ctx context.Context, d Deps, r *Report) {
 	skip := func(area, pt, en, es string) {
 		r.Skipped = append(r.Skipped, Skipped{Area: area, Reason: diagfmt.T(d.Lang, pt, en, es)})
@@ -73,10 +77,13 @@ func collectDarwin(ctx context.Context, d Deps, r *Report) {
 			skip("bateria", "não foi possível ler a bateria (system_profiler SPPowerDataType)", "could not read the battery (system_profiler SPPowerDataType)", "no se pudo leer la batería (system_profiler SPPowerDataType)")
 		}
 	})
-	skip("temperatura",
-		"a temperatura exige administrador; rode 'sudo powermetrics --samplers smc -n 1' para ver",
-		"temperature needs administrator rights; run 'sudo powermetrics --samplers smc -n 1' to see it",
-		"la temperatura exige administrador; ejecute 'sudo powermetrics --samplers smc -n 1' para verla")
+	area(func() {
+		r.NICs = nil
+		if err := macNICs(ctx, d, r); err != nil {
+			skip("rede", "não foi possível ler as placas de rede (networksetup -listallhardwareports)", "could not read the network adapters (networksetup -listallhardwareports)", "no se pudieron leer los adaptadores de red (networksetup -listallhardwareports)")
+		}
+	})
+	area(func() { macTemps(ctx, d, r) })
 	area(func() {
 		if err := macGPU(ctx, d, r); err != nil {
 			skip("gpu", "não foi possível ler a GPU (system_profiler SPDisplaysDataType)", "could not read the GPU (system_profiler SPDisplaysDataType)", "no se pudo leer la GPU (system_profiler SPDisplaysDataType)")
@@ -129,6 +136,8 @@ func macHardware(ctx context.Context, d Deps, r *Report) error {
 			Items []struct {
 				ChipType    any `json:"chip_type"`
 				MachineName any `json:"machine_name"`
+				Serial      any `json:"serial_number"`
+				UUID        any `json:"platform_UUID"`
 				Processors  any `json:"number_processors"`
 			} `json:"SPHardwareDataType"`
 		}
@@ -138,6 +147,8 @@ func macHardware(ctx context.Context, d Deps, r *Report) error {
 				r.Hardware.CPU = macClean(chip, 80) // Apple Silicon: o brand_string do sysctl não existe
 				ok = true
 			}
+			r.Hardware.Serial = macID(it.Serial, 80)
+			r.Hardware.UUID = macID(it.UUID, 80)
 			if name := macStr(it.MachineName); name != "" {
 				if r.Hardware.Vendor == "" {
 					r.Hardware.Vendor = "Apple"
@@ -155,6 +166,12 @@ func macHardware(ctx context.Context, d Deps, r *Report) error {
 				}
 			}
 		}
+	}
+	// Nome da máquina como o sistema informa (ComputerName; cai para o hostname).
+	if out, err := d.run(ctx, readCmd(macScutil, "--get", "ComputerName")); err == nil && firstLine(out) != "" {
+		r.Hardware.Hostname = macClean(out, 120)
+	} else if out, err := d.run(ctx, readCmd(macHostname)); err == nil {
+		r.Hardware.Hostname = macClean(out, 120)
 	}
 	if ok && r.Hardware.Vendor == "" {
 		r.Hardware.Vendor = "Apple"
@@ -278,6 +295,7 @@ func macSwap(s string) (total, used uint64) {
 
 type macPhys struct {
 	name, bus, medium string
+	serial            string
 	size              uint64
 	smart             string
 }
@@ -303,7 +321,7 @@ func macDisks(ctx context.Context, d Deps, r *Report) error {
 					if name == "" {
 						name = macStr(it["_name"])
 					}
-					phys = append(phys, macPhys{name: macClean(name, 80), bus: bus, size: macUint(it["size_in_bytes"]), smart: macStr(it["smart_status"]), medium: macMedium(it["medium_type"])})
+					phys = append(phys, macPhys{name: macClean(name, 80), bus: bus, size: macUint(it["size_in_bytes"]), smart: macStr(it["smart_status"]), medium: macMedium(it["medium_type"]), serial: macID(it["device_serial"], 80)})
 				}
 			}
 		}
@@ -344,7 +362,7 @@ func macDisks(ctx context.Context, d Deps, r *Report) error {
 		return fmt.Errorf("nenhum disco encontrado")
 	}
 	for _, p := range phys {
-		dk := Disk{Name: p.name, Bus: p.bus, Medium: p.medium, SizeBytes: p.size, FreeBytes: free[p.name], HealthRaw: p.smart}
+		dk := Disk{Name: p.name, Serial: p.serial, Bus: p.bus, Medium: p.medium, SizeBytes: p.size, FreeBytes: free[p.name], HealthRaw: p.smart}
 		switch strings.ToLower(strings.TrimSpace(p.smart)) {
 		case "verified":
 			dk.Health = HealthOK
@@ -708,4 +726,86 @@ func macClean(s string, limit int) string {
 		return string(rs[:limit])
 	}
 	return s
+}
+
+// macID limpa um identificador (série, UUID); vazio ou só zeros/separadores = "" (o firmware não informou).
+func macID(v any, limit int) string {
+	id := macClean(macStr(v), limit)
+	if strings.Trim(id, "0-: ") == "" {
+		return ""
+	}
+	return id
+}
+
+// --- rede -------------------------------------------------------------------------------------------------------
+
+var macMACRe = regexp.MustCompile(`^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$`)
+
+// macNICs lê as portas de hardware (networksetup -listallhardwareports): só as que têm endereço Ethernet válido.
+func macNICs(ctx context.Context, d Deps, r *Report) error {
+	out, err := d.run(ctx, readCmd(macNetSetup, "-listallhardwareports"))
+	if err != nil {
+		return err
+	}
+	name := ""
+	for _, ln := range strings.Split(out, "\n") {
+		ln = strings.TrimSpace(ln)
+		switch {
+		case strings.HasPrefix(ln, "Hardware Port:"):
+			name = macClean(strings.TrimSpace(strings.TrimPrefix(ln, "Hardware Port:")), 80)
+		case strings.HasPrefix(ln, "Ethernet Address:"):
+			mac := strings.TrimSpace(strings.TrimPrefix(ln, "Ethernet Address:"))
+			if name != "" && macMACRe.MatchString(mac) && strings.Trim(mac, "0:") != "" {
+				r.NICs = append(r.NICs, NIC{Name: name, MAC: mac})
+			}
+			name = ""
+		case ln == "":
+			name = ""
+		}
+	}
+	return nil
+}
+
+// --- temperatura ------------------------------------------------------------------------------------------------
+
+var (
+	macTempRe     = regexp.MustCompile(`(?m)^\s*([A-Za-z0-9 _/-]*?temperature)\s*:\s*(-?\d+(?:\.\d+)?)\s*C\b`)
+	macPressureRe = regexp.MustCompile(`(?mi)^\s*Current pressure level\s*:\s*(\S[^\n]*)$`)
+)
+
+// macTemps: sem admin vira Skipped (NeedsAdmin); com admin lê o powermetrics (leitura, sem Elevate).
+func macTemps(ctx context.Context, d Deps, r *Report) {
+	if !d.Admin {
+		r.Skipped = append(r.Skipped, Skipped{Area: "temperatura", NeedsAdmin: true, Reason: diagfmt.T(d.Lang,
+			"a temperatura exige administrador; rode com sudo (sudo toolkit diagnostico)",
+			"temperature needs administrator rights; run with sudo (sudo toolkit diagnostico)",
+			"la temperatura exige administrador; ejecute con sudo (sudo toolkit diagnostico)")})
+		return
+	}
+	if out, err := d.run(ctx, readCmd(macPowerMet, "--samplers", "smc", "-n", "1", "-i", "1000")); err == nil {
+		for _, m := range macTempRe.FindAllStringSubmatch(out, -1) {
+			v, perr := strconv.ParseFloat(m[2], 64)
+			if perr != nil || v <= 0 || v > 150 {
+				continue
+			}
+			r.Temps = append(r.Temps, Temp{Sensor: macClean(strings.TrimSpace(m[1]), 60), Celsius: v})
+		}
+	}
+	if len(r.Temps) > 0 {
+		return
+	}
+	// Apple Silicon: sem sensores numéricos; a pressão térmica é só informativa (não vira temperatura).
+	pressure := ""
+	if out, err := d.run(ctx, readCmd(macPowerMet, "--samplers", "thermal", "-n", "1", "-i", "1000")); err == nil {
+		if m := macPressureRe.FindStringSubmatch(out); m != nil {
+			pressure = macClean(m[1], 30)
+		}
+	}
+	pt, en, es := "o sistema não expõe sensores nesta máquina", "the system does not expose sensors on this machine", "el sistema no expone sensores en esta máquina"
+	if pressure != "" {
+		pt += " (pressão térmica: " + pressure + ")"
+		en += " (thermal pressure: " + pressure + ")"
+		es += " (presión térmica: " + pressure + ")"
+	}
+	r.Skipped = append(r.Skipped, Skipped{Area: "temperatura", Reason: diagfmt.T(d.Lang, pt, en, es)})
 }

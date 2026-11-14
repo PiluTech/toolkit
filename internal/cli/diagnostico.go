@@ -16,7 +16,9 @@ import (
 
 	"github.com/PiluTech/toolkit/internal/diagfmt"
 	"github.com/PiluTech/toolkit/internal/diagnostico"
+	"github.com/PiluTech/toolkit/internal/exec"
 	"github.com/PiluTech/toolkit/internal/msg"
+	"github.com/PiluTech/toolkit/internal/platform"
 	"github.com/PiluTech/toolkit/internal/textsafe"
 )
 
@@ -25,6 +27,19 @@ type DiagDeps struct {
 	// Collect lê a máquina (nil = diagnostico.Collect sobre o Runner de leitura e o disco reais).
 	Collect func(ctx context.Context, goos string, d diagnostico.Deps) *diagnostico.Report
 	Now     func() time.Time
+	// IsAdmin diz se o processo roda como administrador (Windows) ou root (Unix). Nil = a detecção real: no Windows pergunta ao
+	// PowerShell, nos outros euid 0. Como administrador os coletores leem a mais (SMART no Linux, temperatura no macOS...).
+	IsAdmin func(ctx context.Context, goos string, r exec.Runner) bool
+}
+
+func (d DiagDeps) admin(ctx context.Context, goos string, r exec.Runner) bool {
+	if d.IsAdmin != nil {
+		return d.IsAdmin(ctx, goos, r)
+	}
+	if goos == "windows" {
+		return platform.IsElevatedViaPowerShell(ctx, r)
+	}
+	return os.Geteuid() == 0
 }
 
 type diagFlags struct {
@@ -95,7 +110,8 @@ func runDiagnostico(ctx context.Context, out, errOut io.Writer, deps Deps, f dia
 	if now == nil {
 		now = time.Now
 	}
-	rep := collect(ctx, deps.GOOS, diagnostico.Deps{Runner: deps.runner(), Now: now, Lang: lang})
+	rn := deps.runner()
+	rep := collect(ctx, deps.GOOS, diagnostico.Deps{Runner: rn, Now: now, Lang: lang, Admin: deps.Diag.admin(ctx, deps.GOOS, rn)})
 	findings := diagnostico.Analyze(rep, lang)
 	if f.json {
 		doc := diagJSON{OS: rep.OS, Generated: rep.Generated, Report: rep}

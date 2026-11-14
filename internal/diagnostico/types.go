@@ -46,12 +46,26 @@ type Report struct {
 	Events    []Event  // erros e críticos recentes (7 dias), agrupados por origem+id, mais recentes primeiro
 	Crashes   []Crash  // BSOD, desligamento inesperado, kernel panic, crash de app (30 dias), mais recentes primeiro
 	Stability *float64 // Windows: índice de confiabilidade (0 a 10), nil nos outros
+	NICs      []NIC    // placas de rede físicas (nome e MAC)
 	Skipped   []Skipped
+	// Admin: a coleta rodou como administrador (Windows) ou root (Linux e macOS). Com admin os coletores leem mais (SMART no
+	// Linux, temperatura no macOS, o que o firmware só expõe a administrador); sem admin tudo continua funcionando e o que
+	// ficou de fora aparece em Skipped com NeedsAdmin.
+	Admin bool
+}
+
+// NIC é uma placa de rede física.
+type NIC struct {
+	Name string
+	MAC  string
 }
 
 // Hardware é a identificação da máquina (sem número de série).
 type Hardware struct {
 	Vendor, Model string
+	Serial        string // número de série da máquina (BIOS/placa); vazio = não lido
+	UUID          string // UUID/ID de hardware; vazio = não lido
+	Hostname      string // nome da máquina
 	CPU           string
 	Cores         int // núcleos físicos (0 = desconhecido)
 	Threads       int // threads lógicas (0 = desconhecido)
@@ -67,7 +81,8 @@ type Memory struct {
 
 // Disk é um disco físico.
 type Disk struct {
-	Name               string // modelo ou nome (sem número de série)
+	Name               string // modelo ou nome
+	Serial             string // número de série do disco; vazio = não lido
 	Medium             string // "SSD", "HDD" ou ""
 	Bus                string // "NVMe", "SATA", "USB"... ou ""
 	SizeBytes          uint64
@@ -122,6 +137,8 @@ type Crash struct {
 type Skipped struct {
 	Area   string // "smart", "temperatura", "bateria", "eventos"... (id estável)
 	Reason string // frase no idioma da coleta, com a instrução quando houver
+	// NeedsAdmin: rodando como administrador/root esta área seria lida (o resumo lista o que se ganha com admin).
+	NeedsAdmin bool
 }
 
 // Severity é a gravidade de um achado.
