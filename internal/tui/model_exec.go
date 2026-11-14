@@ -16,6 +16,8 @@ func (m *Model) selection() Selection {
 			s.Apps = append(s.Apps, x.Marked()...)
 		case *RecipesTab:
 			s.Recipes = append(s.Recipes, x.Marked()...)
+		case *DiagTab:
+			s.Recipes = append(s.Recipes, x.Marked()...)
 		}
 	}
 	return s
