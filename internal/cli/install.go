@@ -180,13 +180,18 @@ func runInstall(ctx context.Context, out, errOut io.Writer, deps Deps, f install
 	if !f.dryRun {
 		planOut = &planBuf
 	}
+	planShown := false
 	failed, plan := installPass(ctx, planOut, errOut, deps, targets, true)
 	// Se o plano sai vazio (tudo instalado) ou algum app falha no plano, não haverá passe real que repita o que
 	// o plano escreveu: é o contexto que o usuário precisa ver (cabeçalhos, "já instalado", erros).
 	if !f.dryRun && (len(plan.Plan()) == 0 || len(failed) > 0) {
 		_, _ = out.Write(planBuf.Bytes())
+		planShown = true
 	}
 	printPlan(out, deps, plan, f.dryRun)
+	if !f.dryRun && !planShown {
+		printPlanNotes(out, planBuf.String()) // o aviso do app aparece ANTES de confirmar
+	}
 	if len(failed) > 0 {
 		return fmt.Errorf(msg.ErrInstallFailed, printable(strings.Join(failed, ", ")))
 	}
@@ -280,6 +285,9 @@ func installOne(ctx context.Context, out io.Writer, reg *providers.Registry, goo
 	default:
 		_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallDone, res.Provider))
 	}
+	if app.Note != "" && !res.Result.AlreadyInstalled {
+		_, _ = fmt.Fprintln(out, fmt.Sprintf(msg.InstallNote, printable(app.ID), printable(app.Note)))
+	}
 	if res.Provider == "flatpak" && !res.Result.AlreadyInstalled {
 		_, _ = fmt.Fprintln(out, msg.InstallFlatpakNote)
 	}
@@ -287,6 +295,16 @@ func installOne(ctx context.Context, out io.Writer, reg *providers.Registry, goo
 		_, _ = fmt.Fprintln(out, msg.InstallReboot)
 	}
 	return nil
+}
+
+// printPlanNotes repete, depois do plano, só os avisos de app (`note:` do catálogo) que o passe do plano escreveu:
+// o resto desse passe é descartado no install real, mas o aviso de segurança precisa estar na tela antes de confirmar.
+func printPlanNotes(out io.Writer, planOutput string) {
+	for _, l := range strings.Split(planOutput, "\n") {
+		if strings.HasPrefix(l, msg.InstallNotePrefix) {
+			_, _ = fmt.Fprintln(out, l)
+		}
+	}
 }
 
 // printPlan mostra cada passo COMO SERÁ EXECUTADO (sudo -n -- env VAR=... cmd, ou VAR=... cmd), avisa quando o
