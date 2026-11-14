@@ -1,0 +1,24 @@
+ toolkit  [1 Privacidade]                                                v0.1.0 
+────────────────────────────────────────────────────────────────────────────────
+ ✓ feito  Perfil recomendado aplicado                                [x] fechar
+   3 mudança(s)
+   Backup em C:\ProgramData\toolkit\backups\privacidade-20261114-1200.json
+   Para desfazer: tecle d nesta aba
+────────────────────────────────────────────────────────────────────────────────
+ PRIVACIDADE DO WINDOWS · edição pro · administrador: sim
+   basico        só o que é do usuário · não exige administrador
+ > recomendado   básico + política, serviço e tarefas · exige administrador
+─ Ajustes do perfil recomendado ────────────────────────────────────────────────
+ ✓ aplicado       ID de publicidade desligado
+ ○ pendente       Sugestões no menu Iniciar desligadas
+ ○ pendente       Dados de diagnóstico no mínimo [admin]
+ ! parcial        Serviço de telemetria [admin]
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+ Aplicado: 3 mudança(s).                                                        
+ ↑↓ perfil  p ver plano  a aplicar  d desfazer  m só usuário  ? ajuda  q sair

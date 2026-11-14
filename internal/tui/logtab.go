@@ -62,6 +62,53 @@ func (t *LogTab) Running() bool { return t.running }
 // Summary é o título do resumo final ("" enquanto roda ou sem execução).
 func (t *LogTab) Summary() string { return t.title }
 
+// Outcome resume a execução para a faixa de resultado da aba de origem (nil = nada rodou ou ainda roda).
+func (t *LogTab) Outcome() *Result {
+	if t.running || len(t.items) == 0 {
+		return nil
+	}
+	var ok, stopped int
+	var failed, reboot []string
+	for _, it := range t.items {
+		switch it.status {
+		case ItemOK, ItemSkipped:
+			ok++
+		case ItemFailed:
+			failed = append(failed, it.name)
+		case ItemReboot:
+			reboot = append(reboot, it.name)
+		case ItemNotRun, ItemCanceled, ItemQueued, ItemRunning:
+			stopped++
+		}
+	}
+	head := "Instalação concluída"
+	if stopped > 0 {
+		head = "Execução interrompida"
+	}
+	parts := []string{fmt.Sprintf("%d ok", ok)}
+	if len(failed) > 0 {
+		parts = append(parts, fmt.Sprintf("%d falharam", len(failed)))
+	}
+	if stopped > 0 {
+		parts = append(parts, fmt.Sprintf("%d não executados", stopped))
+	}
+	r := &Result{Kind: ResultOK, Title: head + ": " + strings.Join(parts, ", ")}
+	switch {
+	case len(failed) > 0 && ok == 0:
+		r.Kind = ResultError
+	case len(failed) > 0 || stopped > 0:
+		r.Kind = ResultPartial
+	}
+	if len(failed) > 0 {
+		r.Lines = append(r.Lines, "Falharam: "+strings.Join(failed, ", "))
+	}
+	if len(reboot) > 0 {
+		r.Lines = append(r.Lines, "Aguardando reinício: "+strings.Join(reboot, ", "))
+	}
+	r.Lines = append(r.Lines, "Detalhes: aba Log")
+	return r
+}
+
 // Warn registra o aviso "não deu para gravar o log em arquivo" (a execução continua).
 func (t *LogTab) Warn(msg string) { t.logWarn = textsafe.Line(msg) }
 

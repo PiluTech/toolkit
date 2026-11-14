@@ -230,8 +230,8 @@ func TestNativeAppsTabRemoverPedeConfirmacaoEUsaOIDDoPlano(t *testing.T) {
 	if tab.Capturing() {
 		t.Error("terminou: não captura mais")
 	}
-	if !strings.Contains(tab.Status(), "Removidos: 1 app(s)") || !strings.Contains(tab.Status(), "tecle i") || !strings.Contains(tab.View(120, 16), `C:\b.json`) {
-		t.Errorf("resultado: status=%q view=%s", tab.Status(), tab.View(120, 16))
+	if !strings.Contains(tab.Status(), "Removidos: 1 app(s)") || tab.Result() == nil || !strings.Contains(strings.Join(tab.Result().Lines, "|"), `Backup em C:\b.json`) || !strings.Contains(strings.Join(tab.Result().Lines, "|"), "tecle i") {
+		t.Errorf("resultado: status=%q result=%+v", tab.Status(), tab.Result())
 	}
 	if be.loads < 2 {
 		t.Error("depois de remover o estado é relido")
@@ -315,7 +315,7 @@ func TestNativeAppsTabErrosDoPlanoEDaRemocao(t *testing.T) {
 		res  NatResult
 		want string
 	}{
-		{ErrNatStalePlan, NatResult{}, "mudou desde o plano mostrado"},
+		{ErrNatStalePlan, NatResult{}, "O plano mudou"},
 		{ErrNatNeedsAdmin, NatResult{}, "Precisa de administrador"},
 		{errors.New("boom"), NatResult{Removed: 2, BackupPath: "b.json"}, "erro: boom"},
 	}
@@ -326,8 +326,8 @@ func TestNativeAppsTabErrosDoPlanoEDaRemocao(t *testing.T) {
 		if !strings.Contains(tab.Status(), c.want) || !strings.HasPrefix(tab.Status(), SymWarn) {
 			t.Errorf("%v: status=%q", c.err, tab.Status())
 		}
-		if c.res.Removed > 0 && !strings.Contains(tab.View(120, 16), "Removidos antes da falha: 2") {
-			t.Errorf("falha parcial não informa o que saiu:\n%s", tab.View(120, 16))
+		if c.res.Removed > 0 && (tab.Result() == nil || !strings.Contains(strings.Join(tab.Result().Lines, "|"), "Antes da falha: 2")) {
+			t.Errorf("falha parcial não informa o que saiu: %+v", tab.Result())
 		}
 	}
 }

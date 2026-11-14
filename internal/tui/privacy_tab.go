@@ -144,8 +144,8 @@ type PrivacyTab struct {
 	conf    *Confirm // confirmação única (só existe com asking)
 	only    bool     // onlyUser do plano mostrado
 	notice  string
-	warn    bool // o aviso é de problema (símbolo "!")
-	result  string
+	warn    bool    // o aviso é de problema (símbolo "!")
+	res     *Result // resultado da última ação, mostrado na faixa da raiz até a pessoa fechar (x)
 }
 
 // NewPrivacyTab cria a aba. O backend decide o que é "suportado" (no real, GOOS == windows).
@@ -320,33 +320,62 @@ func (t *PrivacyTab) buildConfirm() *Confirm {
 
 func (t *PrivacyTab) onDone(m privDoneMsg) {
 	t.busy, t.asking, t.view, t.scroll = busyNone, false, false, 0
-	verb := "Aplicado"
+	what := "aplicar"
 	if m.kind == privUndo {
-		verb = "Restaurado"
+		what = "restaurar"
 	}
+	bk := ""
+	if m.res.BackupPath != "" {
+		bk = "Backup em " + textsafe.Line(m.res.BackupPath)
+	}
+	undo := "Para desfazer: tecle d nesta aba"
 	switch {
 	case m.err != nil && errors.Is(m.err, ErrPrivStalePlan):
-		t.setNotice("O sistema ou o backup mudou desde o plano mostrado: nada foi alterado. Veja o plano de novo (p, a ou d) antes de confirmar.", true)
-		t.result = ""
+		t.setNotice("O plano mudou: nada foi alterado.", true)
+		t.res = &Result{Kind: ResultInfo, Title: "O plano mudou", Lines: []string{"O sistema ou o backup mudou desde o plano mostrado: nada foi alterado.", "Veja o plano de novo (p, a ou d) antes de confirmar."}}
 	case m.err != nil && errors.Is(m.err, ErrPrivNeedsAdmin):
-		t.setNotice("Precisa de administrador: nada foi alterado. Abra o terminal como administrador e tente de novo.", true)
-		t.result = ""
+		t.setNotice("Precisa de administrador: nada foi alterado.", true)
+		t.res = &Result{Kind: ResultError, Title: "Precisa de administrador", Lines: []string{"Nada foi alterado.", "Abra o terminal como administrador e tente de novo."}}
+	case m.err != nil && m.res.Applied > 0:
+		t.setNotice("erro: "+m.err.Error(), true)
+		lines := []string{fmt.Sprintf("Antes da falha: %d mudança(s)", m.res.Applied), "Erro: " + m.err.Error()}
+		if bk != "" {
+			lines = append(lines, bk+". Ele guarda os valores originais.")
+		}
+		t.res = &Result{Kind: ResultPartial, Title: "Parou no meio", Lines: append(lines, undo)}
 	case m.err != nil:
 		t.setNotice("erro: "+m.err.Error(), true)
-		t.result = ""
-		if m.res.Applied > 0 {
-			t.result = fmt.Sprintf("%s antes da falha: %d mudança(s). O backup guarda os valores originais; d desfaz.", verb, m.res.Applied)
-		}
+		t.res = &Result{Kind: ResultError, Title: "Não foi possível " + what, Lines: []string{"Erro: " + m.err.Error(), "Nenhuma mudança foi contada antes da falha."}}
 	case m.res.Nothing:
-		t.setNotice("O backup existia, mas tudo já estava como antes: nada a restaurar (o backup foi removido).", false)
-		t.result = ""
+		t.setNotice("Nada a restaurar: tudo já estava como antes.", false)
+		t.res = &Result{Kind: ResultInfo, Title: "Nada a restaurar", Lines: []string{"O backup existia, mas tudo já estava como antes.", "O backup foi removido."}}
 	case m.kind == privUndo:
-		t.setNotice(fmt.Sprintf("Restaurado: %d item(ns). O backup foi removido.", m.res.Applied), false)
-		t.result = fmt.Sprintf("Restaurado: %d item(ns).", m.res.Applied)
+		t.setNotice(fmt.Sprintf("Restaurado: %d item(ns).", m.res.Applied), false)
+		t.res = &Result{Kind: ResultOK, Title: "Restaurado", Lines: []string{fmt.Sprintf("%d item(ns) voltaram ao valor original", m.res.Applied), "O backup foi removido."}}
 	default:
-		t.setNotice(fmt.Sprintf("Aplicado: %d mudança(s). Backup em %s. d desfaz.", m.res.Applied, textsafe.Line(m.res.BackupPath)), false)
-		t.result = fmt.Sprintf("Aplicado: %d mudança(s). Backup em %s.", m.res.Applied, textsafe.Line(m.res.BackupPath))
+		t.setNotice(fmt.Sprintf("Aplicado: %d mudança(s).", m.res.Applied), false)
+		lines := []string{fmt.Sprintf("%d mudança(s)", m.res.Applied)}
+		if bk != "" {
+			lines = append(lines, bk)
+		}
+		t.res = &Result{Kind: ResultOK, Title: "Perfil " + string(t.profile) + " aplicado", Lines: append(lines, undo)}
 	}
+	t.res = cleanResult(t.res)
+}
+
+// Result implementa Resulter: o resultado da última ação (nil = nada a mostrar).
+func (t *PrivacyTab) Result() *Result { return t.res }
+
+// Dismiss implementa Resulter: fecha a faixa.
+func (t *PrivacyTab) Dismiss() { t.res = nil }
+
+// cleanResult passa todo texto do resultado por textsafe (erros do backend podem trazer saída externa).
+func cleanResult(r *Result) *Result {
+	r.Title = textsafe.Line(r.Title)
+	for i, l := range r.Lines {
+		r.Lines[i] = textsafe.Line(l)
+	}
+	return r
 }
 
 // key trata as teclas. Mudar o sistema só acontece depois do plano na tela e do "s" (ou "y") na confirmação.
@@ -443,7 +472,7 @@ func (t *PrivacyTab) planCmd(kind privKind) tea.Cmd {
 }
 
 func (t *PrivacyTab) confirm() tea.Cmd {
-	t.asking, t.conf, t.busy, t.notice = false, nil, busyApply, ""
+	t.asking, t.conf, t.busy, t.notice, t.res = false, nil, busyApply, "", nil
 	be, ctx, p, only, kind, id := t.be, t.ctx, t.profile, t.only, t.kind, t.plan.ID
 	return tea.Batch(func() tea.Msg {
 		var res PrivResult
@@ -580,9 +609,6 @@ func (t *PrivacyTab) mainLines(w int) []string {
 		adm = strings.Replace(adm, "administrador: não", "administrador: sim", 1)
 	}
 	out = append(out, " "+t.theme.Title().Render(titleCase(t.theme, head))+" · "+adm)
-	if t.result != "" {
-		out = append(out, " "+t.theme.OK().Render(SymOK+" "+t.result))
-	}
 	profiles := []struct {
 		id   PrivProfile
 		desc string

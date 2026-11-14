@@ -132,7 +132,7 @@ type NativeAppsTab struct {
 	conf   *Confirm // confirmação única (só existe com asking)
 	notice string
 	warn   bool
-	result string
+	res    *Result // resultado da última ação, na faixa da raiz até a pessoa fechar (x)
 }
 
 // NewNativeAppsTab cria a aba. O backend decide o que é "suportado" (no real, GOOS == windows).
@@ -290,26 +290,45 @@ func (t *NativeAppsTab) buildConfirm() *Confirm {
 
 func (t *NativeAppsTab) onDone(m natDoneMsg) {
 	t.busy, t.asking, t.view, t.scroll = natBusyNone, false, false, 0
+	bk := ""
+	if m.res.BackupPath != "" {
+		bk = "Backup em " + textsafe.Line(m.res.BackupPath)
+	}
+	reinstall := "Para reinstalar: tecle i"
 	switch {
 	case errors.Is(m.err, ErrNatStalePlan):
-		t.setNotice("O sistema ou a seleção mudou desde o plano mostrado: nada foi alterado. Veja o plano de novo (p ou r) antes de confirmar.", true)
-		t.result = ""
+		t.setNotice("O plano mudou: nada foi alterado.", true)
+		t.res = &Result{Kind: ResultInfo, Title: "O plano mudou", Lines: []string{"O sistema ou a seleção mudou desde o plano mostrado: nada foi alterado.", "Veja o plano de novo (p ou r) antes de confirmar."}}
 	case errors.Is(m.err, ErrNatNeedsAdmin):
-		t.setNotice("Precisa de administrador: nada foi alterado. Abra o terminal como administrador e tente de novo.", true)
-		t.result = ""
+		t.setNotice("Precisa de administrador: nada foi alterado.", true)
+		t.res = &Result{Kind: ResultError, Title: "Precisa de administrador", Lines: []string{"Nada foi alterado.", "Abra o terminal como administrador e tente de novo."}}
+	case m.err != nil && m.res.Removed > 0:
+		t.setNotice("erro: "+m.err.Error(), true)
+		lines := []string{fmt.Sprintf("Antes da falha: %d app(s) removidos", m.res.Removed), "Erro: " + m.err.Error()}
+		if bk != "" {
+			lines = append(lines, bk)
+		}
+		t.res = &Result{Kind: ResultPartial, Title: "Parou no meio", Lines: append(lines, reinstall)}
 	case m.err != nil:
 		t.setNotice("erro: "+m.err.Error(), true)
-		t.result = ""
-		if m.res.Removed > 0 {
-			t.result = fmt.Sprintf("Removidos antes da falha: %d app(s). Backup em %s. i mostra como reinstalar.", m.res.Removed, textsafe.Line(m.res.BackupPath))
-		}
+		t.res = &Result{Kind: ResultError, Title: "Não foi possível remover", Lines: []string{"Erro: " + m.err.Error(), "Nenhum app foi contado como removido antes da falha."}}
 	default:
 		t.marked = map[string]bool{}
-		msg := fmt.Sprintf("Removidos: %d app(s). Backup em %s. Para reinstalar, tecle i.", m.res.Removed, textsafe.Line(m.res.BackupPath))
-		t.setNotice(msg, false)
-		t.result = msg
+		t.setNotice(fmt.Sprintf("Removidos: %d app(s).", m.res.Removed), false)
+		lines := []string{}
+		if bk != "" {
+			lines = append(lines, bk)
+		}
+		t.res = &Result{Kind: ResultOK, Title: fmt.Sprintf("Removidos: %d app(s)", m.res.Removed), Lines: append(lines, reinstall)}
 	}
+	t.res = cleanResult(t.res)
 }
+
+// Result implementa Resulter: o resultado da última ação (nil = nada a mostrar).
+func (t *NativeAppsTab) Result() *Result { return t.res }
+
+// Dismiss implementa Resulter: fecha a faixa.
+func (t *NativeAppsTab) Dismiss() { t.res = nil }
 
 // key trata as teclas. Mudar o sistema só acontece depois do plano na tela e do "s" (ou "y") na confirmação.
 func (t *NativeAppsTab) key(k string) tea.Cmd {
@@ -447,7 +466,7 @@ func (t *NativeAppsTab) planCmd(kind natKind) tea.Cmd {
 }
 
 func (t *NativeAppsTab) confirm() tea.Cmd {
-	t.asking, t.conf, t.busy, t.notice = false, nil, natBusyApply, ""
+	t.asking, t.conf, t.busy, t.notice, t.res = false, nil, natBusyApply, "", nil
 	be, ctx, sel, id := t.be, t.ctx, t.sel, t.plan.ID
 	return tea.Batch(func() tea.Msg {
 		res, err := be.Apply(ctx, sel, id)
@@ -572,9 +591,6 @@ func (t *NativeAppsTab) mainLines(w int) []string {
 		adm = "administrador: sim"
 	}
 	out = append(out, " "+t.theme.Title().Render(titleCase(t.theme, "Apps nativos do Windows"))+" · "+adm)
-	if t.result != "" {
-		out = append(out, " "+t.theme.OK().Render(SymOK+" "+t.result))
-	}
 	scope := "só o usuário atual"
 	if t.allUsers {
 		scope = t.theme.Accent().Render("[x]") + " todos os usuários e o provisionamento (exige administrador)"

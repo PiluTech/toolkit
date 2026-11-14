@@ -199,6 +199,14 @@ caracteres: primeira frase na lista, texto inteiro no log do item.
 5. `q` durante a execução pergunta e encerra o item atual, descartando a fila.
 6. Conjunto ASCII atrás de `--ascii`, depois.
 
+## Faixa de resultado (PR 2 do redesign, `internal/tui/result.go`)
+
+O resultado de cada ação aparece na própria tela, entre o cabeçalho e o corpo, e PERSISTE até a pessoa teclar `x` (nem timeout nem troca de aba a fecham; a faixa é por aba).
+
+- Interface opcional `Resulter{Result() *Result; Dismiss()}` (`tab.go`); `Result{Kind (ok|parcial|erro|info), Title, Lines}`. A raiz (`layout.go`) desenha a faixa quando a aba ativa tem resultado (próprio ou guardado pela raiz) e passa `h` menor ao corpo. Teclas: `x` fecha a faixa da aba ativa SÓ quando a aba não captura teclas (busca/texto/confirmação: `x` continua texto) e há faixa na tela; nenhuma outra tecla é consumida.
+- Forma: linha do título (`✓ feito  <título>` + `[x] fechar`), até 4 linhas de detalhe QUEBRADAS (nunca cortadas), régua. Abaixo de 20 linhas de janela (ou se a faixa deixasse menos de 8 linhas ao corpo) vira uma linha só: símbolo, título e `[x] fechar`. Em Mono sem cor (cor só no símbolo, via `Paint`). Texto estável, sem animação; todo texto passa por `textsafe`.
+- Privacidade e Apps nativos implementam `Resulter` (resultado de aplicar/restaurar/remover, backup e como desfazer). Execuções (Apps, Receitas, Diagnóstico): o dono é a RAIZ, não a aba (`Model.results`, por índice de aba): ao fechar a execução, `LogTab.Outcome()` resume e a raiz guarda uma cópia nas abas que tinham marcados (`origins`), com "Instalação concluída: N ok, M falharam", "Falharam: <nomes>" e "Detalhes: aba Log"; interrompida vira "Execução interrompida"; nova execução substitui a faixa anterior. Escolha do menor desenho: as abas de lista não conhecem a execução, então não ganham estado nem interface nova.
+
 ## Planner e Runner reais (PR 5c, feito)
 
 `internal/cli/tui_exec.go`, ligados em `runRoot` por `tui.Options.Planner/Runner` (o `tui.run` chama `SetExec` com o

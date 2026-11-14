@@ -66,6 +66,10 @@ type Model struct {
 	updFocus   int  // botão do modal de versão nova: 0 Fechar (padrão), 1 Atualizar
 	wantUpdate bool // o usuário escolheu Atualizar: o Run devolve ErrUpdateRequested
 	updScroll  int
+
+	// resultados de execuções por índice de aba (a faixa da aba de origem); origins são as abas que tinham marcados
+	results map[int]*Result
+	origins []int
 }
 
 // UpdateInfo é uma versão nova (tag, notas já limpas, página da release).
@@ -101,7 +105,7 @@ func New(o Options, tabs ...Tab) *Model {
 		tabs = DefaultTabs()
 	}
 	// tema escuro até a detecção do terminal chegar
-	return &Model{opts: o, theme: Theme{Mono: o.Mono, Dark: true, NoMotion: o.NoMotion}, tabs: tabs, w: 80, h: 24}
+	return &Model{opts: o, theme: Theme{Mono: o.Mono, Dark: true, NoMotion: o.NoMotion}, tabs: tabs, w: 80, h: 24, results: map[int]*Result{}}
 }
 
 // Init pede a cor de fundo do terminal (claro ou escuro).
@@ -173,6 +177,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// aba digitando ou com modal: as teclas são dela (só Ctrl+C sai sempre)
 		if m.modal == modalNone && m.tabs[m.active].Capturing() && msg.String() != "ctrl+c" {
 			return m, m.toActive(msg)
+		}
+		// x fecha a faixa de resultado da aba ativa (só com a faixa na tela; sem ela a tecla é da aba)
+		if msg.String() == "x" && m.modal == modalNone && m.dismissResult() {
+			return m, nil
 		}
 		if next, cmd, handled := m.global(msg.String()); handled {
 			return next, cmd
