@@ -317,9 +317,9 @@ func TestAnimBackendUndoZeroPendenciasRevalida(t *testing.T) {
 func TestDesfazerZeroPendenciasSoAnunciaRemocaoDepoisDeRemover(t *testing.T) {
 	type cli struct {
 		name string
-		run  func(t *testing.T, tty bool, input string, hook func(), removeErr error, args ...string) (out string, err error, backup func() bool)
+		run  func(t *testing.T, tty bool, input string, hook func(), removeErr error, args ...string) (out string, backup func() bool, err error)
 	}
-	privRun := func(t *testing.T, tty bool, input string, hook func(), removeErr error, args ...string) (string, error, func() bool) {
+	privRun := func(t *testing.T, tty bool, input string, hook func(), removeErr error, args ...string) (string, func() bool, error) {
 		sys, st := privZeroStore()
 		st.removeErr = removeErr
 		if hook != nil {
@@ -330,16 +330,16 @@ func TestDesfazerZeroPendenciasSoAnunciaRemocaoDepoisDeRemover(t *testing.T) {
 			}
 		}
 		out, err := runPriv(t, privDeps(t, sys, st, "windows", tty, input), append([]string{"desfazer"}, args...)...)
-		return out, err, func() bool { return st.b != nil }
+		return out, func() bool { return st.b != nil }, err
 	}
-	animRun := func(t *testing.T, tty bool, input string, hook func(), removeErr error, args ...string) (string, error, func() bool) {
+	animRun := func(t *testing.T, tty bool, input string, hook func(), removeErr error, args ...string) (string, func() bool, error) {
 		sys, st := animZero(t)
 		st.removeErr = removeErr
 		if hook != nil {
 			sys.afterRead = func() { sys.set(animStr("5")) }
 		}
 		out, err := runAnim(t, animDeps(t, sys, st, "windows", tty, input), append([]string{"animacoes", "desfazer"}, args...)...)
-		return out, err, func() bool { return st.b != nil }
+		return out, func() bool { return st.b != nil }, err
 	}
 	for _, c := range []cli{{"privacidade", privRun}, {"animacoes", animRun}} {
 		fail := map[string]struct {
@@ -357,7 +357,7 @@ func TestDesfazerZeroPendenciasSoAnunciaRemocaoDepoisDeRemover(t *testing.T) {
 		}
 		for name, f := range fail {
 			t.Run(c.name+"/"+name, func(t *testing.T) {
-				out, _, hasBackup := c.run(t, f.tty, f.input, f.hook, f.removeErr, f.args...)
+				out, hasBackup, _ := c.run(t, f.tty, f.input, f.hook, f.removeErr, f.args...)
 				if !hasBackup() {
 					t.Fatal("o backup tem de ficar")
 				}
@@ -367,7 +367,7 @@ func TestDesfazerZeroPendenciasSoAnunciaRemocaoDepoisDeRemover(t *testing.T) {
 			})
 		}
 		t.Run(c.name+"/sucesso anuncia só depois", func(t *testing.T) {
-			out, err, hasBackup := c.run(t, true, "s\n", nil, nil)
+			out, hasBackup, err := c.run(t, true, "s\n", nil, nil)
 			if err != nil || hasBackup() {
 				t.Fatalf("err=%v backup=%v\n%s", err, hasBackup(), out)
 			}
