@@ -395,12 +395,11 @@ func TestLegacyModeKeepsFlatTabs(t *testing.T) {
 func TestAreaGoldens(t *testing.T) {
 	d := func() []AreaDef {
 		ds := areaDefs()
-		ds[0].Tabs[0] = NewInfoTab("Início", "Iníc", "Bem-vindo ao toolkit. Escolha uma área:\n 1 Instalar   2 Máquina   3 Segurança\n 4 Rede   5 Histórico\nTab troca de seção, ? ajuda, q sai.")
 		ds[4].Tabs[0] = NewInfoTab("Análise", "Anál", "A análise de rede ainda não existe nesta versão.")
 		return ds
 	}
 	for _, sz := range [][2]int{{80, 24}, {120, 40}, {60, 17}} {
-		for _, k := range []string{"0", "1", "2", "3", "4", "5"} {
+		for _, k := range []string{"1", "2", "3", "4", "5"} { // o Início tem os seus goldens em inicio_tab_test.go
 			m := NewWithAreas(Options{Version: "v0.1.0", Mono: true, NoMotion: true}, d())
 			m.Update(sizeMsg(sz[0], sz[1]))
 			press(m, rune(k[0]), 0, k)

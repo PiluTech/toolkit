@@ -137,7 +137,28 @@ const (
 	TUISecaoExecucoesShort = "Exec"
 	TUIDetalhesHistorico   = "área Histórico (5)"
 	TUIAnaliseText         = "A análise de rede ainda não existe nesta versão."
-	TUIInicioText          = "Escolha uma área pelo número:\n0 Início   1 Instalar (apps e receitas)   2 Máquina (diagnóstico, apps nativos)\n3 Segurança (privacidade)   4 Rede (análise, em breve)   5 Histórico (execuções)\nTab e Shift+Tab trocam de seção dentro da área. ? ajuda, q sai."
+	TUIInicioPergunta      = "O que você quer fazer?"
+)
+
+// Início da TUI: um objetivo por linha (título, uma frase didática e, quando vale, uma etiqueta de estado ou requisito).
+const (
+	TUIInicioApps          = "Instalar programas"
+	TUIInicioAppsDesc      = "Escolha os programas do catálogo e instale todos de uma vez."
+	TUIInicioReceitas      = "Preparar a máquina com uma receita"
+	TUIInicioReceitasDesc  = "Uma receita faz vários passos em sequência e continua após reiniciar."
+	TUIInicioSaude         = "Ver a saúde da máquina"
+	TUIInicioSaudeDesc     = "Diagnóstico só de leitura: hardware, série, UUID, MAC e o que está ruim."
+	TUIInicioNativos       = "Remover apps nativos do Windows"
+	TUIInicioNativosDesc   = "Remove só os apps do Windows que você escolher, depois de ver o plano."
+	TUIInicioPrivacidade   = "Proteger a privacidade do Windows"
+	TUIInicioPrivDesc      = "Ajustes de privacidade, um por um, com confirmação e como desfazer."
+	TUIInicioRede          = "Analisar a rede"
+	TUIInicioRedeDesc      = "IPs, Wi-Fi, DNS e portas da máquina."
+	TUIInicioHistorico     = "Ver o que já rodou"
+	TUIInicioHistoricoDesc = "O que já rodou e o que falhou, com o registro de cada execução."
+	TUIInicioTagSoWindows  = "! só Windows"
+	TUIInicioTagEmBreve    = "○ em breve"
+	TUIInicioTagAdmin      = "! pede administrador para alguns itens"
 )
 
 // Textos do comando diagnostico.

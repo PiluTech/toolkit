@@ -146,6 +146,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.opts.Latest, m.opts.LatestNotes, m.opts.LatestURL = msg.Tag, msg.Notes, msg.URL
 		}
 		return m, nil
+	case GoToMsg:
+		m.goTo(msg)
+		return m, nil
 	case planReadyMsg:
 		// só o plano DESTA Revisão vale: um plano atrasado de uma Revisão anterior (outra seleção) é ignorado
 		if m.review != nil && m.review.id == msg.id {
@@ -176,6 +179,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			quit := k == "q" && m.modal == modalNone && !m.tabs[m.active].Capturing() // sair continua possível (não é confirmação)
 			if k != "ctrl+c" && k != "esc" && !quit {
 				return m, nil
+			}
+		}
+		// a seção que usa Enter e os números para si (Início) os recebe antes da Revisão e da troca de área, mas só na
+		// navegação normal: com Revisão, execução, modal ou pergunta aberta valem as regras da raiz.
+		if m.modal == modalNone && m.mode == modeNav && m.asking == askNone {
+			if c, ok := m.tabs[m.active].(KeyClaimer); ok && c.Claims(msg.String()) {
+				return m, m.toActive(msg)
 			}
 		}
 		if next, cmd, handled := m.execKey(msg.String()); handled {

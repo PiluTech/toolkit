@@ -79,6 +79,25 @@ func (m *Model) gotoArea(a int) {
 	m.setActive(m.areas[a].Idx[m.lastSec[a]])
 }
 
+// goTo atende um GoToMsg (a seção Início abre a área e a seção de um objetivo). Só vale na navegação normal: durante a
+// Revisão, a execução, um modal, uma pergunta [s/N] ou numa seção que captura teclas (busca, confirmação) é ignorado,
+// como as teclas de número. Índice de área fora da lista é ignorado; seção fora da área abre a última visitada.
+func (m *Model) goTo(g GoToMsg) {
+	if !m.areaMode || m.modal != modalNone || m.mode != modeNav || m.asking != askNone || m.tabs[m.active].Capturing() {
+		return
+	}
+	if g.Area < 0 || g.Area >= len(m.areas) {
+		return
+	}
+	idx := m.areas[g.Area].Idx
+	if g.Section < 0 || g.Section >= len(idx) {
+		m.gotoArea(g.Area)
+	} else {
+		m.setActive(idx[g.Section])
+	}
+	m.notice = ""
+}
+
 // cycleSection troca de seção DENTRO da área ativa (dá a volta, nunca sai dela).
 func (m *Model) cycleSection(d int) {
 	a, p := m.areaOf(m.active)
@@ -146,7 +165,7 @@ func (m *Model) areaHeader() string {
 			}
 			label := itoa(i) + " " + name
 			if i == ai {
-				if m.collapsed() {
+				if m.collapsed() && secLong != a.Title { // área de uma seção com o mesmo nome (Início) não repete
 					sec := secLong
 					if l.shortSec {
 						sec = secShort
