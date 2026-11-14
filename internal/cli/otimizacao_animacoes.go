@@ -150,11 +150,13 @@ func runAnimUndo(ctx context.Context, out io.Writer, deps Deps, f animFlags) err
 		_, _ = fmt.Fprintln(out, msg.PrivDryRunDone)
 		return nil
 	}
-	if plan.Pending() == 0 {
+	zero := plan.Pending() == 0 // tudo já está como antes: só o backup seria removido, mas com a MESMA cautela do restaurar
+	question := msg.AnimConfirmUndo
+	if zero {
 		_, _ = fmt.Fprintln(out, msg.AnimUndoNothing)
-		return cleanErr(e.store.Remove())
+		question = msg.AnimConfirmUndoNothing
 	}
-	if ok, err := privConfirm(ctx, out, deps, f.yes, msg.AnimConfirmUndo); !ok || err != nil {
+	if ok, err := privConfirm(ctx, out, deps, f.yes, question); !ok || err != nil {
 		return err
 	}
 	// Reconfere backup (mesmo conteúdo) e estado atual (mesmo plano) antes de restaurar qualquer coisa.
@@ -167,6 +169,13 @@ func runAnimUndo(ctx context.Context, out io.Writer, deps Deps, f animFlags) err
 	}
 	if formatAnimUndo(fresh) != formatAnimUndo(plan) || fresh.Pending() != plan.Pending() || !reflect.DeepEqual(freshBk, bk) {
 		return errors.New(msg.AnimStateChanged)
+	}
+	if zero {
+		if err := e.store.Remove(); err != nil {
+			return cleanErr(err)
+		}
+		_, _ = fmt.Fprintln(out, msg.AnimBackupRemoved) // só DEPOIS de Remove() retornar nil
+		return nil
 	}
 	res, err := animacoes.ApplyUndo(ctx, e.sys, e.store, fresh, freshBk)
 	if err != nil {
