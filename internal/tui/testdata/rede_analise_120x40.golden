@@ -13,9 +13,10 @@
      O que fazer: Feche o serviço ou restrinja-o ao 127.0.0.1 (o toolkit não fecha portas).
  - baixa: DNS em endereço público, sem DoH/DoT — 203.0.113.53 — as consultas de nomes viajam sem criptografia
      O que fazer: Sem ação obrigatória; considere um DNS com criptografia (DoH ou DoT).
- - info: IP público: não consultado (sob pedido, PR seguinte) — descobrir o IP público exige uma requisição a um
-   serviço externo, que fica para um pedido explícito
-     O que fazer: Para saber o IP público agora, veja o painel do roteador.
+ - info: IP público: não consultado (só sob pedido) — descobrir o IP público exige uma requisição a um serviço externo
+   que você escolhe, o que revela o seu IP a ele; o toolkit não tem serviço padrão
+     O que fazer: Para consultar: toolkit rede ip --servico-ip <URL https> (ou a tecla o na TUI); o portal cativo, com
+   toolkit rede portal. Ou veja o IP público no painel do roteador.
 
  Não lidos: 1 (processos-das-portas) — veja o relatório completo
 
@@ -34,7 +35,6 @@
 
  == Wi-Fi ==
  Interface: wlan0
- SSID: REDE-FAKE
-────────────────────────────────────────────────────────────────────────────────────────────────────── ↓ mais 18 linhas
+────────────────────────────────────────────────────────────────────────────────────────────────────── ↓ mais 19 linhas
  Rede — dados como o sistema informou; c lê de novo
  ↑↓ rolar  c ler de novo  ? ajuda  q sair

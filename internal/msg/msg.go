@@ -183,15 +183,32 @@ const (
 // Textos do comando rede.
 const (
 	RedeShort = "Analisa a rede da máquina (só leitura): IPs, Wi-Fi, DNS, portas em escuta e firewall"
-	RedeLong  = "Lê a rede da máquina SEM alterar nada (funciona sem administrador): IPs por interface, perfil de rede (Windows), tipo de segurança do Wi-Fi conectado (aberto, WEP, WPA2, WPA3), DNS, portas em escuta, firewall e privacidade do IPv6. Mostra um resumo do que está exposto e do que fazer. NÃO faz varredura de outras máquinas nem de redes Wi-Fi vizinhas, NÃO acessa a internet (o IP público só será consultado sob pedido, numa versão futura) e nunca lê a senha do Wi-Fi. Rodando como administrador (sudo no Linux e macOS; terminal como administrador no Windows) ele lê mais: firewall no Linux, pf no macOS, nome dos processos de outros usuários. Sem administrador, o resumo diz o que você ganharia. O toolkit nunca pede senha nem eleva sozinho. As informações aparecem como o sistema as informa: nada é mascarado."
+	RedeLong  = "Lê a rede da máquina SEM alterar nada (funciona sem administrador): IPs por interface, perfil de rede (Windows), tipo de segurança do Wi-Fi conectado (aberto, WEP, WPA2, WPA3), DNS, portas em escuta, firewall e privacidade do IPv6. Mostra um resumo do que está exposto e do que fazer. NÃO faz varredura de outras máquinas nem de redes Wi-Fi vizinhas, NÃO acessa a internet (o IP público e o portal cativo só são consultados sob pedido, com os subcomandos ip e portal e um serviço que VOCÊ informa) e nunca lê a senha do Wi-Fi. Rodando como administrador (sudo no Linux e macOS; terminal como administrador no Windows) ele lê mais: firewall no Linux, pf no macOS, nome dos processos de outros usuários. Sem administrador, o resumo diz o que você ganharia. O toolkit nunca pede senha nem eleva sozinho. As informações aparecem como o sistema as informa: nada é mascarado."
 
 	FlagRedeFull   = "mostra também o relatório completo (todos os dados lidos)"
 	FlagRedeJSON   = "saída em JSON (achados e dados lidos)"
 	FlagRedeReport = "grava o resumo e o relatório completo neste arquivo novo (permissão 0600; não sobrescreve)"
 
-	RedeReading = "Lendo a rede (só leitura; sem varredura e sem acessar a internet)…"
-	RedeSaved   = "Relatório completo salvo em %s"
-	RedeHint    = "Para ver todos os dados lidos: toolkit rede --completo (ou --relatorio arquivo.txt)."
+	RedeReading     = "Lendo a rede (só leitura; sem varredura e sem acessar a internet)…"
+	RedeSaved       = "Relatório completo salvo em %s"
+	RedeHint        = "Para ver todos os dados lidos: toolkit rede --completo (ou --relatorio arquivo.txt)."
+	RedeIPShort     = "Descobre o IP público (SÓ sob pedido, com um serviço que você informa; pede confirmação)"
+	RedeIPLong      = "Pede o IP público a um serviço que VOCÊ informa (variável TOOLKIT_IP_URL ou --servico-ip, URL https de host público, porta 443): o toolkit NÃO tem serviço padrão. Antes de enviar, mostra o serviço (host), o que será enviado (um GET, sem corpo, sem cookies, só o User-Agent \"toolkit\") e o que você revela (o seu IP público ao serviço), e pede confirmação; sem terminal exige --yes. Não segue redirecionamento, limita a resposta a 1 KiB e 5 s, valida a resposta como endereço IP público e não grava nada. Com o IP, cruza as portas em escuta e o firewall já lidos (o toolkit não testa de fora). --dry-run mostra o que seria enviado, sem enviar."
+	RedePortalShort = "Sonda o portal cativo (SÓ sob pedido, com um endereço de teste que você informa; pede confirmação)"
+	RedePortalLong  = "Faz UM GET a um endereço de teste que VOCÊ informa (variável TOOLKIT_PORTAL_URL ou --servico-portal; URL https de host público, porta 443, que responda 204 sem conteúdo): o toolkit NÃO tem serviço padrão. Redirecionamento NÃO é seguido: se a rede responder com redirecionamento ou conteúdo em vez de 204, o toolkit só diz \"possível portal cativo\" e não abre nada. Pede confirmação antes (nomeia o serviço e o que é enviado); sem terminal exige --yes; --dry-run mostra sem enviar."
+
+	FlagRedeServiceIP     = "URL https do serviço que devolve o IP público (vale mais que TOOLKIT_IP_URL)"
+	FlagRedeServicePortal = "URL https do endereço de teste do portal cativo (vale mais que TOOLKIT_PORTAL_URL)"
+	FlagRedeQueryYes      = "não pergunta antes de enviar (obrigatório sem terminal)"
+	FlagRedeQueryDry      = "mostra o que seria enviado e a quem, sem enviar nada"
+
+	RedeQueryConfirm   = "Enviar esta requisição? [s/N] "
+	RedeQueryCancelled = "Cancelado: nada foi enviado."
+	RedeQueryDryRun    = "(--dry-run) nada foi enviado."
+	RedeQueryNeedsYes  = "sem terminal para confirmar: nada foi enviado; confira com --dry-run e rode de novo com --yes"
+	ErrRedeBadService  = "serviço inválido: use uma URL https de host público (porta 443, sem usuário, sem #, sem IP literal nem localhost); nada foi enviado"
+	RedeQueryReading   = "Lendo as portas e o firewall locais (só leitura) para cruzar com o IP público…"
+
 	RedePrivacy = "Aviso: esta saída contém dados da rede local (IPs, MACs, nomes de rede). Nada foi enviado a ninguém; guarde e compartilhe com cuidado."
 )
 

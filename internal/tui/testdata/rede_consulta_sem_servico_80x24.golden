@@ -1,0 +1,24 @@
+ toolkit  [1 Análise]                                                    v0.1.0
+────────────────────────────────────────────────────────────────────────────────
+ i info  IP público: nenhum serviço configurado.                     [x] fechar
+   O toolkit não tem serviço padrão e não envia nada sem uma URL informada por
+   você.
+   Para configurar: defina a variável TOOLKIT_IP_URL (ou use --servico-ip) com
+   uma URL https de um serviço que devolva só o seu IP em texto (https, host
+   público, porta 443).
+   Exemplo: TOOLKIT_IP_URL=https://exemplo.org/ip toolkit rede ip
+   Sem serviço, você ainda vê o IP público no painel do roteador.
+────────────────────────────────────────────────────────────────────────────────
+ Análise de rede (Linux)
+
+ Resultado: 3 alta(s), 0 média(s), 1 baixa(s).
+
+ ✗ alta: Rede Wi-Fi aberta (sem senha) (REDE-FAKE) — qualquer pessoa por perto
+   lê o que não estiver criptografado
+     O que fazer: Evite dados sensíveis, use uma VPN ou prefira outra rede.
+ ✗ alta: Firewall desligado — nenhum firewall lido está ativo
+     O que fazer: Ligue o firewall nas configurações de segurança do sistema (o
+   toolkit não o liga).
+────────────────────────────────────────────────────────────── ↓ mais 55 linhas
+ Rede — dados como o sistema informou; o e w consultam só sob pedido
+ ↑↓ rolar  c ler de novo  o IP público…  w portal cativo…  ? ajuda  q sair

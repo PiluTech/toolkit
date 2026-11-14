@@ -92,6 +92,8 @@ var actionKeys = []KeyDef{
 	{Key: "espaço", Label: "marcar", Help: "marca ou desmarca o item."},
 	{Key: "s", Label: "confirmar", Alt: []string{"confirma", "executar"}, Help: "executa na Revisão, confirma uma confirmação e responde sim a uma pergunta [s/N]."},
 	{Key: "f", Label: "seguir o fim", Help: "liga e desliga o seguir o fim do log."},
+	{Key: "o", Label: "IP público", Confirms: true, Help: "consulta o IP público num serviço que você configurou, depois da confirmação."},
+	{Key: "w", Label: "portal cativo", Confirms: true, Help: "sonda o portal cativo num endereço que você configurou, depois da confirmação."},
 	{Key: "u", Label: "versão nova", Help: "abre as notas da versão nova (quando há)."},
 }
 

@@ -89,7 +89,7 @@ func TestLegendaSemTeclasDuplicadas(t *testing.T) {
 	}
 	// só as ações que abrem confirmação levam reticências
 	for _, k := range actionKeys {
-		wantConf := k.Key == "a" || k.Key == "d" || k.Key == "r"
+		wantConf := k.Key == "a" || k.Key == "d" || k.Key == "r" || k.Key == "o" || k.Key == "w" // o e w: consultas à internet, sob confirmação
 		if k.Confirms != wantConf {
 			t.Errorf("%s: Confirms=%v", k.Key, k.Confirms)
 		}

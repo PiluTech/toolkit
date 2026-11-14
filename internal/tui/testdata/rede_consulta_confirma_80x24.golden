@@ -1,0 +1,24 @@
+ toolkit  [1 Análise]                                                    v0.1.0
+────────────────────────────────────────────────────────────────────────────────
+ CONSULTAR O IP PÚBLICO?
+ Serviço que será contatado: ip.example.org (https://ip.example.org/meu-ip)
+ ! aviso: isto revela o IP público desta conexão ao serviço acima. Cancelar
+   (Esc) não envia nada.
+
+ O que será enviado: uma requisição GET, sem corpo, sem cookies e sem cabeçalhos
+   de identificação além do User-Agent genérico "toolkit".
+
+ O que você revela: o IP público desta conexão ao serviço (e a quem o opera); é
+   inevitável em qualquer requisição de internet.
+
+ O toolkit não segue redirecionamento, limita a resposta a 1 KiB e 5 s e não
+   grava nada em disco.
+
+ Nada será enviado sem a sua confirmação.
+
+ >[ Cancelar ]<    [ Consultar ]
+
+
+────────────────────────────────────────────────────────────────────────────────
+ Confirmação aberta: nada muda até você confirmar.
+ Tab botão  Enter ativa  s confirma  Esc cancela  ↑↓ rolar  ? ajuda  q sair

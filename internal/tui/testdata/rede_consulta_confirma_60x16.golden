@@ -1,0 +1,16 @@
+ toolkit  [1 Anál]                                   v0.1.0
+────────────────────────────────────────────────────────────
+ CONSULTAR O IP PÚBLICO?
+ Serviço que será contatado: ip.example.org
+   (https://ip.example.org/meu-ip)
+ ! aviso: isto revela o IP público desta conexão ao serviço
+   acima. Cancelar (Esc) não envia nada.
+
+ O que será enviado: uma requisição GET, sem corpo, sem
+   cookies e sem cabeçalhos de identificação além do
+   User-Agent genérico "toolkit".
+ ↓ mais 9 linhas
+ >[ Cancelar ]<    [ Consultar ]
+────────────────────────────────────────────────────────────
+ Confirmação aberta: nada muda até você confirmar.
+ Tab botão  Enter ativa  s confirma  ? ajuda  q sair

@@ -482,7 +482,7 @@ Continuação da numeração dos PRs de produto (o último documentado é o PR8 
 | PR | Escopo | Depende de | Risco | Critério de pronto |
 |---|---|---|---|---|
 | **PR8** Rede: análise (só leitura) (feito: `docs/rede.md`) | `internal/rede` (Windows, Linux, macOS), achados e severidades, `toolkit rede` (`--json`, `--relatorio`), TUI área 4 > Análise, Início "Analisar a rede"; **sem IP público** | nada | baixo (leitura) | todos os itens da tabela com fixtures; nenhum `Elevate`; nenhum comando de escrita; golden TUI; `docs/rede.md` |
-| **PR9** Rede: IP público e portal cativo (sob pedido) | requisição externa com serviço nomeado, confirmação com foco em Cancelar | PR8 e decisão sobre o serviço | médio (requisição externa) | fake HTTP prova "nada sem pedido"; validação de resposta; texto de privacidade |
+| **PR9** Rede: IP público e portal cativo (sob pedido) (feito: `docs/rede.md`, decisões 1 e 2 pela recomendação) | requisição externa com serviço nomeado, confirmação com foco em Cancelar | PR8 e decisão sobre o serviço | médio (requisição externa) | fake HTTP prova "nada sem pedido"; validação de resposta; texto de privacidade |
 | **PR10** Apps: navegadores + escritório + compactadores | entradas no `catalog.yaml` (Brave, Chrome, LibreOffice, PeaZip) só com ids confirmados; testes e docs | decisão de lista | baixo | `assets_test.go`; `--dry-run` por app; ids confirmados; ajuda atualizada |
 | **PR11** Otimização: leitura de gargalos | `internal/otimizacao` (leitura), `toolkit otimizacao`, TUI área 2 > Otimização (parte Gargalos) | nada | baixo | fixtures; limiares com fronteira; "sem evento" não vira "rápido" |
 | **PR12** Otimização: animações (muda `HKCU`) | plano, backup, desfazer, API `SystemParametersInfo`, TUI parte Animações | PR11, valores confirmados em VM | médio | ida e volta; nenhuma escrita em `HKLM`; nenhum serviço |
@@ -497,8 +497,8 @@ Sugestão de **ordem**: PR8, PR10, PR11 podem andar em paralelo (independentes);
 
 | # | Pergunta | Recomendação |
 |---|---|---|
-| 1 | Qual serviço usar para descobrir o IP público (ou nenhum)? (PR8: aplicada a recomendação, nenhum serviço e nenhuma requisição; o PR9 trata) | **Nenhum por padrão**: só com serviço informado pela pessoa (`TOOLKIT_IP_URL`); decidir um padrão só depois de uma avaliação de privacidade do serviço escolhido |
-| 2 | O portal cativo entra na primeira versão da análise de rede? (PR8: aplicada a recomendação, fora da fase) | **Não**: junto do IP público, no PR9 |
+| 1 | Qual serviço usar para descobrir o IP público (ou nenhum)? (PR8: aplicada a recomendação, nenhum serviço e nenhuma requisição; PR9: aplicada, só com URL informada, sem serviço embutido) | **Nenhum por padrão**: só com serviço informado pela pessoa (`TOOLKIT_IP_URL`); decidir um padrão só depois de uma avaliação de privacidade do serviço escolhido |
+| 2 | O portal cativo entra na primeira versão da análise de rede? (PR8: aplicada a recomendação, fora da fase; PR9: entra junto do IP público, só sob pedido e com URL informada) | **Não**: junto do IP público, no PR9 |
 | 3 | RustDesk entra no catálogo, dadas as CVEs de 2026 e o uso em golpes? | **Resolvida no PR13 (2026-11-14): entra**, no macOS (cask) e no Linux (flatpak), com o aviso na tela e a versão mínima **1.5.0** verificada no NVD; **sem instalador no Windows** (id do winget inexistente). O toolkit NÃO enforça a versão mínima (ver [Verificação do PR13](#verificação-do-pr13-rustdesk-e-versão-mínima)) |
 | 4 | Chrome entra apesar da possibilidade de falha de hash por URL do fabricante mutável? | **Entra**, com a mensagem explicativa; hash divergente nunca é contornado |
 | 5 | USB no Windows Home: recusar ou tentar? | **Recusar** (a Microsoft não lista a edição); revalidar na VM |
