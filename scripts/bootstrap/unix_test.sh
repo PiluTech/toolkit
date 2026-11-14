@@ -74,6 +74,13 @@ grep -q "dry-run" "$tmp/out" || fail "dry-run sem saída"
 run "file://$rel" --nao-existe && fail "argumento desconhecido foi aceito"
 rm -rf "${tmp:?}/home"; mkdir -p "$tmp/home"
 if HOME="$tmp/home" TOOLKIT_VERSION='v1/../x' sh "$script" --dry-run >"$tmp/out" 2>&1; then fail "versão inválida aceita"; fi
+# 7a. formato real da tag (mesma regra do release.yml): v opcional + X.Y.Z + sufixo opcional -rc.N; "." e ".." não passam
+for bad in . .. ... v.. v. v1 v1.2 v1.2.3. v1.2.3- v1.2.3-rc..1 v1.2.3-.rc v1.2.3+x v1.2.3/x x1.2.3 ..1.2.3 v1.2.3-rc.1/..; do
+  if HOME="$tmp/home" TOOLKIT_VERSION="$bad" sh "$script" --dry-run >"$tmp/out" 2>&1; then fail "versão inválida aceita: $bad"; fi
+done
+for good in v1.2.3 1.2.3 v0.4.0-rc.1 v1.0.0-beta.2 v1.0.0-alpha; do
+  HOME="$tmp/home" TOOLKIT_VERSION="$good" sh "$script" --dry-run >"$tmp/out" 2>&1 || fail "versão válida recusada: $good: $(cat "$tmp/out")"
+done
 HOME="$tmp/home" TOOLKIT_VERSION='0.1.0' sh "$script" --dry-run >"$tmp/out" 2>&1 || fail "versão 0.1.0 recusada"
 grep -q "releases/download/v0.1.0" "$tmp/out" || fail "versão sem v não foi normalizada: $(cat "$tmp/out")"
 HOME="$tmp/home" sh "$script" --dry-run >"$tmp/out" 2>&1 || fail "dry-run padrão falhou"

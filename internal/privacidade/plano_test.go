@@ -79,8 +79,8 @@ func TestBuildItensJaNoValorFicamNaoPendentes(t *testing.T) {
 			t.Errorf("%s deveria estar fora das pendências", target)
 		}
 	}
-	if !change(t, p, "serviço dmwappushservice").Pending {
-		t.Error("dmwappushservice ligado deveria estar pendente")
+	if !change(t, p, "tarefa "+`\Microsoft\Windows\Autochk\Proxy`).Pending {
+		t.Error("tarefa habilitada deveria estar pendente")
 	}
 	out := p.Format(diagfmt.PT)
 	if strings.Contains(out, "! "+kAdv) || !strings.Contains(out, "✓ "+kAdv+`\Enabled: 0 (já está assim)`) {
@@ -158,7 +158,7 @@ func TestBuildServicoETarefaAusentesViramMissing(t *testing.T) {
 			t.Errorf("serviço/tarefa inexistente virou mudança: %+v", c)
 		}
 	}
-	if len(p.Missing) != 2+7 {
+	if len(p.Missing) != 1+7 {
 		t.Errorf("Missing = %d: %v", len(p.Missing), p.Missing)
 	}
 	out := p.Format(diagfmt.PT)
@@ -257,5 +257,15 @@ func TestDescribeETemplatesDeDesfazer(t *testing.T) {
 	}
 	if got := taskUndo(`\a\b`, false); got != `schtasks /Change /TN "\a\b" /DISABLE` {
 		t.Error(got)
+	}
+}
+
+func TestRegUndoEDescribePreservamREG_EXPAND_SZ(t *testing.T) {
+	v := RegValue{Kind: RegExpandString, Str: `%USERPROFILE%\x`}
+	if got := regUndo(`HKCU\K`, "N", v, true); !strings.Contains(got, "/t REG_EXPAND_SZ") || strings.Contains(got, "REG_DWORD") {
+		t.Errorf("regUndo: %s", got)
+	}
+	if got := describeReg(v, true, diagfmt.PT); got != `"%USERPROFILE%\x"` {
+		t.Errorf("describeReg: %s", got)
 	}
 }

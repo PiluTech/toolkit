@@ -10,7 +10,7 @@ function Fail($m) { throw "FALHOU: $m" }
 
 # Carrega so as funcoes puras do win.ps1 (sem rodar a instalacao), pela AST.
 $ast = [Management.Automation.Language.Parser]::ParseFile($script, [ref]$null, [ref]$null)
-foreach ($fn in $ast.FindAll({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in 'Test-EnvOn', 'Test-ShouldLaunch', 'Start-ToolkitTui', 'Get-VersionArg' }, $true)) {
+foreach ($fn in $ast.FindAll({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in 'Test-EnvOn', 'Test-ShouldLaunch', 'Start-ToolkitTui', 'Get-VersionArg', 'Test-VersionTag' }, $true)) {
     . ([scriptblock]::Create($fn.Extent.Text))
 }
 
@@ -153,6 +153,14 @@ try {
     if ($outV -notmatch 'versao v0\.4\.0-rc\.1') { Fail "dry-run nao mostra a versao: $outV" }
     & $exe -NoProfile -File $script -DryRun -Versao *> "$root\out2.txt"
     if ($LASTEXITCODE -eq 0) { Fail '-Versao sem valor foi aceito' }
+
+    # 4c. formato da tag (mesma regra do release.yml): v opcional + X.Y.Z + sufixo opcional; '.' e '..' nao passam
+    foreach ($bad in @('.', '..', '...', 'v..', 'v1', 'v1.2', 'v1.2.3.', 'v1.2.3-', 'v1.2.3-rc..1', 'v1.2.3-.rc', 'v1.2.3+x', 'v1.2.3/x', 'x1.2.3', 'v1.2.3-rc.1/..')) {
+        if (Test-VersionTag $bad) { Fail "tag invalida aceita: $bad" }
+    }
+    foreach ($good in @('v1.2.3', '1.2.3', 'v0.4.0-rc.1', 'v1.0.0-beta.2', 'v1.0.0-alpha')) {
+        if (-not (Test-VersionTag $good)) { Fail "tag valida recusada: $good" }
+    }
 
     # 5. versao invalida
     $env:TOOLKIT_VERSION = 'v1/../x'; Remove-Item Env:\TOOLKIT_RELEASE_BASE -ErrorAction SilentlyContinue

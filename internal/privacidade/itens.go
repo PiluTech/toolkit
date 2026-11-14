@@ -13,8 +13,8 @@ const (
 	// PerfilBasico só mexe no que é do USUÁRIO (HKCU): ID de publicidade, experiências personalizadas, sugestões e anúncios do
 	// Iniciar, dicas e pedido de feedback. Não exige administrador.
 	PerfilBasico Perfil = "basico"
-	// PerfilRecomendado é o básico mais a política de dados de diagnóstico, o histórico de atividades, os serviços
-	// DiagTrack e dmwappushservice e as tarefas agendadas de coleta. Exige administrador (só na hora de aplicar).
+	// PerfilRecomendado é o básico mais a política de dados de diagnóstico, o histórico de atividades, o serviço
+	// DiagTrack e as tarefas agendadas de coleta. Exige administrador (só na hora de aplicar).
 	PerfilRecomendado Perfil = "recomendado"
 )
 
@@ -110,9 +110,9 @@ func Settings() []Setting {
 			Regs: []RegSpec{
 				{hklmSystem, "EnableActivityFeed", fixed(0)}, {hklmSystem, "PublishUserActivities", fixed(0)}, {hklmSystem, "UploadUserActivities", fixed(0)}}},
 		{ID: "servicos-telemetria", Admin: true,
-			Title: tr("Serviços de telemetria desativados (DiagTrack e dmwappushservice)", "Telemetry services disabled (DiagTrack and dmwappushservice)", "Servicios de telemetría desactivados (DiagTrack y dmwappushservice)"),
-			Why:   tr("\"Experiências do Usuário Conectado e Telemetria\" (DiagTrack) e roteamento de mensagens push WAP (dmwappushservice): ficam parados e desativados.", "\"Connected User Experiences and Telemetry\" (DiagTrack) and WAP push message routing (dmwappushservice): stopped and disabled.", "\"Experiencias del usuario conectado y telemetría\" (DiagTrack) y enrutamiento de mensajes push WAP (dmwappushservice): detenidos y desactivados."),
-			Svcs:  []ServiceSpec{{"DiagTrack"}, {"dmwappushservice"}}},
+			Title: tr("Serviço de telemetria desativado (DiagTrack)", "Telemetry service disabled (DiagTrack)", "Servicio de telemetría desactivado (DiagTrack)"),
+			Why:   tr("\"Experiências do Usuário Conectado e Telemetria\" (DiagTrack): fica parado e desativado. O dmwappushservice não é mexido: desativá-lo quebra a sincronização com Intune/MDM.", "\"Connected User Experiences and Telemetry\" (DiagTrack): stopped and disabled. dmwappushservice is left alone: disabling it breaks Intune/MDM sync.", "\"Experiencias del usuario conectado y telemetría\" (DiagTrack): detenido y desactivado. dmwappushservice no se toca: desactivarlo rompe la sincronización con Intune/MDM."),
+			Svcs:  []ServiceSpec{{"DiagTrack"}}},
 		{ID: "tarefas-coleta", Admin: true,
 			Title: tr("Tarefas agendadas de coleta desabilitadas", "Collection scheduled tasks disabled", "Tareas programadas de recopilación deshabilitadas"),
 			Why:   tr("Compatibilidade de aplicativos (Appraiser, ProgramDataUpdater), Programa de Aperfeiçoamento da Experiência do Cliente e coletor de diagnóstico de disco.", "Application compatibility (Appraiser, ProgramDataUpdater), the Customer Experience Improvement Program and the disk diagnostic collector.", "Compatibilidad de aplicaciones (Appraiser, ProgramDataUpdater), el Programa para la mejora de la experiencia del cliente y el recopilador de diagnóstico de disco."),

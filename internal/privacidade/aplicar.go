@@ -61,7 +61,8 @@ func Apply(ctx context.Context, sys System, store Store, plan *Plan, now time.Ti
 }
 
 // BuildUndo monta o plano de DESFAZER a partir do backup: cada item volta ao estado original. Backup ausente =
-// ErrNoBackup. Serviço ou tarefa que não existe mais é ignorado.
+// ErrNoBackup. Serviço ou tarefa que não existe mais é ignorado. Todas as entradas são validadas contra o catálogo
+// ANTES de qualquer coisa (ErrBackupInvalido; o arquivo não é tocado): o backup é dado não confiável.
 func BuildUndo(ctx context.Context, sys System, store Store, l Lang) (*Plan, *Backup, error) {
 	bk, err := store.Load()
 	if err != nil {
@@ -69,6 +70,12 @@ func BuildUndo(ctx context.Context, sys System, store Store, l Lang) (*Plan, *Ba
 	}
 	if bk == nil || len(bk.Entries) == 0 {
 		return nil, nil, ErrNoBackup
+	}
+	ix := newCatalogIndex()
+	for id, e := range bk.Entries { // TODAS as entradas são conferidas antes de ler ou mudar qualquer coisa
+		if err := ix.validateEntry(id, e); err != nil {
+			return nil, nil, err
+		}
 	}
 	ed, _ := sys.Edition(ctx)
 	plan := &Plan{Perfil: "desfazer", Edition: ed, IsAdmin: sys.IsAdmin(ctx)}

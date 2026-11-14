@@ -15,7 +15,7 @@ Fora do Windows os três comandos terminam com a mensagem "só existe no Windows
 ## Perfis
 
 - **basico**: só o que é do usuário (chaves em `HKCU`). Não exige administrador. ID de publicidade, experiências personalizadas com dados de diagnóstico, sugestões e anúncios do Iniciar, instalação automática de apps sugeridos, dicas e boas-vindas, pedidos de feedback.
-- **recomendado**: o básico mais política de dados de diagnóstico (`HKLM`), histórico de atividades, os serviços `DiagTrack` e `dmwappushservice` (desativados e parados) e as tarefas agendadas de coleta (Appraiser, ProgramDataUpdater, CEIP, coletor de diagnóstico de disco). Exige administrador na hora de aplicar.
+- **recomendado**: o básico mais política de dados de diagnóstico (`HKLM`), histórico de atividades, o serviço `DiagTrack` (desativado e parado; o `dmwappushservice` fica de fora porque desativá-lo quebra a sincronização com Intune/MDM) e as tarefas agendadas de coleta (Appraiser, ProgramDataUpdater, CEIP, coletor de diagnóstico de disco). Exige administrador na hora de aplicar.
 
 Limite real: no Windows Home e Pro o mínimo de dados de diagnóstico é "obrigatório" (valor 1); o Windows ignora 0 nessas edições. O plano avisa isso. O texto de cada item (o que faz e por quê) sai do próprio comando, em pt-BR, inglês ou espanhol (`TOOLKIT_LANG`).
 
@@ -31,7 +31,8 @@ Limite real: no Windows Home e Pro o mínimo de dados de diagnóstico é "obriga
 
 ## Backup e desfazer
 
-- Arquivo: `privacidade-backup.json` na pasta de estado do toolkit (`C:\ProgramData\toolkit` como administrador, `%LOCALAPPDATA%\toolkit` como usuário), permissão 0600, escrita atômica.
+- Arquivos na pasta de estado do toolkit (`C:\ProgramData\toolkit` como administrador, `%LOCALAPPDATA%\toolkit` como usuário), permissão 0600, escrita atômica, e SEPARADOS por escopo: `privacidade-backup-<SID>.json` (só os valores `HKCU`, de cada usuário; o SID vem de `whoami /user`) e `privacidade-backup-maquina.json` (`HKLM`, serviços e tarefas, compartilhados). Cada arquivo grava o dono; um arquivo de outro dono (copiado ou renomeado) é recusado e fica intacto. Dois administradores não compartilham nem desfazem o `HKCU` um do outro.
+- O backup é tratado como dado não confiável: ANTES de ler ou mudar qualquer coisa, o `desfazer` confere CADA entrada contra o catálogo (ID, chave e nome, serviço ou caminho da tarefa idênticos aos do catálogo; tipo de valor e de início conhecidos). Entrada fora do catálogo ou de tipo desconhecido recusa o desfazer inteiro, sem mutação, e o arquivo é preservado. O `desfazer --dry-run` nunca remove nem escreve nada, nem com zero pendências.
 - Guarda o estado ORIGINAL de cada item (valor do registro ou "não existia", tipo de início e se rodava o serviço, se a tarefa estava habilitada). Aplicar duas vezes nunca sobrescreve o original.
 - `desfazer` restaura o valor (ou apaga o que não existia), reconfigura serviços e tarefas e, no fim, apaga o backup. Falha no meio deixa no backup só o que sobrou.
 - Como o backup fica na pasta de estado de quem aplicou, rode o `desfazer` no mesmo nível (administrador ou usuário) em que rodou o `aplicar`.

@@ -44,7 +44,8 @@ func TestCatalogoSoChavesEsperadas(t *testing.T) {
 }
 
 func TestCatalogoServicosETarefasPermitidos(t *testing.T) {
-	allowedSvc := map[string]bool{"DiagTrack": true, "dmwappushservice": true}
+	// dmwappushservice fica de fora de propósito: desativá-lo quebra a sincronização Intune/MDM.
+	allowedSvc := map[string]bool{"DiagTrack": true}
 	for _, s := range Settings() {
 		for _, sv := range s.Svcs {
 			if !allowedSvc[sv.Name] {

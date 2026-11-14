@@ -25,6 +25,13 @@ function Test-EnvOn {
     return -not ($v -eq '' -or $v -eq '0' -or $v -eq 'false' -or $v -eq 'no' -or $v -eq 'off')
 }
 
+# Formato real da tag (mesma regra do release.yml): v opcional + X.Y.Z + sufixo opcional '-rc.1' (letras, numeros e
+# pontos, sem ponto no comeco, no fim nem repetido). '.' e '..' nao passam. Pura (testavel sem Windows).
+function Test-VersionTag {
+    param([string]$Tag)
+    return ($Tag -cmatch '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?\z')
+}
+
 # Versao pedida: '-Versao <tag>' nos argumentos do script vence TOOLKIT_VERSION, que vence o padrao
 # (vazio = ultima release). Pura (testavel sem Windows). '-Versao' sem valor lanca erro claro (o 'throw'
 # nao fecha o terminal de quem usou 'irm | iex'). Aceita tambem '-Versao:v1'.
@@ -119,7 +126,7 @@ function Install-Toolkit {
     } elseif (-not $version -or $version -eq 'latest') {
         $base = 'https://github.com/PiluTech/toolkit/releases/latest/download'
     } else {
-        if ($version -notmatch '^[A-Za-z0-9._+-]+$') { throw 'toolkit: versao invalida (-Versao ou TOOLKIT_VERSION): use algo como v0.1.0' }
+        if (-not (Test-VersionTag $version)) { throw 'toolkit: versao invalida (-Versao ou TOOLKIT_VERSION): use algo como v0.1.0 ou v0.4.0-rc.1' }
         if ($version -match '^[0-9]') { $version = "v$version" }
         $base = "https://github.com/PiluTech/toolkit/releases/download/$version"
     }

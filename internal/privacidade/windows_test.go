@@ -103,7 +103,7 @@ func TestRegReadStringComEspacosEAcentos(t *testing.T) {
 		stdout: "\r\nHKEY_CURRENT_USER\\Software\\X\r\n    Texto    REG_SZ    Olá mundo  com espaços  \r\n\r\n",
 	})
 	v, ok, err := newSys(r, false).RegRead(ctx, `HKCU\Software\X`, "Texto")
-	if err != nil || !ok || v.Kind != RegString || v.Str != "Olá mundo  com espaços" {
+	if err != nil || !ok || v.Kind != RegString || v.Str != "Olá mundo  com espaços  " {
 		t.Fatalf("v=%+v ok=%v err=%v", v, ok, err)
 	}
 }
@@ -120,12 +120,99 @@ func TestRegReadCabecalhoTraduzidoEOutrosValores(t *testing.T) {
 }
 
 func TestRegReadInexistente(t *testing.T) {
-	r := newRec(t).on(`reg query HKCU\Software\X /v Nada`, reply{
-		code: 1, stderr: "ERRO: o sistema não pôde localizar a chave ou o valor do Registro especificado.\r\n",
-	})
+	// valor ausente com a chave existente: confirmado pela listagem da chave (sem /v).
+	r := newRec(t).
+		on(`reg query HKCU\Software\X /v Nada`, reply{code: 1, stderr: "ERRO: o sistema não pôde localizar a chave ou o valor do Registro especificado.\r\n"}).
+		on(`reg query HKCU\Software\X`, reply{stdout: "\r\nHKEY_CURRENT_USER\\Software\\X\r\n    Outro    REG_DWORD    0x1\r\n\r\n"})
 	_, ok, err := newSys(r, false).RegRead(ctx, `HKCU\Software\X`, "Nada")
 	if err != nil || ok {
 		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+}
+
+func TestRegReadChaveInexistenteConfirmadaPelaChavePai(t *testing.T) {
+	r := newRec(t).
+		on(`reg query HKCU\Software\X /v Nada`, reply{code: 1, stderr: "x"}).
+		on(`reg query HKCU\Software\X`, reply{code: 1, stderr: "x"}).
+		on(`reg query HKCU\Software`, reply{stdout: "\r\nHKEY_CURRENT_USER\\Software\r\nHKEY_CURRENT_USER\\Software\\Outra\r\n"})
+	_, ok, err := newSys(r, false).RegRead(ctx, `HKCU\Software\X`, "Nada")
+	if err != nil || ok {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+	for _, c := range r.calls {
+		if !c.ReadOnly || c.Elevate {
+			t.Errorf("leitura com flags erradas: %+v", c)
+		}
+	}
+}
+
+func TestRegReadAcessoNegadoNaoViraAusencia(t *testing.T) {
+	// /v falha com exit 1 e a chave existe (a chave pai a lista), mas não dá para lê-la: erro, nunca existed=false.
+	r := newRec(t).
+		on(`reg query HKLM\SOFTWARE\Policies\X /v N`, reply{code: 1, stderr: "ERROR: Access is denied.\r\n"}).
+		on(`reg query HKLM\SOFTWARE\Policies\X`, reply{code: 1, stderr: "ERROR: Access is denied.\r\n"}).
+		on(`reg query HKLM\SOFTWARE\Policies`, reply{stdout: "\r\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\r\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\x\r\n"})
+	_, ok, err := newSys(r, false).RegRead(ctx, `HKLM\SOFTWARE\Policies\X`, "N")
+	if err == nil || ok {
+		t.Fatalf("esperava erro de leitura, ok=%v err=%v", ok, err)
+	}
+}
+
+func TestRegReadFalhaNaChavePaiEErro(t *testing.T) {
+	r := newRec(t).
+		on(`reg query HKCU\Software\X /v N`, reply{code: 1}).
+		on(`reg query HKCU\Software\X`, reply{code: 1}).
+		on(`reg query HKCU\Software`, reply{code: 5, stderr: "negado"})
+	if _, ok, err := newSys(r, false).RegRead(ctx, `HKCU\Software\X`, "N"); err == nil || ok {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+}
+
+func TestRegReadValorExisteMasVFalhouEErro(t *testing.T) {
+	r := newRec(t).
+		on(`reg query HKCU\Software\X /v N`, reply{code: 1}).
+		on(`reg query HKCU\Software\X`, reply{stdout: "\r\nHKEY_CURRENT_USER\\Software\\X\r\n    N    REG_DWORD    0x1\r\n"})
+	if _, ok, err := newSys(r, false).RegRead(ctx, `HKCU\Software\X`, "N"); err == nil || ok {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+}
+
+func TestRegReadExpandSZPreservaTipoEConteudo(t *testing.T) {
+	r := newRec(t).on(`reg query HKCU\Software\X /v P`, reply{
+		stdout: "\r\nHKEY_CURRENT_USER\\Software\\X\r\n    P    REG_EXPAND_SZ    %SystemRoot%\\System32;\"a b\"\r\n",
+	})
+	v, ok, err := newSys(r, false).RegRead(ctx, `HKCU\Software\X`, "P")
+	want := RegValue{Kind: RegExpandString, Str: `%SystemRoot%\System32;"a b"`}
+	if err != nil || !ok || v != want {
+		t.Fatalf("v=%+v ok=%v err=%v", v, ok, err)
+	}
+	// volta como REG_EXPAND_SZ, com o mesmo conteúdo
+	w := newRec(t).on(`reg add HKCU\Software\X /v P /t REG_EXPAND_SZ /d %SystemRoot%\System32;"a b" /f`, reply{})
+	if err := newSys(w, false).RegWrite(ctx, `HKCU\Software\X`, "P", v); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRegReadStringPreservaEspacosDasPontas(t *testing.T) {
+	r := newRec(t).on(`reg query HKCU\Software\X /v S`, reply{stdout: "    S    REG_SZ      ab  \r\n"})
+	v, ok, err := newSys(r, false).RegRead(ctx, `HKCU\Software\X`, "S")
+	if err != nil || !ok || v.Kind != RegString || v.Str != "  ab  " {
+		t.Fatalf("v=%q ok=%v err=%v", v.Str, ok, err)
+	}
+}
+
+func TestRegWriteAceitaPercentEAspas(t *testing.T) {
+	r := newRec(t).on(`reg add HKCU\Software\X /v S /t REG_SZ /d 100% "ok" & ^ /f`, reply{})
+	if err := newSys(r, false).RegWrite(ctx, `HKCU\Software\X`, "S", RegValue{Kind: RegString, Str: `100% "ok" & ^`}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRegReadRecusaTextoQueNaoVoltaria(t *testing.T) {
+	// terminado em barra: RegWrite recusaria, então a leitura também (Apply para antes de mudar).
+	r := newRec(t).on(`reg query HKCU\Software\X /v S`, reply{stdout: "    S    REG_SZ    C:\\dir\\\r\n"})
+	if _, _, err := newSys(r, false).RegRead(ctx, `HKCU\Software\X`, "S"); !errors.Is(err, ErrEntradaInvalida) {
+		t.Fatalf("err=%v", err)
 	}
 }
 
@@ -195,12 +282,15 @@ func TestRegDeleteExistente(t *testing.T) {
 }
 
 func TestRegDeleteInexistenteNaoExecutaDelete(t *testing.T) {
-	r := newRec(t).on(`reg query HKCU\Software\Y /v Dw`, reply{code: 1, stderr: "ERROR: The system was unable to find the specified registry key or value."})
+	r := newRec(t).on(`reg query HKCU\Software\Y /v Dw`, reply{code: 1, stderr: "ERROR: The system was unable to find the specified registry key or value."}).
+		on(`reg query HKCU\Software\Y`, reply{stdout: "\r\nHKEY_CURRENT_USER\\Software\\Y\r\n"})
 	if err := newSys(r, false).RegDelete(ctx, `HKCU\Software\Y`, "Dw"); err != nil {
 		t.Fatal(err)
 	}
-	if len(r.calls) != 1 {
-		t.Fatalf("calls=%d", len(r.calls))
+	for _, c := range r.calls {
+		if !c.ReadOnly {
+			t.Fatalf("delete executado: %+v", c)
+		}
 	}
 }
 
@@ -459,7 +549,8 @@ func TestEdition(t *testing.T) {
 }
 
 func TestEditionSemValorEhOther(t *testing.T) {
-	r := newRec(t).on(`reg query HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion /v EditionID`, reply{code: 1})
+	r := newRec(t).on(`reg query HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion /v EditionID`, reply{code: 1}).
+		on(`reg query HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion`, reply{stdout: "\r\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\r\n    Outro    REG_SZ    x\r\n"})
 	got, err := newSys(r, false).Edition(ctx)
 	if err != nil || got != EditionOther {
 		t.Fatalf("got %q err=%v", got, err)
@@ -528,7 +619,7 @@ func TestEntradasInvalidasNaoExecutamNada(t *testing.T) {
 		}
 	}
 	badValues := []RegValue{
-		{Kind: RegString, Str: `a"b`}, {Kind: RegString, Str: "a\r\nb"}, {Kind: RegString, Str: `x\`}, {Kind: RegString, Str: "%PATH%"},
+		{Kind: RegString, Str: "a\r\nb"}, {Kind: RegString, Str: `x\`}, {Kind: RegExpandString, Str: "a\x00b"}, {Kind: RegExpandString, Str: `%X%\`},
 		{Kind: RegKind(99)},
 	}
 	for _, v := range badValues {

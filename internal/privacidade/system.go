@@ -17,6 +17,8 @@ type RegKind int
 const (
 	RegDWORD RegKind = iota
 	RegString
+	// RegExpandString é o REG_EXPAND_SZ: o texto é guardado SEM expandir as %variáveis% e volta com o mesmo tipo.
+	RegExpandString
 )
 
 // RegValue é um valor do registro.

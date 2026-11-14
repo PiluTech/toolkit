@@ -223,10 +223,7 @@ func TestApplyErroNoMeioParaEBackupCobreTudo(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "serviço DiagTrack") || !strings.Contains(err.Error(), "falha simulada") {
 		t.Fatalf("err = %v", err)
 	}
-	// parou: dmwappushservice e as tarefas, que vêm depois, não foram tocados
-	if s := f.svcs["dmwappushservice"]; s.StartType != "automatic" || !s.Running {
-		t.Errorf("dmwappushservice mudou depois da falha: %+v", s)
-	}
+	// parou: as tarefas, que vêm depois, não foram tocadas
 	if !f.tasks[taskAp].Enabled {
 		t.Error("tarefa mudou depois da falha")
 	}
@@ -325,7 +322,7 @@ func TestUndoRestauraValorAnteriorEAusente(t *testing.T) {
 		t.Errorf("faltou reg-delete: %v", f.writes())
 	}
 	// serviço e tarefa
-	for _, n := range []string{"DiagTrack", "dmwappushservice"} {
+	for _, n := range []string{"DiagTrack"} {
 		if s := f.svcs[n]; s.StartType != "automatic" || !s.Running {
 			t.Errorf("%s: %+v", n, s)
 		}
@@ -409,8 +406,8 @@ func TestUndoItemQueJaEstaComoAntesNaoEhPendente(t *testing.T) {
 	f := newFake(EditionPro, true)
 	f.regs[rkey(kAdv, nAdv)] = DWORD(1)
 	st := &memStore{b: &Backup{Version: 1, Entries: map[string]Entry{
-		regID(kAdv, nAdv): {ID: regID(kAdv, nAdv), Kind: "reg", Key: kAdv, Name: nAdv, Existed: true, DWORD: 1},
-		regID(kAct, "X"):  {ID: regID(kAct, "X"), Kind: "reg", Key: kAct, Name: "X", Existed: false},
+		regID(kAdv, nAdv):                 {ID: regID(kAdv, nAdv), Kind: "reg", Key: kAdv, Name: nAdv, Existed: true, DWORD: 1},
+		regID(kAct, "EnableActivityFeed"): {ID: regID(kAct, "EnableActivityFeed"), Kind: "reg", Key: kAct, Name: "EnableActivityFeed", Existed: false},
 	}}}
 	plan, bk, err := BuildUndo(context.Background(), f, st, diagfmt.PT)
 	if err != nil {

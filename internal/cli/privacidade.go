@@ -19,9 +19,6 @@ import (
 	"github.com/PiluTech/toolkit/internal/textsafe"
 )
 
-// backupFileName é o nome do backup dentro da pasta de estado do toolkit (platform.ResolvePaths).
-const backupFileName = "privacidade-backup.json"
-
 // PrivDeps são os pontos injetáveis do `toolkit privacidade` (os testes nunca tocam o Windows real).
 type PrivDeps struct {
 	// System é o Windows visto pelo toolkit (nil = privacidade.NewWindowsSystem sobre o Runner do Deps, com a
@@ -106,7 +103,15 @@ func newPrivEnv(ctx context.Context, deps Deps) (privEnv, error) {
 		if err != nil {
 			return privEnv{}, err
 		}
-		e.store = privacidade.FileStore{File: paths.StateDir + `\` + backupFileName}
+		// backup por usuário (SID) e da máquina em arquivos separados, cada um com o dono gravado
+		sid, err := privacidade.UserSID(ctx, e.sys)
+		if err != nil {
+			return privEnv{}, cleanErr(err)
+		}
+		e.store, err = privacidade.NewScopedStore(paths.StateDir, sid)
+		if err != nil {
+			return privEnv{}, err
+		}
 	}
 	return e, nil
 }
@@ -220,6 +225,10 @@ func runPrivUndo(ctx context.Context, out io.Writer, deps Deps, f privFlags) err
 	}
 	if plan.Pending() == 0 {
 		_, _ = fmt.Fprintln(out, textsafe.Multiline(formatUndo(plan)))
+		if f.dryRun { // dry-run nunca remove nem escreve nada
+			_, _ = fmt.Fprintln(out, msg.PrivDryRunDone)
+			return nil
+		}
 		_, _ = fmt.Fprintln(out, msg.PrivUndoNothing)
 		return e.store.Remove()
 	}

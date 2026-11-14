@@ -71,7 +71,7 @@ func describeReg(v RegValue, exists bool, l Lang) string {
 	if !exists {
 		return diagfmt.T(l, "não definido", "not set", "no definido")
 	}
-	if v.Kind == RegString {
+	if v.Kind == RegString || v.Kind == RegExpandString {
 		return `"` + v.Str + `"`
 	}
 	return fmt.Sprintf("%d", v.DWORD)
@@ -81,8 +81,11 @@ func regUndo(key, name string, v RegValue, exists bool) string {
 	if !exists {
 		return fmt.Sprintf(`reg delete "%s" /v %s /f`, key, name)
 	}
-	if v.Kind == RegString {
+	switch v.Kind {
+	case RegString:
 		return fmt.Sprintf(`reg add "%s" /v %s /t REG_SZ /d "%s" /f`, key, name, v.Str)
+	case RegExpandString:
+		return fmt.Sprintf(`reg add "%s" /v %s /t REG_EXPAND_SZ /d "%s" /f`, key, name, v.Str)
 	}
 	return fmt.Sprintf(`reg add "%s" /v %s /t REG_DWORD /d %d /f`, key, name, v.DWORD)
 }

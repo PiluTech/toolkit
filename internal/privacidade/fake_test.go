@@ -19,11 +19,12 @@ type fakeSys struct {
 	tasks   map[string]*TaskState
 	log     []string // mutações, na ordem
 	failOn  string   // "operação" que falha (prefixo do log), p.ex. "reg-write:HKCU\\...\\Enabled"
+	sid     string   // SID do usuário (UserSID)
 	onWrite func()   // gancho chamado ANTES de cada mutação (testa a ordem backup -> mudança)
 }
 
 func newFake(edition string, admin bool) *fakeSys {
-	return &fakeSys{edition: edition, admin: admin, regs: map[string]RegValue{}, svcs: map[string]*ServiceState{}, tasks: map[string]*TaskState{}}
+	return &fakeSys{edition: edition, admin: admin, sid: "S-1-5-21-1-2-3-1001", regs: map[string]RegValue{}, svcs: map[string]*ServiceState{}, tasks: map[string]*TaskState{}}
 }
 
 func rkey(key, name string) string { return strings.ToUpper(key) + "|" + name }
@@ -179,3 +180,5 @@ func sortedIDs(b *Backup) []string {
 	sort.Strings(ids)
 	return ids
 }
+
+func (f *fakeSys) UserSID(context.Context) (string, error) { return f.sid, nil }

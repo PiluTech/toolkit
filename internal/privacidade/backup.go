@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -32,7 +33,9 @@ type Entry struct {
 // Backup reúne os estados originais. O PRIMEIRO original de cada item vence: aplicar duas vezes nunca sobrescreve o que
 // o Windows tinha antes do toolkit.
 type Backup struct {
-	Version int              `json:"version"`
+	Version int `json:"version"`
+	// Owner é quem pode usar este backup: o SID do usuário (escopo usuário) ou "maquina". Vazio só em FileStore sem Owner.
+	Owner   string           `json:"owner,omitempty"`
 	Created time.Time        `json:"created"`
 	Entries map[string]Entry `json:"entries"`
 }
@@ -45,8 +48,12 @@ type Store interface {
 	Path() string
 }
 
-// FileStore guarda o backup num arquivo JSON (0600) por escrita atômica (temporário + rename).
-type FileStore struct{ File string }
+// FileStore guarda o backup num arquivo JSON (0600) por escrita atômica (temporário + rename). Com Owner, o arquivo
+// só é aceito se o dono gravado dentro dele for o mesmo (ErrBackupOutroDono) e o Save grava o dono.
+type FileStore struct {
+	File  string
+	Owner string
+}
 
 // Path devolve o caminho do arquivo.
 func (s FileStore) Path() string { return s.File }
@@ -68,6 +75,9 @@ func (s FileStore) Load() (*Backup, error) {
 	if b.Version != 1 {
 		return nil, fmt.Errorf("o backup %s é de uma versão desconhecida (%d)", s.File, b.Version)
 	}
+	if s.Owner != "" && b.Owner != s.Owner {
+		return nil, fmt.Errorf("%w (%s)", ErrBackupOutroDono, s.File)
+	}
 	if b.Entries == nil {
 		b.Entries = map[string]Entry{}
 	}
@@ -76,6 +86,11 @@ func (s FileStore) Load() (*Backup, error) {
 
 // Save grava o backup.
 func (s FileStore) Save(b *Backup) error {
+	if s.Owner != "" {
+		cp := *b
+		cp.Owner = s.Owner
+		b = &cp
+	}
 	if err := os.MkdirAll(filepath.Dir(s.File), 0o700); err != nil {
 		return err
 	}
@@ -109,4 +124,104 @@ func (s FileStore) Remove() error {
 		return err
 	}
 	return nil
+}
+
+// machineOwner é o dono do arquivo do escopo máquina (HKLM, serviços e tarefas: valem para todos os usuários).
+const machineOwner = "maquina"
+
+// ScopedStore separa o estado em dois arquivos na mesma pasta: um POR USUÁRIO (SID; só os valores HKCU, que são de
+// cada perfil) e um da MÁQUINA (HKLM, serviços e tarefas, compartilhados). Cada arquivo grava o dono e só abre com
+// o mesmo dono. Load junta os dois; Save separa por escopo (escopo vazio apaga o arquivo); Remove apaga os dois.
+type ScopedStore struct {
+	user, machine FileStore
+}
+
+// NewScopedStore valida o SID (vira parte do nome do arquivo) e monta o Store.
+func NewScopedStore(dir, sid string) (ScopedStore, error) {
+	if !validSID(sid) {
+		return ScopedStore{}, errors.New("SID do usuário inválido")
+	}
+	return ScopedStore{
+		user:    FileStore{File: filepath.Join(dir, "privacidade-backup-"+sid+".json"), Owner: sid},
+		machine: FileStore{File: filepath.Join(dir, "privacidade-backup-"+machineOwner+".json"), Owner: machineOwner},
+	}, nil
+}
+
+// Path devolve o arquivo do usuário (o que a mensagem ao usuário mostra).
+func (s ScopedStore) Path() string { return s.user.File }
+
+func userScoped(e Entry) bool { return e.Kind == "reg" && strings.HasPrefix(e.Key, `HKCU\`) }
+
+// Load junta os dois escopos; nenhum arquivo = nil, nil.
+func (s ScopedStore) Load() (*Backup, error) {
+	u, err := s.user.Load()
+	if err != nil {
+		return nil, err
+	}
+	m, err := s.machine.Load()
+	if err != nil {
+		return nil, err
+	}
+	if u == nil && m == nil {
+		return nil, nil
+	}
+	out := &Backup{Version: 1, Entries: map[string]Entry{}}
+	for _, part := range []*Backup{m, u} {
+		if part == nil {
+			continue
+		}
+		if out.Created.IsZero() || part.Created.Before(out.Created) {
+			out.Created = part.Created
+		}
+		for id, e := range part.Entries {
+			out.Entries[id] = e
+		}
+	}
+	return out, nil
+}
+
+// Save separa por escopo. Falha em um escopo antes de gravar qualquer um não deixa estado pela metade: os dois
+// arquivos são preparados (e o dono conferido) antes da primeira escrita.
+func (s ScopedStore) Save(b *Backup) error {
+	u := &Backup{Version: 1, Created: b.Created, Entries: map[string]Entry{}}
+	m := &Backup{Version: 1, Created: b.Created, Entries: map[string]Entry{}}
+	for id, e := range b.Entries {
+		if userScoped(e) {
+			u.Entries[id] = e
+		} else {
+			m.Entries[id] = e
+		}
+	}
+	// máquina primeiro: é o que o Apply precisa ter gravado antes de mudar HKLM
+	for _, x := range []struct {
+		fs FileStore
+		b  *Backup
+	}{{s.machine, m}, {s.user, u}} {
+		if _, err := x.fs.Load(); err != nil { // dono diferente = recusa sem sobrescrever
+			return err
+		}
+		if len(x.b.Entries) == 0 {
+			if err := x.fs.Remove(); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := x.fs.Save(x.b); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Remove apaga os dois arquivos (se o dono de algum não confere, recusa sem apagar nada).
+func (s ScopedStore) Remove() error {
+	for _, fs := range []FileStore{s.user, s.machine} {
+		if _, err := fs.Load(); err != nil {
+			return err
+		}
+	}
+	if err := s.user.Remove(); err != nil {
+		return err
+	}
+	return s.machine.Remove()
 }

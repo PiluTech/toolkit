@@ -333,3 +333,28 @@ func TestPrivacidadeSaidaNaoTrazControle(t *testing.T) {
 		t.Errorf("a saída tem caractere de controle: %q", out)
 	}
 }
+
+func TestUndoDryRunSemPendenciasPreservaOBackup(t *testing.T) {
+	sys := newPrivSys(false)
+	key := `HKCU\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo`
+	e := privacidade.Entry{ID: "reg:" + key + "|Enabled", Kind: "reg", Key: key, Name: "Enabled"} // não existia, e continua não existindo
+	st := &privStore{b: &privacidade.Backup{Version: 1, Entries: map[string]privacidade.Entry{e.ID: e}}}
+	if out, err := runPriv(t, privDeps(t, sys, st, "windows", false, ""), "desfazer", "--dry-run"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if st.b == nil || len(st.b.Entries) != 1 {
+		t.Fatal("desfazer --dry-run apagou o backup")
+	}
+	if _, err := runPriv(t, privDeps(t, sys, st, "windows", false, ""), "desfazer"); err != nil || st.b != nil {
+		t.Errorf("sem --dry-run o backup sem pendências deve ser removido: %v %v", err, st.b)
+	}
+}
+
+func TestPrivacidadeSemSIDNaoUsaBackupCompartilhado(t *testing.T) {
+	deps := privDeps(t, newPrivSys(true), nil, "windows", false, "")
+	deps.Priv.Store = nil // store real: o backup é por SID e o System de teste não informa SID
+	out, err := runPriv(t, deps, "desfazer")
+	if err == nil || !strings.Contains(err.Error(), "SID") {
+		t.Fatalf("err=%v\n%s", err, out)
+	}
+}

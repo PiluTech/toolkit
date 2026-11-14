@@ -99,13 +99,16 @@ func checkTaskPath(path string) error {
 	return nil
 }
 
+// checkRegString recusa só o que o reg.exe não leva com segurança: caractere de controle e barra invertida no fim.
+// % e aspas são texto válido (nenhum shell está no caminho; o Go escapa as aspas no argumento) e precisam voltar
+// como estavam (REG_EXPAND_SZ usa %VAR%).
 func checkRegString(s string) error {
 	if strings.HasSuffix(s, `\`) {
 		return invalid("valor de texto não pode terminar em barra invertida")
 	}
 	for _, r := range s {
-		if unicode.IsControl(r) || strings.ContainsRune(`"%^&|<>`, r) {
-			return invalid("valor de texto com caractere não permitido (U+%04X)", r)
+		if unicode.IsControl(r) {
+			return invalid("valor de texto com caractere de controle (U+%04X)", r)
 		}
 	}
 	return nil
@@ -175,9 +178,12 @@ func (w *windowsSystem) Edition(ctx context.Context) (string, error) {
 	return EditionOther, nil
 }
 
-// RegRead: reg.exe query <key> /v <name>. Exit 1 = valor ou chave inexistente (não é erro; limite: o reg.exe usa
-// o mesmo código 1 para outras falhas, e a mensagem é traduzida, então não dá para separar). Outro código = erro.
-// O parse procura a linha que começa por espaços + nome + espaços + REG_xxx; o cabeçalho (qualquer idioma) é ignorado.
+// RegRead: reg.exe query <key> /v <name>. Exit 0 = achou (parse abaixo). Exit 1 é AMBÍGUO (valor ausente, chave
+// ausente ou acesso negado, com texto traduzido), então a ausência só é aceita quando CONFIRMADA por outro caminho
+// (confirmaAusencia: listagem da chave, ou da chave pai); na dúvida é erro de leitura e nada é mudado.
+// O parse procura a linha que começa por espaços + nome + espaços + REG_xxx e preserva o conteúdo exato (tipo e
+// espaços); o cabeçalho (qualquer idioma) é ignorado. Só REG_DWORD, REG_SZ e REG_EXPAND_SZ; outro tipo é erro, e
+// texto que RegWrite recusaria também é erro (um original que não dá para restaurar não pode ser sobrescrito).
 func (w *windowsSystem) RegRead(ctx context.Context, key, name string) (RegValue, bool, error) {
 	if err := checkKey(key); err != nil {
 		return RegValue{}, false, err
@@ -190,6 +196,9 @@ func (w *windowsSystem) RegRead(ctx context.Context, key, name string) (RegValue
 		return RegValue{}, false, fmt.Errorf("reg query %s: %w", key, err)
 	}
 	if r.ExitCode == 1 {
+		if err := w.confirmaAusencia(ctx, c, r, key, name); err != nil {
+			return RegValue{}, false, err
+		}
 		return RegValue{}, false, nil
 	}
 	if r.ExitCode != 0 {
@@ -202,12 +211,61 @@ func (w *windowsSystem) RegRead(ctx context.Context, key, name string) (RegValue
 	if !found {
 		return RegValue{}, false, fmt.Errorf("reg query %s\\%s: valor não encontrado na saída", key, name)
 	}
+	if v.Kind != RegDWORD {
+		if err := checkRegString(v.Str); err != nil {
+			return RegValue{}, false, fmt.Errorf("reg query %s\\%s: valor atual não pode ser guardado nem restaurado: %w", key, name, err)
+		}
+	}
 	return v, true, nil
+}
+
+// regRoots traduz o prefixo curto para o nome que o reg.exe imprime na listagem.
+var regRoots = map[string]string{"HKCU": "HKEY_CURRENT_USER", "HKLM": "HKEY_LOCAL_MACHINE"}
+
+// confirmaAusencia é chamada quando "reg query key /v name" saiu com 1. Devolve nil SÓ quando a ausência do valor
+// está provada: (a) a chave existe (listagem sem /v, exit 0) e o nome não está nela; ou (b) a chave não existe e a
+// listagem da chave pai (exit 0) não traz a subchave. Acesso negado, falha da listagem ou resultado contraditório
+// viram erro (o chamador não muda nada).
+func (w *windowsSystem) confirmaAusencia(ctx context.Context, c exec.Cmd, r exec.Result, key, name string) error {
+	_, lr, err := w.readCmd(ctx, regExe, "query", key)
+	if err != nil {
+		return fmt.Errorf("reg query %s: %w", key, err)
+	}
+	if lr.ExitCode == 0 {
+		if _, found, perr := parseRegQuery(string(lr.Stdout), name); perr != nil || found {
+			return fmt.Errorf("reg query %s\\%s: leitura inconsistente (o valor aparece na listagem da chave): %s", key, name, snippet(r))
+		}
+		return nil // chave existe e o valor não está nela
+	}
+	if lr.ExitCode != 1 {
+		return cmdFailed(c, lr)
+	}
+	i := strings.LastIndex(key, `\`)
+	parent, leaf := key[:i], key[i+1:]
+	_, pr, err := w.readCmd(ctx, regExe, "query", parent)
+	if err != nil {
+		return fmt.Errorf("reg query %s: %w", parent, err)
+	}
+	if pr.ExitCode != 0 {
+		return fmt.Errorf("reg query %s\\%s: não foi possível confirmar que o valor não existe (%s): %w", key, name, snippet(r), cmdFailed(c, pr))
+	}
+	root, rest, _ := strings.Cut(parent, `\`)
+	full := regRoots[root]
+	if rest != "" {
+		full += `\` + rest
+	}
+	full += `\` + leaf
+	for _, line := range strings.Split(string(pr.Stdout), "\n") {
+		if strings.EqualFold(strings.TrimSpace(line), full) {
+			return fmt.Errorf("reg query %s\\%s: a chave existe mas não pôde ser lida (acesso negado?): %s", key, name, snippet(r))
+		}
+	}
+	return nil
 }
 
 func parseRegQuery(out, name string) (RegValue, bool, error) {
 	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimRight(line, "\r\n \t")
+		line = strings.TrimRight(line, "\r")
 		t := strings.TrimLeft(line, " \t")
 		if len(t) == len(line) || len(t) <= len(name) || !strings.EqualFold(t[:len(name)], name) {
 			continue
@@ -220,23 +278,34 @@ func parseRegQuery(out, name string) (RegValue, bool, error) {
 		if !strings.HasPrefix(typ, "REG_") {
 			continue
 		}
-		data = strings.TrimSpace(data)
 		switch typ {
 		case "REG_DWORD":
+			data = strings.TrimSpace(data)
 			n, err := strconv.ParseUint(data, 0, 32)
 			if err != nil {
 				return RegValue{}, false, fmt.Errorf("REG_DWORD ilegível %q", data)
 			}
 			return DWORD(uint32(n)), true, nil
 		case "REG_SZ", "REG_EXPAND_SZ":
-			return RegValue{Kind: RegString, Str: data}, true, nil
+			// o reg.exe separa o tipo do dado com exatamente 4 espaços; o resto é o conteúdo, sem mexer.
+			if data != "" {
+				if !strings.HasPrefix(data, "   ") {
+					return RegValue{}, false, fmt.Errorf("%s em formato inesperado", typ)
+				}
+				data = data[3:]
+			}
+			kind := RegString
+			if typ == "REG_EXPAND_SZ" {
+				kind = RegExpandString
+			}
+			return RegValue{Kind: kind, Str: data}, true, nil
 		}
 		return RegValue{}, false, fmt.Errorf("tipo %s não suportado", typ)
 	}
 	return RegValue{}, false, nil
 }
 
-// RegWrite: reg.exe add <key> /v <name> /t REG_DWORD|REG_SZ /d <valor> /f. Elevate só em HKLM.
+// RegWrite: reg.exe add <key> /v <name> /t REG_DWORD|REG_SZ|REG_EXPAND_SZ /d <valor> /f. Elevate só em HKLM.
 func (w *windowsSystem) RegWrite(ctx context.Context, key, name string, v RegValue) error {
 	if err := checkKey(key); err != nil {
 		return err
@@ -248,11 +317,14 @@ func (w *windowsSystem) RegWrite(ctx context.Context, key, name string, v RegVal
 	switch v.Kind {
 	case RegDWORD:
 		typ, data = "REG_DWORD", strconv.FormatUint(uint64(v.DWORD), 10)
-	case RegString:
+	case RegString, RegExpandString:
 		if err := checkRegString(v.Str); err != nil {
 			return err
 		}
 		typ, data = "REG_SZ", v.Str
+		if v.Kind == RegExpandString {
+			typ = "REG_EXPAND_SZ"
+		}
 	default:
 		return invalid("tipo de valor do registro desconhecido (%d)", int(v.Kind))
 	}

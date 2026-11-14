@@ -36,6 +36,19 @@ fetch() {
 
 # truthy VALOR: mesma regra do envOn do Go: ligado = definido e, sem espaços NAS PONTAS e sem distinguir
 # maiúsculas, diferente de vazio, 0, false, no e off ("f alse" não é "false").
+# Formato real da tag (mesma regra do release.yml): v opcional + X.Y.Z + sufixo opcional "-rc.1" (letras, números e
+# pontos, sem ponto no começo, no fim nem repetido). "." e ".." não passam.
+valid_tag() {
+  vt="${1#v}"
+  vcore="${vt%%-*}"
+  case "$vcore" in "" | *[!0-9.]* | .* | *. | *..*) return 1 ;; esac
+  [ "$(printf '%s' "$vcore" | tr -d '0-9')" = ".." ] || return 1
+  [ "$vt" = "$vcore" ] && return 0
+  vsuf="${vt#*-}"
+  case "$vsuf" in "" | *[!0-9A-Za-z.]* | .* | *. | *..*) return 1 ;; esac
+  return 0
+}
+
 truthy() {
   v="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
   v="${v#"${v%%[![:space:]]*}"}"
@@ -126,9 +139,7 @@ main() {
   elif [ "$version" = latest ]; then
     base="https://github.com/$REPO/releases/latest/download"
   else
-    case "$version" in
-      *[!A-Za-z0-9._+-]* | "") die "versão inválida (--versao ou TOOLKIT_VERSION): use algo como v0.1.0" ;;
-    esac
+    valid_tag "$version" || die "versão inválida (--versao ou TOOLKIT_VERSION): use algo como v0.1.0 ou v0.4.0-rc.1"
     case "$version" in [0-9]*) version="v$version" ;; esac
     base="https://github.com/$REPO/releases/download/$version"
   fi

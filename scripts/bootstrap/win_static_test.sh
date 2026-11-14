@@ -25,6 +25,7 @@ deny "SetEnvironmentVariable\('Path'" 'SetEnvironmentVariable no Path acharia o 
 need 'github\.com/PiluTech/toolkit/releases' 'repositorio PiluTech/toolkit'
 need 'TOOLKIT_VERSION' 'TOOLKIT_VERSION'
 need '-DryRun' 'modo dry-run'
+need 'function Test-VersionTag' 'formato da tag (v opcional, X.Y.Z, -rc.N), igual ao release.yml'
 need 'function Get-VersionArg' 'versao por parametro (-Versao), funcao pura'
 need '-Versao' 'parametro -Versao'
 need 'function Test-EnvOn' 'regra envOn (vazio, 0, false, no, off)'
