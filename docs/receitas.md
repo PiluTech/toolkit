@@ -194,17 +194,9 @@ Uma etapa de diagnóstico pode ter `render: <nome>`: a saída crua do comando (J
 `en`/`es` por `TOOLKIT_LANG`, `LC_ALL`, `LC_MESSAGES` ou `LANG` (o primeiro valor não vazio decide; outro idioma cai em
 pt-BR). A saída original só aparece no **modo detalhes**: tecla `d` na aba Diagnóstico da TUI (a dica mostra
 `d detalhes ✓` quando ligado; vale para os diagnósticos marcados na próxima execução) ou `toolkit recipe run <id>
---detalhes`; ela vem depois do resumo, sob `-- Detalhes (saída original, sem os identificadores da máquina) --`. **Identificadores nunca
-saem:** antes de qualquer saída da etapa (detalhes, falha do comando e o log do smoke de teste) o toolkit remove número
-de série, UUID/GUID, UDID, ECID, WWN, IMEI, endereço MAC e afins (`diagfmt.Redact`: o valor vira `[***]`, a chave fica),
-inclusive em JSON truncado. JSON válido é lido de verdade e redigido por chave (aspas escapadas, unicode, valores de qualquer
-tipo); o resto (truncado, tabela do `Format-Table` ou de colunas alinhadas, linhas `Chave: valor`) passa por um fallback
-conservador por padrões, e UUIDs e MACs soltos somem sempre. O RESUMO também é redigido no último ponto antes da saída (um
-nome de disco com UUID ou MAC não reaparece), com e sem detalhes e no smoke de teste. As consultas do Windows nem pedem
-`SerialNumber` nem UUID (os campos são escolhidos um a um no `Select-Object`); o `system_profiler` do macOS traz os
-seus de qualquer jeito, e por isso a redação. Se o renderizador não entender a saída (formato novo do sistema), a etapa NÃO falha, mas a
-saída crua NÃO aparece por padrão: só o aviso "não deu para resumir esta saída; use --detalhes ... para ver a original
-sem os identificadores da máquina". O `render`
+--detalhes`; ela vem depois do resumo, sob `-- Detalhes (saída original) --`. **Nada é mascarado:** o resumo, os detalhes e a saída de uma
+falha do comando mostram o que o sistema informou, como veio (o toolkit é uma ferramenta de análise). Se o renderizador não entender a saída (formato novo do sistema), a etapa NÃO falha, mas a
+saída crua NÃO aparece por padrão: só o aviso "não deu para resumir esta saída; use --detalhes, ou a tecla d na TUI, para ver a original". O `render`
 só vale em etapa `run` de receita `kind: diagnostic`; um nome desconhecido é erro de carga. Renderizadores:
 
 | Nome | Entrada | Resumo |
@@ -268,12 +260,10 @@ chega a ele; só segue redirecionamentos para `https` (`--proto-redir =https`), 
 `--max-time 10`. O corpo da resposta é descartado. O `nslookup` (último recurso no Linux) roda com `HOME=/`, sem ler o
 `~/.nslookuprc`; `ping`, `ip`, `ss`, `getent`, `nmcli`, `route` e `netstat` não leem configuração do usuário.
 
-**Dados sensíveis.** A saída mostra no terminal (a engine nunca grava a saída dos comandos no log) e mesmo assim:
-o MAC nunca aparece; o nome da rede Wi-Fi (SSID) vira `[nome oculto]`; endereços IPv4 públicos viram `A.x.x.x`
-(privados, loopback, link-local e CGNAT continuam) e IPv6 globais viram `2001:x:x`; não há consulta de "meu IP
-público"; as portas aparecem sem endereço (só "só esta máquina" ou "toda a rede"). As respostas da resolução de DNS e as
-caudas de erro do ping e do curl passam pela mesma máscara (se o nome resolver para a própria máquina, o IP público
-não reaparece). Exceção documentada: os alvos configurados, os servidores DNS e o gateway aparecem como são.
+**Informações como o sistema informa.** Nada é mascarado: IPs (públicos inclusive), IPv6 global, gateway, servidores DNS, as
+respostas da resolução de nomes, as caudas de erro do ping e do curl e o nome da rede Wi-Fi (SSID) aparecem inteiros. As portas
+aparecem sem endereço (só "só esta máquina" ou "toda a rede") por ficarem mais legíveis, e o MAC não é coletado (a receita não o
+pede); não há consulta de "meu IP público".
 
 **Idioma.** A saída sai em pt-BR por padrão e em `en` ou `es` por `TOOLKIT_LANG`, `LC_ALL`, `LC_MESSAGES` ou `LANG`
 (nessa ordem; `pt_BR`, `en_US`, `es_ES`... e qualquer outro idioma cai em pt-BR). Cada etapa tem um bloco
@@ -282,15 +272,15 @@ não reaparece). Exceção documentada: os alvos configurados, os servidores DNS
 campo de idioma; ver `docs/auditoria-a11y-l10n.md`, L5).
 
 **Limites.** Um diagnóstico nunca falha por causa do achado: rede fora do ar, ping sem resposta ou falta de uma
-ferramenta aparecem na saída (`falhou`, "o comando 'x' não existe") e a etapa termina com status 0. No macOS, o nome
-da rede Wi-Fi não é lido de propósito; o sistema também pode dizer "sem conexão" quando a permissão de Localização não
-foi dada. A `diag-rede` do Windows é mais simples (adaptadores, endereços e DNS) e ainda não mascara nem aceita alvos.
+ferramenta aparecem na saída (`falhou`, "o comando 'x' não existe") e a etapa termina com status 0. No macOS o
+sistema pode dizer "sem conexão" quando a permissão de Localização não foi dada (o nome da rede vem do `networksetup`). A
+`diag-rede` do Windows é mais simples (adaptadores, endereços e DNS) e ainda não aceita alvos.
 
 **Testes** (`internal/recipes/diagrede_test.go`, sem rede real): validação do YAML por plataforma; lista de comandos
 proibidos (nada de `sudo`, escrita de rede, redirecionamento para arquivo); sintaxe `sh -n`; chaves de idioma; e a
 execução de cada etapa em `/bin/sh` com um PATH que só tem ferramentas de texto reais e `ip`, `ping`, `curl`,
 `networksetup` etc. FALSAS, que registram cada chamada (toda chamada tem de estar na lista de leitura permitida):
-máscara de IP/MAC/SSID, idioma, alvos configurados, alvos inválidos recusados, falha de rede sem erro e ausência de
+IPs e SSID sem máscara, idioma, alvos configurados, alvos inválidos recusados, falha de rede sem erro e ausência de
 ferramentas. Os testes dos scripts não rodam no Windows.
 
 ## Regras para receitas

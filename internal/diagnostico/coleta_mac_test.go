@@ -135,14 +135,15 @@ func TestMacCaminhoFeliz(t *testing.T) {
 	if len(r.GPUs) != 2 || r.GPUs[0].Name != "AMD Radeon Pro 5500M" || r.GPUs[0].VRAMBytes != 8<<30 || r.GPUs[1].VRAMBytes != 0 {
 		t.Fatalf("gpu: %+v", r.GPUs)
 	}
-	if len(r.Events) != 2 {
+	// os caminhos aparecem como o sistema os informou (nada é mascarado): /Users/ann e /Users/joe são eventos distintos
+	if len(r.Events) != 3 {
 		t.Fatalf("eventos: %+v", r.Events)
 	}
 	if e := r.Events[0]; e.Source != "kernel" || e.Count != 1 {
 		t.Fatalf("evento 0: %+v", e)
 	}
 	e := r.Events[1]
-	if e.Source != "Chrome Helper" || e.Count != 2 || strings.Contains(e.Message, "joe") || strings.Contains(e.Message, "ann") || !e.When.Equal(time.Date(2026, 11, 13, 22, 39, 26, 0, time.UTC)) {
+	if e.Source != "Chrome Helper" || e.Count != 1 || !strings.Contains(e.Message, "/Users/ann/x") || !e.When.Equal(time.Date(2026, 11, 13, 22, 39, 26, 0, time.UTC)) {
 		t.Fatalf("evento 1: %+v", e)
 	}
 	if !macSkipped(r, "temperatura") || len(r.Skipped) != 1 || !strings.Contains(r.Skipped[0].Reason, "sudo powermetrics --samplers smc -n 1") {

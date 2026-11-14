@@ -46,9 +46,9 @@ func TestFullTemTodasAsAreasESemTexto(t *testing.T) {
 			t.Errorf("faltou %q:\n%s", want, out)
 		}
 	}
-	// o mascaramento é do chamador: depois dele o usuário some
-	if masked := MaskText(out, []string{"paulo"}); strings.Contains(masked, "paulo") {
-		t.Errorf("sobrou o usuário:\n%s", masked)
+	// nada é mascarado: o caminho com o nome do usuário aparece como veio
+	if !strings.Contains(out, `C:\Users\paulo\x`) {
+		t.Errorf("o texto do evento aparece como o sistema informou:\n%s", out)
 	}
 	empty := Full(&Report{OS: "linux"}, diagfmt.ES)
 	for _, want := range []string{"no leída", "ningún disco leído", "sin batería", "ningún sensor leído"} {

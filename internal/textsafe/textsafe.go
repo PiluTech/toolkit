@@ -33,3 +33,20 @@ func Line(s string) string {
 	s = strings.NewReplacer("\r\n", " ⏎ ", "\n", " ⏎ ", "\r", " ⏎ ", "\t", " ").Replace(s)
 	return Printable(s)
 }
+
+// Multiline é Printable para texto de várias linhas (relatórios): preserva as quebras de linha e o Tab, junta CRLF em LF e
+// escapa todo o resto que não é imprimível (ESC, BEL, CSI, OSC, C1, DEL, bidi...) de forma visível e inerte. Um campo vindo
+// do sistema (nome de disco, mensagem de log) nunca chega ao terminal como sequência de controle.
+func Multiline(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	var b strings.Builder
+	for _, r := range s {
+		switch r {
+		case '\n', '\t':
+			b.WriteRune(r)
+		default:
+			b.WriteString(Printable(string(r)))
+		}
+	}
+	return b.String()
+}

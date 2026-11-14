@@ -1,47 +1,30 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/user"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf16"
 
 	"github.com/spf13/cobra"
 
 	"github.com/PiluTech/toolkit/internal/diagfmt"
 	"github.com/PiluTech/toolkit/internal/diagnostico"
 	"github.com/PiluTech/toolkit/internal/msg"
+	"github.com/PiluTech/toolkit/internal/textsafe"
 )
 
 // DiagDeps são os pontos injetáveis do `toolkit diagnostico` (os testes nunca tocam a máquina real).
 type DiagDeps struct {
 	// Collect lê a máquina (nil = diagnostico.Collect sobre o Runner de leitura e o disco reais).
 	Collect func(ctx context.Context, goos string, d diagnostico.Deps) *diagnostico.Report
-	// Names são os nomes pessoais a mascarar no relatório: usuário e nome da máquina (nil = os reais).
-	Names func() []string
-	Now   func() time.Time
-}
-
-func (d DiagDeps) names() []string {
-	if d.Names != nil {
-		return d.Names()
-	}
-	var out []string
-	if u, err := user.Current(); err == nil {
-		out = append(out, u.Username, u.Name)
-	}
-	if h, err := os.Hostname(); err == nil {
-		out = append(out, h)
-	}
-	for _, k := range []string{"USER", "USERNAME", "COMPUTERNAME", "HOSTNAME", "LOGNAME"} {
-		out = append(out, os.Getenv(k))
-	}
-	return out
+	Now     func() time.Time
 }
 
 type diagFlags struct {
@@ -114,65 +97,78 @@ func runDiagnostico(ctx context.Context, out, errOut io.Writer, deps Deps, f dia
 	}
 	rep := collect(ctx, deps.GOOS, diagnostico.Deps{Runner: deps.runner(), Now: now, Lang: lang})
 	findings := diagnostico.Analyze(rep, lang)
-	names := deps.Diag.names()
-	mask := func(s string) string { return diagnostico.MaskText(s, names) }
-
 	if f.json {
 		doc := diagJSON{OS: rep.OS, Generated: rep.Generated, Report: rep}
 		for _, x := range findings {
 			doc.Findings = append(doc.Findings, diagFindingJSON{Area: x.Area, Severity: severityName(x.Severity), Title: x.Title, Detail: x.Detail, Action: x.Action})
 		}
-		raw, err := json.Marshal(doc)
+		b, err := json.MarshalIndent(doc, "", "  ")
 		if err != nil {
 			return err
 		}
-		// Mascara os VALORES de texto do documento já decodificado e só então serializa: chaves, números e tipos do
-		// contrato ficam intactos (um nome pessoal como "report" ou "Source" não toca as chaves) e os escapes do JSON
-		// (aspas e barras de um serial ou de um caminho do Windows) nunca são quebrados.
-		dec := json.NewDecoder(bytes.NewReader(raw))
-		dec.UseNumber()
-		var generic any
-		if err := dec.Decode(&generic); err != nil {
-			return err
-		}
-		b, err := json.MarshalIndent(diagnostico.MaskDocument(generic, names), "", "  ")
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintln(out, string(b))
+		_, err = fmt.Fprintln(out, jsonSafe(string(b)))
 		return err
 	}
 
-	summary := diagnostico.Summary(rep, findings, lang)
+	// O toolkit mostra as informações do PC como elas são (é uma ferramenta de análise): nenhum dado é escondido.
+	// Nenhum campo do sistema chega ao terminal (nem ao arquivo) como sequência de controle: a limpeza é no limite da saída
+	// textual e preserva os dados legíveis, LF e Tab (textsafe.Multiline).
+	summary := textsafe.Multiline(diagnostico.Summary(rep, findings, lang))
 	switch {
 	case f.report != "":
-		full := summary + "\n" + diagnostico.Full(rep, lang)
-		if err := writeReport(f.report, mask(full)); err != nil {
-			// o erro do Open/Write/Close repete o caminho (PathError) e o caminho pode ter o nome da pessoa: tudo mascarado
-			return errors.New(mask(err.Error()))
+		if err := writeReport(f.report, summary+"\n"+textsafe.Multiline(diagnostico.Full(rep, lang))); err != nil {
+			return err
 		}
-		_, _ = fmt.Fprint(out, mask(summary))
-		_, _ = fmt.Fprintf(out, "\n"+msg.DiagSaved+"\n", mask(printable(f.report)))
+		_, _ = fmt.Fprint(out, summary)
+		_, _ = fmt.Fprintf(out, "\n"+msg.DiagSaved+"\n", printable(f.report))
 	case f.full:
-		_, _ = fmt.Fprint(out, mask(summary+"\n"+diagnostico.Full(rep, lang)))
+		_, _ = fmt.Fprint(out, summary+"\n"+textsafe.Multiline(diagnostico.Full(rep, lang)))
 	default:
-		_, _ = fmt.Fprint(out, mask(summary))
+		_, _ = fmt.Fprint(out, summary)
 		_, _ = fmt.Fprintln(out, "\n"+msg.DiagHint)
 	}
 	return nil
 }
 
-// writeReport grava o relatório (já mascarado) com permissão 0600, e NUNCA sobrescreve um arquivo que já existe.
+// jsonSafe escapa, dentro das strings do JSON, os caracteres que o encoding/json deixa passar mas que um terminal pode
+// tratar como controle: DEL (U+007F), C1 (U+0080 a U+009F), formatação/bidi/tags (categoria Cf, inclusive acima de U+FFFF) e
+// os separadores de linha e de parágrafo (U+2028 e U+2029). Vira \uXXXX; uma runa acima de U+FFFF vira o PAR SUBSTITUTO
+// UTF-16 (\ud8xx\udcxx), que decodifica para a mesma runa: o escape nunca altera o dado.
+func jsonSafe(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r == 0x7f || (r >= 0x80 && r <= 0x9f) || unicode.Is(unicode.Cf, r) || r == 0x2028 || r == 0x2029 {
+			if r > 0xFFFF {
+				hi, lo := utf16.EncodeRune(r)
+				fmt.Fprintf(&b, `\u%04x\u%04x`, hi, lo)
+			} else {
+				fmt.Fprintf(&b, `\u%04x`, r)
+			}
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// writeReport grava o relatório com permissão 0600 e NUNCA sobrescreve um arquivo que já existe (O_EXCL): não esconde nada,
+// só evita apagar um arquivo seu. Todo erro (Open, Write ou Close) sai limpo: o os.PathError repete o caminho, e o caminho
+// pode ter controle no nome.
 func writeReport(path, text string) (err error) {
 	fh, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
-		return fmt.Errorf(msg.ErrDiagReport, printable(path), err)
+		return cleanErr(fmt.Errorf(msg.ErrDiagReport, path, err))
 	}
 	defer func() {
-		if cerr := fh.Close(); err == nil {
-			err = cerr
+		if cerr := fh.Close(); err == nil && cerr != nil {
+			err = cleanErr(cerr)
 		}
 	}()
-	_, err = fh.WriteString(text)
-	return err
+	if _, werr := fh.WriteString(text); werr != nil {
+		return cleanErr(werr)
+	}
+	return nil
 }
+
+// cleanErr devolve um erro com a mensagem limpa para o terminal (controles escapados, quebras de linha preservadas).
+func cleanErr(err error) error { return errors.New(textsafe.Multiline(err.Error())) }
