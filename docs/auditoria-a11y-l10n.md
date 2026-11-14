@@ -87,12 +87,15 @@ O toolkit é CLI + TUI de terminal (Bubble Tea), não site nem app gráfico. Por
 - **Corrigir:** (a) o teste de contraste do A1; (b) teste de tabela que percorre os estados (`ok`, `falhou`,
   `pendente`, `pulado`, `aviso`) e confirma símbolo + palavra em Mono. Esforço: P.
 
-### A6 · Zoom/fonte maior: sem verificação a 200% — B
-- **Problema:** com a fonte a 200%, um terminal de 80×24 vira 40×12, abaixo do mínimo declarado (60×16). Não achei
-  uma tela "terminal pequeno demais" com instrução (nenhum `minW/minH` em `layout.go`/`model.go`); o comportamento
-  abaixo do mínimo precisa ser verificado.
-- **Corrigir:** abaixo de 60×16, mostrar uma linha "terminal pequeno: aumente a janela ou use `--no-tui`" (nunca
-  tela quebrada), com teste de tamanho. Esforço: P.
+### A6 · Zoom/fonte maior: aviso de janela pequena com o tamanho atual e quebra de linha — B (corrigido na Fase 1)
+- **Correção da v1 deste relatório:** a tela de "janela pequena demais" JÁ existia (`Model.tooSmall`, `internal/tui/layout.go`;
+  minha busca não a achou). O que faltava: o texto não dizia o tamanho atual, não apontava a ajuda do toolkit e as linhas
+  não quebravam (uma janela de 20 colunas cortava a frase).
+- **Corrigido:** texto aprovado pelo Paulo ("Terminal pequeno: a interface precisa de 60×16 e esta janela tem LxA." /
+  "Aumente a janela ou use os comandos sem a interface: toolkit --help" / "q sair"), com quebra na largura da janela, "q sair"
+  sempre visível mesmo com altura de 1 linha e redimensionar voltando à interface normal; testes em `model_test.go`.
+- **Segue em aberto:** com a fonte a 200% um terminal 80×24 vira 40×12, abaixo do mínimo: o aviso agora diz isso, mas a
+  TUI continua sem layout abaixo de 60×16.
 
 ### A7 · Teclas de uma letra e sem remapeamento — B
 - A barra de teclas é contextual e sempre visível (bom). Não há como remapear teclas; atalhos de uma letra (`u`,

@@ -160,7 +160,7 @@ spinner (4 quadros, 100 ms). Troca de aba, modal e cursor são instantâneos; o 
 | 80 ou mais | layout completo; acima de 80 só o nome e as linhas de comando crescem |
 | 70 a 79 | some a coluna VIA (vai para a linha de estado); o nome encolhe até 12 |
 | 60 a 69 | abas `2 Rec` e `3 Diag`; VERSÃO junta ao nome (`Python 3.12`) ou ao estado (`✓ 2.43.0 → latest`); faixa `↑ v0.2.0 (u)`; barra de teclas só com mover, marcar, buscar, ajuda, sair |
-| < 60 colunas ou < 16 linhas | tela única "Janela pequena demais (mínimo 60 × 16). Aumente a janela ou use toolkit --no-tui."; `q` funciona e a execução em andamento continua |
+| < 60 colunas ou < 16 linhas | tela única com o aviso "Terminal pequeno: a interface precisa de 60×16 e esta janela tem LxA." / "Aumente a janela ou use os comandos sem a interface: toolkit --help" / "q sair" (L×A = tamanho atual); cada linha quebra na largura da janela e, se faltar altura, o "q sair" sobrevive; `q` funciona, a execução em andamento continua e redimensionar volta à interface normal |
 | altura | só o corpo encolhe; listas rolam com `↓ mais N` |
 | redimensionar | recalcula a cada `WindowSizeMsg`, mantém o cursor visível e o log no fim se estiver seguindo; comandos quebram com recuo de 5 e nunca são cortados |
 
