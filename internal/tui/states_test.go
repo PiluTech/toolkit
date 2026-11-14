@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"testing"
 
@@ -172,3 +173,5 @@ func TestEstadosTerminalPequenoNaRaiz(t *testing.T) {
 		t.Fatal("Ctrl+C sai da tela pequena")
 	}
 }
+
+func stripANSI(s string) string { return ansi.Strip(s) }

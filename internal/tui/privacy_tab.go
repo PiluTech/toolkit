@@ -135,6 +135,7 @@ type PrivacyTab struct {
 
 	busy    privBusy
 	seq     int
+	changed bool               // alguma ação já mudou o sistema nesta sessão: o erro de releitura não pode dizer "Nada foi alterado"
 	cancel  context.CancelFunc // cancela a preparação do plano em andamento (Esc)
 	view    bool               // mostrando um plano
 	kind    privKind
@@ -214,6 +215,9 @@ func (t *PrivacyTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		}
 		t.onPlan(msg)
 	case privDoneMsg:
+		if msg.res.Applied > 0 {
+			t.changed = true
+		}
 		t.onDone(msg)
 		return t, t.loadCmd()
 	case tickMsg:
@@ -543,6 +547,8 @@ func (t *PrivacyTab) View(w, h int) string {
 	switch {
 	case t.loading:
 		return strings.Join(StateLoading(t.theme, w, h, "o estado de privacidade", t.frame), "\n")
+	case t.loadErr != nil && t.changed:
+		return strings.Join(StateErrorAfterChange(t.theme, w, h, "a privacidade", t.loadErr, "Saia (q) e abra o toolkit de novo para reler o estado."), "\n")
 	case t.loadErr != nil:
 		return strings.Join(StateError(t.theme, w, h, "a privacidade", t.loadErr, "Saia (q) e abra o toolkit de novo."), "\n")
 	case !t.info.Supported:

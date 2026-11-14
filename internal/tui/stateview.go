@@ -84,6 +84,22 @@ func StateError(th Theme, w, h int, what string, err error, steps ...string) []s
 	return b.render(w, h)
 }
 
+// StateErrorAfterChange é o erro de RELEITURA depois de uma ação que já mudou o sistema (aplicar, restaurar, remover):
+// nunca diz "Nada foi alterado" (seria falso). Diz que não deu para atualizar a leitura e que o resultado da ação e o
+// backup continuam valendo.
+func StateErrorAfterChange(th Theme, w, h int, what string, err error, steps ...string) []string {
+	lead := "Não foi possível atualizar a leitura"
+	if what = safeWhat(what, ""); what != "" {
+		lead += " de " + what
+	}
+	lead += ". As alterações já feitas continuam valendo (o backup guarda os valores originais)."
+	b := stateBlock{title: th.Err().Render(titleError), lead: []string{lead}, steps: safeAll(steps)}
+	if err != nil {
+		b.detail = errorLines(err)
+	}
+	return b.render(w, h)
+}
+
 // StateNeedsAdmin é a recusa por falta de administrador. Sem passos, mostra os do Windows e os do Linux/macOS; as
 // abas passam AdminSteps(goos, comando) para dar só o do sistema atual.
 func StateNeedsAdmin(th Theme, w, h int, what string, steps ...string) []string {

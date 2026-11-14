@@ -517,3 +517,28 @@ func TestNativeAppsForaDoWindowsQuebraOMotivo(t *testing.T) {
 		t.Errorf("o fim do motivo se perdeu:\n%s", out)
 	}
 }
+
+// Lupa #71: idem para a remoção de apps nativos.
+func TestNativosReleituraFalhaDepoisDeRemoverNaoDizNadaFoiAlterado(t *testing.T) {
+	for _, partial := range []bool{false, true} {
+		be := &fakeNat{info: natSample(true), plan: NatPlan{ID: "p", Text: natPlanText, Pending: 1, IsAdmin: true}, applyRes: NatResult{Removed: 2, BackupPath: `C:\b.json`}}
+		if partial {
+			be.applyErr = errors.New("falhou no meio")
+		}
+		tab := natTab(t, be)
+		be.loadErr = errors.New("Get-AppxPackage: acesso negado")
+		nkey(tab, "space", "r", "s")
+		check := func(when string) {
+			out := stripANSI(tab.View(80, 24))
+			if strings.Contains(out, "Nada foi alterado") {
+				t.Errorf("partial=%v %s: a tela nega as alterações:\n%s", partial, when, out)
+			}
+			if !strings.Contains(out, "atualizar a leitura") {
+				t.Errorf("partial=%v %s: deve dizer que não deu para atualizar a leitura:\n%s", partial, when, out)
+			}
+		}
+		check("com a faixa")
+		tab.Dismiss()
+		check("depois de fechar a faixa")
+	}
+}

@@ -111,6 +111,7 @@ type NativeAppsTab struct {
 
 	loading bool
 	loadErr error
+	changed bool // alguma remoção já mudou o sistema nesta sessão: o erro de releitura não pode dizer "Nada foi alterado"
 	info    NatInfo
 
 	cur      int
@@ -207,6 +208,9 @@ func (t *NativeAppsTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		}
 		t.onPlan(msg)
 	case natDoneMsg:
+		if msg.res.Removed > 0 {
+			t.changed = true
+		}
 		t.onDone(msg)
 		return t, t.loadCmd()
 	case tickMsg:
@@ -526,6 +530,8 @@ func (t *NativeAppsTab) View(w, h int) string {
 	switch {
 	case t.loading:
 		return strings.Join(StateLoading(t.theme, w, h, "os apps nativos", t.frame), "\n")
+	case t.loadErr != nil && t.changed:
+		return strings.Join(StateErrorAfterChange(t.theme, w, h, "os apps nativos", t.loadErr, "Saia (q) e abra o toolkit de novo para reler o estado."), "\n")
 	case t.loadErr != nil:
 		return strings.Join(StateError(t.theme, w, h, "os apps nativos", t.loadErr, "Saia (q) e abra o toolkit de novo."), "\n")
 	case !t.info.Supported:

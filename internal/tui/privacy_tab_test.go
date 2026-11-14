@@ -598,3 +598,37 @@ func TestPrivacyConfirmUsaOIDDoPlanoExibido(t *testing.T) {
 		t.Fatalf("o plano exibido devia ter sido aplicado: %v", be.applies)
 	}
 }
+
+// Lupa #71: a releitura roda DEPOIS de aplicar/restaurar; se ela falhar, a tela nunca nega as alterações.
+func TestPrivacidadeReleituraFalhaDepoisDeAplicarNaoDizNadaFoiAlterado(t *testing.T) {
+	for _, partial := range []bool{false, true} {
+		be := &fakePriv{info: privSample(true), plan: PrivPlan{Text: planText, Pending: 2}, applyRes: PrivResult{Applied: 2, BackupPath: `C:\b.json`}}
+		if partial {
+			be.applyErr = errors.New("falhou no meio")
+		}
+		tab := privTab(t, be)
+		be.loadErr = errors.New("reg.exe: acesso negado") // a releitura pós-ação falha
+		pkey(tab, "a", "s")
+		check := func(when string) {
+			out := stripANSI(tab.View(80, 24))
+			if strings.Contains(out, "Nada foi alterado") {
+				t.Errorf("partial=%v %s: a tela nega as alterações:\n%s", partial, when, out)
+			}
+			if !strings.Contains(out, "atualizar a leitura") {
+				t.Errorf("partial=%v %s: deve dizer que não deu para atualizar a leitura:\n%s", partial, when, out)
+			}
+		}
+		check("com a faixa")
+		tab.Dismiss() // fechar a faixa com x não pode deixar só a frase falsa
+		check("depois de fechar a faixa")
+	}
+}
+
+// Sem alteração nenhuma, o erro de leitura continua dizendo (com razão) que nada foi alterado.
+func TestPrivacidadeErroDeLeituraSemAcaoContinuaDizendoNadaFoiAlterado(t *testing.T) {
+	be := &fakePriv{loadErr: errors.New("boom")}
+	tab := privTab(t, be)
+	if out := stripANSI(tab.View(80, 24)); !strings.Contains(out, "Nada foi alterado") {
+		t.Errorf("sem ação, vale a cauda:\n%s", out)
+	}
+}
