@@ -1,7 +1,7 @@
 // Package diagnostico reúne, SÓ PARA LEITURA, o estado de saúde da máquina (hardware, discos com SMART, bateria,
 // temperatura, GPU e erros recentes), transforma em achados ("o que está ruim e o que fazer") e monta o resumo e o
-// relatório completo com os dados sensíveis mascarados. Os coletores de cada SO (collect_windows.go, collect_linux.go,
-// collect_darwin.go) só usam o exec.Runner de leitura e as funções de arquivo injetadas em Deps: nenhum teste toca o
+// relatório completo com os dados sensíveis mascarados. Os coletores de cada SO (coleta_win.go, coleta_lin.go,
+// coleta_mac.go) só usam o exec.Runner de leitura e as funções de arquivo injetadas em Deps: nenhum teste toca o
 // sistema real e nada pede administrador (o que exigiria admin vira um item em Report.Skipped, com a instrução).
 package diagnostico
 
