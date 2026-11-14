@@ -80,6 +80,20 @@ HOME="$tmp/home" sh "$script" --dry-run >"$tmp/out" 2>&1 || fail "dry-run padrã
 grep -q "releases/latest/download" "$tmp/out" || fail "URL padrão não é latest"
 grep -q "github.com/PiluTech/toolkit" "$tmp/out" || fail "repositório errado"
 
+# 7b. --versao / -v: vence TOOLKIT_VERSION; sem valor é erro; mostra a versão no dry-run
+rm -rf "${tmp:?}/home"; mkdir -p "$tmp/home"
+HOME="$tmp/home" TOOLKIT_VERSION='v0.1.0' sh "$script" --dry-run --versao v0.4.0-rc.1 >"$tmp/out" 2>&1 || fail "--versao recusada: $(cat "$tmp/out")"
+grep -q "releases/download/v0.4.0-rc.1" "$tmp/out" || fail "--versao não venceu TOOLKIT_VERSION: $(cat "$tmp/out")"
+grep -q "versão v0.4.0-rc.1" "$tmp/out" || fail "dry-run não mostra a versão: $(cat "$tmp/out")"
+HOME="$tmp/home" sh "$script" --dry-run -v 0.4.0-rc.2 >"$tmp/out" 2>&1 || fail "-v recusado"
+grep -q "releases/download/v0.4.0-rc.2" "$tmp/out" || fail "-v sem v não foi normalizado"
+HOME="$tmp/home" sh "$script" --dry-run --versao=v0.4.0-rc.3 >"$tmp/out" 2>&1 || fail "--versao= recusado"
+grep -q "releases/download/v0.4.0-rc.3" "$tmp/out" || fail "--versao= não aplicada"
+if HOME="$tmp/home" sh "$script" --dry-run --versao >"$tmp/out" 2>&1; then fail "--versao sem valor aceito"; fi
+grep -q "exige um valor" "$tmp/out" || fail "--versao sem valor sem mensagem clara"
+if HOME="$tmp/home" sh "$script" --versao --dry-run >"$tmp/out" 2>&1; then fail "--versao seguida de flag aceita"; fi
+if HOME="$tmp/home" sh "$script" --dry-run --versao 'v1/../x' >"$tmp/out" 2>&1; then fail "--versao inválida aceita"; fi
+
 # 8. SO não suportado (uname falso no PATH)
 mkdir "$tmp/fakebin"
 printf '#!/bin/sh\necho Plan9\n' >"$tmp/fakebin/uname"; chmod +x "$tmp/fakebin/uname"

@@ -217,7 +217,12 @@ func (p *Plan) Format(l Lang) string {
 		groups[c.Setting] = append(groups[c.Setting], c)
 	}
 	for _, id := range order {
-		s := byID[id]
+		s, known := byID[id]
+		if !known { // plano de desfazer: os itens vêm do backup, não do catálogo
+			s = Setting{ID: id, Admin: groupAdmin(groups[id]),
+				Title: tr("Restaurar o estado anterior", "Restore the previous state", "Restaurar el estado anterior"),
+				Why:   tr("Cada item volta ao valor que tinha antes do toolkit mexer.", "Each item goes back to the value it had before the toolkit changed it.", "Cada elemento vuelve al valor que tenía antes de que el toolkit lo cambiara.")}
+		}
 		admin := ""
 		if s.Admin {
 			admin = " [" + t("exige administrador", "needs administrator", "requiere administrador") + "]"
@@ -242,6 +247,15 @@ func (p *Plan) Format(l Lang) string {
 	}
 	b.WriteString(".\n")
 	return b.String()
+}
+
+func groupAdmin(cs []Change) bool {
+	for _, c := range cs {
+		if c.Admin {
+			return true
+		}
+	}
+	return false
 }
 
 func editionName(ed string, l Lang) string {

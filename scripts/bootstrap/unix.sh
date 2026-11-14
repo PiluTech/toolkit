@@ -5,6 +5,7 @@
 #   curl -fsSL https://github.com/PiluTech/toolkit/releases/latest/download/unix.sh | sh
 #   ... | sh -s -- --dry-run        # só mostra o que faria
 #   TOOLKIT_VERSION=v0.1.0 sh unix.sh   # fixa a versão (padrão: a última release)
+#   ... | sh -s -- --versao v0.4.0-rc.1   # fixa a versão por argumento (vence TOOLKIT_VERSION; também -v)
 #   ... | sh -s -- --no-launch      # não abre a TUI no fim (ou TOOLKIT_NO_LAUNCH=1)
 #
 # Depois de instalar, abre "toolkit tui" na própria janela, mas só com terminal real (/dev/tty) e
@@ -89,13 +90,23 @@ sha256() {
 main() {
   DRY=0
   NOLAUNCH=0
+  # Versão: --versao/-v <tag> (ou --versao=<tag>) vence TOOLKIT_VERSION, que vence "latest".
+  version="${TOOLKIT_VERSION:-latest}"
+  want_ver=0
   for a in "$@"; do
+    if [ "$want_ver" = 1 ]; then
+      case "$a" in "" | -*) die "--versao exige um valor, por exemplo: --versao v0.4.0-rc.1" ;; esac
+      version="$a"; want_ver=0; continue
+    fi
     case "$a" in
       --dry-run) DRY=1 ;;
       --no-launch) NOLAUNCH=1 ;;
-      *) echo "toolkit: argumento desconhecido: $a (use --dry-run ou --no-launch)" >&2; exit 2 ;;
+      --versao | -v) want_ver=1 ;;
+      --versao=*) version="${a#--versao=}"; [ -n "$version" ] || die "--versao exige um valor, por exemplo: --versao v0.4.0-rc.1" ;;
+      *) echo "toolkit: argumento desconhecido: $a (use --dry-run, --no-launch ou --versao)" >&2; exit 2 ;;
     esac
   done
+  [ "$want_ver" = 0 ] || die "--versao exige um valor, por exemplo: --versao v0.4.0-rc.1"
 
   case "$(uname -s)" in
     Linux) os=linux ;;
@@ -109,7 +120,6 @@ main() {
   esac
 
   # URL base: a última release ou uma tag fixa.
-  version="${TOOLKIT_VERSION:-latest}"
   if [ -n "${TOOLKIT_RELEASE_BASE:-}" ]; then
     base="$TOOLKIT_RELEASE_BASE"
     echo "toolkit: AVISO: usando TOOLKIT_RELEASE_BASE=$base (só para testes)" >&2
@@ -117,7 +127,7 @@ main() {
     base="https://github.com/$REPO/releases/latest/download"
   else
     case "$version" in
-      *[!A-Za-z0-9._+-]* | "") die "TOOLKIT_VERSION inválida: use algo como v0.1.0" ;;
+      *[!A-Za-z0-9._+-]* | "") die "versão inválida (--versao ou TOOLKIT_VERSION): use algo como v0.1.0" ;;
     esac
     case "$version" in [0-9]*) version="v$version" ;; esac
     base="https://github.com/$REPO/releases/download/$version"
@@ -127,6 +137,7 @@ main() {
   dest="${TOOLKIT_INSTALL_DIR:-$HOME/.local/bin}"
 
   if [ "$DRY" = 1 ]; then
+    echo "toolkit (dry-run): versão $version"
     echo "toolkit (dry-run): baixaria $base/$asset e $base/checksums.txt"
     echo "toolkit (dry-run): conferiria o SHA-256 e instalaria em $dest/toolkit"
     return 0
