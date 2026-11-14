@@ -491,3 +491,18 @@ func TestNativeAppsTabCapturaTeclasDaRaiz(t *testing.T) {
 		t.Fatal("a confirmação captura as teclas (q, Tab e números não saem)")
 	}
 }
+
+// O motivo (por SO) é quebrado em linhas, nunca cortado com reticências.
+func TestNativeAppsForaDoWindowsQuebraOMotivo(t *testing.T) {
+	reason := "No macOS os apps do sistema ficam em um volume protegido (somente leitura) e o toolkit não os remove; nada foi alterado."
+	tab := &NativeAppsTab{theme: Theme{Mono: true, NoMotion: true}, info: NatInfo{OS: "darwin", Reason: reason}}
+	out := tab.View(60, 12)
+	for _, l := range strings.Split(out, "\n") {
+		if lipgloss.Width(l) > 60 || strings.Contains(l, "…") {
+			t.Errorf("linha cortada ou larga: %q", l)
+		}
+	}
+	if !strings.Contains(strings.Join(strings.Fields(out), " "), "nada foi alterado.") {
+		t.Errorf("o fim do motivo se perdeu:\n%s", out)
+	}
+}

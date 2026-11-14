@@ -475,11 +475,11 @@ func (t *NativeAppsTab) View(w, h int) string {
 	case t.loadErr != nil:
 		return " " + t.theme.Err().Render(SymFail+" erro:") + " não deu para ler os apps nativos (" + textsafe.Line(t.loadErr.Error()) + ")"
 	case !t.info.Supported:
-		out := " Os apps nativos só existem no Windows (este sistema é " + t.info.OS + "). Nada a mudar aqui."
+		lines := wrapLine(" Os apps nativos só existem no Windows (este sistema é "+t.info.OS+"). Nada a mudar aqui.", w)
 		if t.info.Reason != "" {
-			out += "\n " + t.info.Reason
+			lines = append(lines, wrapLine(" "+t.info.Reason, w)...) // quebra a explicação em vez de cortar com reticências
 		}
-		return out
+		return strings.Join(lines, "\n")
 	}
 	var lines []string
 	if t.view {
