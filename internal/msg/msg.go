@@ -84,6 +84,7 @@ const (
 	UpdateDoneFrom       = "toolkit atualizado para %s (SHA-256 conferido)."
 
 	RootNoTUI              = "não abre a interface de terminal (mostra a ajuda)"
+	FlagNoMotion           = "desliga a animação da interface (o spinner vira um símbolo fixo); também vale TOOLKIT_REDUCE_MOTION=1"
 	InstallHeader          = "==> %s (%s)"
 	InstallAlready         = "já instalado (%s%s)"
 	InstallExternal        = "já instalado fora do %s em %s%s: nada a fazer"

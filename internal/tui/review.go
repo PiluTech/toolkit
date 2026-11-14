@@ -53,7 +53,7 @@ func (r *reviewScreen) canRun() bool {
 func (r *reviewScreen) lines(w int) []string {
 	t := r.theme
 	if r.loading {
-		return []string{" " + t.Accent().Render(spinnerFrames[r.frame%len(spinnerFrames)]) + " Lendo o estado do sistema…"}
+		return []string{" " + t.Accent().Render(t.Spin(r.frame)) + " Lendo o estado do sistema…"}
 	}
 	var out []string
 	add := func(s ...string) { out = append(out, s...) }

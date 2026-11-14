@@ -158,7 +158,7 @@ func (t *LogTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 	case tickMsg:
 		t.frame++
 		if t.running {
-			return t, tick()
+			return t, t.theme.Tick()
 		}
 	case tea.KeyPressMsg:
 		page := max(t.lastH/2, 1)
@@ -216,7 +216,7 @@ func (t *LogTab) Status() string {
 // More implementa Tab.
 func (t *LogTab) More() int { return 0 }
 
-func (t *LogTab) spin() string { return spinnerFrames[t.frame%len(spinnerFrames)] }
+func (t *LogTab) spin() string { return t.theme.Spin(t.frame) }
 
 // View desenha os itens (até 6 linhas), a régua e o log do item sob o cursor.
 func (t *LogTab) View(w, h int) string {

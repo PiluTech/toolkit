@@ -148,7 +148,7 @@ func (t *AppsTab) SetContext(ctx context.Context) { t.ctx = ctx }
 
 // Init carrega o catálogo e liga o spinner.
 func (t *AppsTab) Init() tea.Cmd {
-	return tea.Batch(t.loadCmd(), tick())
+	return tea.Batch(t.loadCmd(), t.theme.Tick())
 }
 
 func tick() tea.Cmd { return tea.Tick(tickEvery, func(time.Time) tea.Msg { return tickMsg{} }) }
@@ -171,7 +171,7 @@ func (t *AppsTab) Reload() tea.Cmd {
 		}
 	}
 	t.prioritizeVisible()
-	return tea.Batch(t.pump(), tick())
+	return tea.Batch(t.pump(), t.theme.Tick())
 }
 
 // Title implementa Tab.
@@ -247,7 +247,7 @@ func (t *AppsTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 	case tickMsg:
 		t.frame++
 		if t.busy() {
-			return t, tick()
+			return t, t.theme.Tick()
 		}
 		return t, nil
 	case tea.KeyPressMsg:
@@ -295,7 +295,7 @@ func (t *AppsTab) pump() tea.Cmd {
 		cmds = append(cmds, func() tea.Msg { return appStateMsg{id: id, st: be.Status(ctx, id)} })
 	}
 	if len(cmds) > 0 && len(t.pending) == len(cmds) {
-		cmds = append(cmds, tick()) // religa o spinner se estava parado
+		cmds = append(cmds, t.theme.Tick()) // religa o spinner se estava parado
 	}
 	return tea.Batch(cmds...)
 }
@@ -515,7 +515,7 @@ func (t *AppsTab) openVersions(explicit bool) tea.Cmd {
 	return tea.Batch(func() tea.Msg {
 		v, err := be.Versions(ctx, id)
 		return versionsLoadedMsg{id: id, versions: v, err: err}
-	}, tick())
+	}, t.theme.Tick())
 }
 
 // highlighted devolve a versão destacada ("" se a lista estiver vazia ou o cursor fora dela).
@@ -652,7 +652,7 @@ func osName(goos string) string {
 	return goos
 }
 
-func (t *AppsTab) spin() string { return spinnerFrames[t.frame%len(spinnerFrames)] }
+func (t *AppsTab) spin() string { return t.theme.Spin(t.frame) }
 
 // View desenha o corpo (h linhas, no máximo w colunas).
 func (t *AppsTab) View(w, h int) string {
