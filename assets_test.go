@@ -24,12 +24,12 @@ func TestCatalogoEmbutidoEValido(t *testing.T) {
 	}
 }
 
-func TestCatalogoEmbutidoTemAsSeteEntradasEUrlSempreTemSha256(t *testing.T) {
+func TestCatalogoEmbutidoTemAsEntradasEsperadasEUrlSempreTemSha256(t *testing.T) {
 	cat, err := catalog.Parse("catalog.yaml", toolkit.CatalogYAML)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"git", "vscode", "python", "discord", "firefox", "vlc", "7zip"}
+	want := []string{"git", "vscode", "python", "discord", "firefox", "vlc", "7zip", "brave", "chrome", "libreoffice", "peazip"}
 	if !reflect.DeepEqual(cat.Order, want) {
 		t.Fatalf("entradas do catálogo embutido: %v, quer %v", cat.Order, want)
 	}
