@@ -104,13 +104,36 @@ func incomplete(status map[rootKey]string, roots ...[]rootKey) bool {
 	return false
 }
 
+// readWindowsRegistry roda o script UMA vez e reaproveita a saída pelo prazo do cache (cacheTTL), tanto o sucesso
+// quanto a falha: a TUI pergunta o estado de cada app do catálogo e cada pergunta rodava um PowerShell que lê todo o
+// registro (centenas de ms de CPU por app, vários em paralelo na partida). Perguntas simultâneas esperam a mesma
+// leitura (o lock fica preso enquanto ela roda). Cancelamento não é guardado. Invalidate descarta (depois de
+// instalar ou remover algo).
+func (d *Detector) readWindowsRegistry(ctx context.Context) ([]byte, bool) {
+	d.winMu.Lock()
+	defer d.winMu.Unlock()
+	if d.winBuilt && d.now().Sub(d.winAt) < cacheTTL {
+		return d.winOut, d.winOK
+	}
+	res, err := d.rn.Run(ctx, d.readOnly(exec.Cmd{Name: windowsPowerShell,
+		Args: []string{"-NoProfile", "-NonInteractive", "-Command", uninstallScript}, Timeout: 30 * time.Second}))
+	if ctx.Err() != nil {
+		return nil, false // cancelado: não vira cache
+	}
+	ok := err == nil && res.ExitCode == 0 && len(res.Stdout) <= maxUninstallOutput
+	d.winOut, d.winOK, d.winAt, d.winBuilt = nil, ok, d.now(), true
+	if ok {
+		d.winOut = res.Stdout
+	}
+	return d.winOut, ok
+}
+
 func (d *Detector) findWindows(ctx context.Context, spec catalog.Detect) (Found, bool) {
 	if (spec.DisplayName == "" && spec.AppPath == "") || d.rn == nil {
 		return Found{}, false
 	}
-	res, err := d.rn.Run(ctx, d.readOnly(exec.Cmd{Name: windowsPowerShell,
-		Args: []string{"-NoProfile", "-NonInteractive", "-Command", uninstallScript}, Timeout: 30 * time.Second}))
-	if err != nil || res.ExitCode != 0 || len(res.Stdout) > maxUninstallOutput {
+	out, readOK := d.readWindowsRegistry(ctx)
+	if !readOK {
 		// Nada foi lido: não é "não instalado", é detecção incompleta.
 		return Found{Incomplete: true}, false
 	}
@@ -121,7 +144,7 @@ func (d *Detector) findWindows(ctx context.Context, spec catalog.Detect) (Found,
 		viaPath *Found
 	)
 	status := map[rootKey]string{}
-	for _, line := range strings.Split(string(res.Stdout), "\n") {
+	for _, line := range strings.Split(string(out), "\n") {
 		f := strings.Split(strings.TrimRight(line, "\r"), "\t")
 		switch {
 		case len(f) == 4 && f[0] == "S":
