@@ -239,8 +239,9 @@ func TestPartidaPrimeiraTelaENaoBloqueiaTecla(t *testing.T) {
 	sent := time.Now()
 	l.msgs <- tea.KeyPressMsg{Code: tea.KeyDown}
 	var handled time.Duration
+	done := false // não usar handled == 0: no Windows time.Since pode dar 0 para intervalos curtos
 	end := time.After(2 * time.Second)
-	for handled == 0 {
+	for !done {
 		select {
 		case <-end:
 			t.Fatal("a seta não foi tratada em 2 s: fila entupida")
@@ -249,7 +250,7 @@ func TestPartidaPrimeiraTelaENaoBloqueiaTecla(t *testing.T) {
 			_ = l.m.View()
 			l.run(cmd)
 			if _, ok := msg.(tea.KeyPressMsg); ok {
-				handled = time.Since(sent)
+				handled, done = time.Since(sent), true
 			}
 		}
 	}
