@@ -79,6 +79,13 @@ type Model struct {
 	// resultados de execuções por índice de aba (a faixa da aba de origem); origins são as abas que tinham marcados
 	results map[int]*Result
 	origins []int
+
+	// inited: seções cujo Init (a carga) já foi pedido. A abertura carrega só a ativa; as outras, na primeira visita.
+	inited  map[int]bool
+	started bool // o Init já rodou (só depois dele o Update carrega seções novas)
+
+	// ticking: há UM quadro do spinner agendado (as abas só PEDEM quadros; a raiz os deduplica)
+	ticking bool
 }
 
 // UpdateInfo é uma versão nova (tag, notas já limpas, página da release).
@@ -117,13 +124,24 @@ func New(o Options, tabs ...Tab) *Model {
 	return &Model{opts: o, theme: Theme{Mono: o.Mono, Dark: true, NoMotion: o.NoMotion}, tabs: tabs, areas: legacyAreas(tabs), lastSec: make([]int, len(tabs)), w: 80, h: 24, results: map[int]*Result{}}
 }
 
-// Init pede a cor de fundo do terminal (claro ou escuro).
+// Init pede a cor de fundo do terminal (claro ou escuro) e carrega SÓ a seção ativa: as outras carregam na primeira
+// visita (wake), nunca todas juntas na abertura (antes: catálogo e estado de cada app, receitas, apps do Windows,
+// privacidade... disputando CPU e processos com a primeira tela).
 func (m *Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{tea.RequestBackgroundColor}
-	for _, t := range m.tabs {
-		cmds = append(cmds, t.Init())
+	m.started = true
+	return tea.Batch(tea.RequestBackgroundColor, m.wake())
+}
+
+// wake pede o Init da seção ativa se ainda não foi pedido.
+func (m *Model) wake() tea.Cmd {
+	if len(m.tabs) == 0 || m.inited[m.active] {
+		return nil
 	}
-	return tea.Batch(cmds...)
+	if m.inited == nil {
+		m.inited = map[int]bool{}
+	}
+	m.inited[m.active] = true
+	return m.tabs[m.active].Init()
 }
 
 // Active devolve o índice da aba ativa (para os testes).
@@ -132,8 +150,19 @@ func (m *Model) Active() int { return m.active }
 // Quitting diz se a TUI foi encerrada.
 func (m *Model) Quitting() bool { return m.quit }
 
-// Update trata tamanho, teclas globais e repassa o resto à aba ativa.
+// Update trata tamanho, teclas globais e repassa o resto à aba ativa; se a tecla levou a uma seção nova, carrega-a.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.update(msg)
+	if !m.started {
+		return next, cmd
+	}
+	if w := m.wake(); w != nil {
+		cmd = tea.Batch(cmd, w)
+	}
+	return next, cmd
+}
+
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
@@ -163,15 +192,29 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.finishRun()
 		// depois da execução as abas que mostram o estado do sistema o releem (Apps, Receitas)
 		var cmds []tea.Cmd
-		for _, t := range m.tabs {
-			if r, ok := t.(Reloader); ok {
+		for i, t := range m.tabs {
+			if r, ok := t.(Reloader); ok && (!m.started || m.inited[i]) { // seção nunca aberta carrega do zero na primeira visita
 				cmds = append(cmds, r.Reload())
 			}
 		}
 		return m, tea.Batch(cmds...)
+	case tickWantMsg:
+		if m.ticking {
+			return m, nil
+		}
+		m.ticking = true
+		return m, tick()
 	case tickMsg:
+		m.ticking = false // as abas que ainda animam pedem o próximo; o primeiro pedido rearma o relógio
 		if m.review != nil && m.review.loading {
 			m.review.frame++
+			cmds := []tea.Cmd{m.theme.Tick()}
+			for i, t := range m.tabs {
+				tab, cmd := t.Update(msg)
+				m.tabs[i] = tab
+				cmds = append(cmds, cmd)
+			}
+			return m, tea.Batch(cmds...)
 		}
 	case tea.KeyPressMsg:
 		if m.w < MinWidth || m.h < MinHeight {
@@ -281,15 +324,15 @@ func (m *Model) global(k string) (tea.Model, tea.Cmd, bool) {
 	}
 	switch k {
 	case "tab":
-		m.active = (m.active + 1) % len(m.tabs)
+		m.setActive((m.active + 1) % len(m.tabs))
 		return m, nil, true
 	case "shift+tab":
-		m.active = (m.active + len(m.tabs) - 1) % len(m.tabs)
+		m.setActive((m.active + len(m.tabs) - 1) % len(m.tabs))
 		return m, nil, true
 	}
 	if len(k) == 1 && k[0] >= '1' && k[0] <= '9' {
 		if i := int(k[0] - '1'); i < len(m.tabs) {
-			m.active = i
+			m.setActive(i)
 			return m, nil, true
 		}
 	}

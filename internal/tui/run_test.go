@@ -148,7 +148,8 @@ func TestRunAreasCancelsAndStopsEveryArea(t *testing.T) {
 	be := &blockingBackend{apps: []AppInfo{{ID: "a", Name: "A", Category: "dev"}}}
 	apps := NewAppsTab(context.Background(), be, Theme{Mono: true}, "linux")
 	ctx, cancel := context.WithCancel(context.Background())
-	in, _ := io.Pipe()
+	in, w := io.Pipe()
+	go func() { _, _ = w.Write([]byte("1")) }() // visita a seção Instalar: as seções só carregam na primeira visita
 	done := make(chan error, 1)
 	go func() {
 		done <- runAreas(ctx, Options{Mono: true}, []tea.ProgramOption{tea.WithInput(in), tea.WithOutput(io.Discard), tea.WithWindowSize(80, 24)},

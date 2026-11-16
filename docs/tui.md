@@ -157,7 +157,7 @@ canal e devolve o próximo lote.
 | `rebootPromptMsg{receita}` | raiz: pergunta na linha de estado |
 | `runDoneMsg{resumo}` | raiz: modo Resumo; apps recarrega os estados |
 | `updateAvailableMsg{atual, nova, notas}` | raiz; falha na consulta é silenciosa |
-| `spinner.TickMsg` | raiz; só há tick enquanto algo carrega ou roda |
+| `tickMsg` / `tickWantMsg` | raiz: UM relógio de quadros (100 ms) para todas as seções; as seções só PEDEM quadro (`Theme.Tick()` → `tickWantMsg`) e a raiz deduplica; só há quadro enquanto algo carrega ou roda |
 
 ## Tokens (Lip Gloss v2, `internal/tui/theme.go`)
 
@@ -186,6 +186,14 @@ Símbolos (sempre com a palavra do estado): `✓` instalado/feito (`✓ instalad
 reinício, `○` pendente/não instalado/na fila, `-` pulado/sem instalador, `| / - \` verificando/executando,
 `[x] [ ]` marca, `(•) ( )` escolha única, `▾` tem lista, `↑` versão nova, `↓` há mais. Conjunto ASCII
 atrás de `--ascii`: depois.
+
+**Partida leve (v0.4.0):** a abertura carrega só a seção ativa (o Início, sem I/O); cada outra seção carrega na PRIMEIRA visita
+(`Model.wake`, depois do `Init`) e nunca de novo, e depois de uma execução só as seções já abertas são relidas. Um quadro
+do spinner por 100 ms, não um por seção (antes cada seção agendava o seu e todo quadro ia a todas, então com K seções
+carregando os quadros multiplicavam por K a cada 100 ms e a seta travava). No Windows a leitura do registro de
+desinstalação roda UMA vez por 30 s para todos os apps (`internal/detect`, `Invalidate` depois de instalar). Testes:
+`internal/tui/partida_perf_test.go` (quadros, primeira tela < 100 ms, seta < 30 ms durante a carga, teto do View com
+300 apps) e `internal/detect/windows_cache_test.go`.
 
 Bordas: réguas `─`; só os modais têm caixa (`lipgloss.NormalBorder()`, até 46 de largura). Movimento: só o
 spinner (4 quadros, 100 ms). Troca de aba, modal e cursor são instantâneos; o log entra em lotes de 50 ms.
