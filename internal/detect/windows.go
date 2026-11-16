@@ -106,26 +106,42 @@ func incomplete(status map[rootKey]string, roots ...[]rootKey) bool {
 
 // readWindowsRegistry roda o script UMA vez e reaproveita a saída pelo prazo do cache (cacheTTL), tanto o sucesso
 // quanto a falha: a TUI pergunta o estado de cada app do catálogo e cada pergunta rodava um PowerShell que lê todo o
-// registro (centenas de ms de CPU por app, vários em paralelo na partida). Perguntas simultâneas esperam a mesma
-// leitura (o lock fica preso enquanto ela roda). Cancelamento não é guardado. Invalidate descarta (depois de
-// instalar ou remover algo).
+// registro (centenas de ms de CPU por app, vários em paralelo na partida). Só uma leitura roda por vez (winSem) e quem
+// espera por ela respeita o PRÓPRIO contexto. Cancelamento não é guardado. Invalidate (depois de instalar ou remover
+// algo) invalida por geração e nunca espera: a leitura que já estava rodando entrega o resultado a quem a pediu, mas
+// não vira cache.
 func (d *Detector) readWindowsRegistry(ctx context.Context) ([]byte, bool) {
-	d.winMu.Lock()
-	defer d.winMu.Unlock()
-	if d.winBuilt && d.now().Sub(d.winAt) < cacheTTL {
-		return d.winOut, d.winOK
+	select {
+	case d.winSem <- struct{}{}:
+		defer func() { <-d.winSem }()
+	case <-ctx.Done():
+		return nil, false
 	}
+	d.winSt.Lock()
+	if d.winBuilt && d.now().Sub(d.winAt) < cacheTTL {
+		out, ok := d.winOut, d.winOK
+		d.winSt.Unlock()
+		return out, ok
+	}
+	gen := d.winGen
+	d.winSt.Unlock()
+
 	res, err := d.rn.Run(ctx, d.readOnly(exec.Cmd{Name: windowsPowerShell,
 		Args: []string{"-NoProfile", "-NonInteractive", "-Command", uninstallScript}, Timeout: 30 * time.Second}))
 	if ctx.Err() != nil {
 		return nil, false // cancelado: não vira cache
 	}
 	ok := err == nil && res.ExitCode == 0 && len(res.Stdout) <= maxUninstallOutput
-	d.winOut, d.winOK, d.winAt, d.winBuilt = nil, ok, d.now(), true
+	var out []byte
 	if ok {
-		d.winOut = res.Stdout
+		out = res.Stdout
 	}
-	return d.winOut, ok
+	d.winSt.Lock()
+	if d.winGen == gen { // sem Invalidate no meio da leitura
+		d.winOut, d.winOK, d.winAt, d.winBuilt = out, ok, d.now(), true
+	}
+	d.winSt.Unlock()
+	return out, ok
 }
 
 func (d *Detector) findWindows(ctx context.Context, spec catalog.Detect) (Found, bool) {

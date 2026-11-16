@@ -191,7 +191,7 @@ atrás de `--ascii`: depois.
 (`Model.wake`, depois do `Init`) e nunca de novo, e depois de uma execução só as seções já abertas são relidas. Um quadro
 do spinner por 100 ms, não um por seção (antes cada seção agendava o seu e todo quadro ia a todas, então com K seções
 carregando os quadros multiplicavam por K a cada 100 ms e a seta travava). No Windows a leitura do registro de
-desinstalação roda UMA vez por 30 s para todos os apps (`internal/detect`, `Invalidate` depois de instalar). Testes:
+desinstalação roda UMA vez por 30 s para todos os apps (`internal/detect`: só uma leitura por vez, quem espera respeita o próprio contexto, e `Invalidate` depois de instalar invalida por GERAÇÃO sem esperar a leitura em andamento, que não vira cache). Testes:
 `internal/tui/partida_perf_test.go` (quadros, primeira tela < 100 ms, seta < 30 ms durante a carga, teto do View com
 300 apps) e `internal/detect/windows_cache_test.go`.
 
