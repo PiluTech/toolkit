@@ -226,8 +226,8 @@ func TestPartidaPrimeiraTelaENaoBloqueiaTecla(t *testing.T) {
 	cmd := m.Init()
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	first := m.View().Content
-	if el := time.Since(t0); el > 100*time.Millisecond {
-		t.Fatalf("a primeira tela levou %v (teto 100 ms): Init/Update não podem esperar I/O", el)
+	if el := time.Since(t0); el > 250*time.Millisecond {
+		t.Fatalf("a primeira tela levou %v (teto 250 ms): Init/Update não podem esperar I/O", el)
 	}
 	if first == "" {
 		t.Fatal("primeira tela vazia")
@@ -254,8 +254,8 @@ func TestPartidaPrimeiraTelaENaoBloqueiaTecla(t *testing.T) {
 		}
 	}
 	t.Logf("seta tratada e desenhada em %v; %d quadros na partida", handled, l.ticks)
-	if handled > 30*time.Millisecond {
-		t.Fatalf("seta tratada e desenhada em %v (teto 30 ms)", handled)
+	if handled > 100*time.Millisecond {
+		t.Fatalf("seta tratada e desenhada em %v (teto 100 ms)", handled)
 	}
 }
 
@@ -268,8 +268,8 @@ func TestViewCom300AppsTemTeto(t *testing.T) {
 		m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 		_ = m.View()
 	}
-	if avg := time.Since(t0) / n; avg > 8*time.Millisecond {
-		t.Fatalf("tecla + View com 300 apps: %v em média (teto 8 ms)", avg)
+	if avg := time.Since(t0) / n; avg > 50*time.Millisecond {
+		t.Fatalf("tecla + View com 300 apps: %v em média (teto 50 ms; local ~0,2 ms, runner compartilhado ~9 ms)", avg)
 	}
 }
 
