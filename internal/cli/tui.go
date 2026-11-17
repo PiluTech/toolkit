@@ -202,6 +202,7 @@ func tuiAreas(ctx context.Context, deps Deps, rd RecipeDeps, th tui.Theme, admin
 		}},
 		{Key: "seguranca", Title: msg.TUIAreaSeguranca, Short: msg.TUIAreaSegurancaShort, Tabs: []tui.Tab{
 			newPrivacyTab(ctx, deps, th),
+			newUsbTab(ctx, deps, th),
 		}},
 		{Key: "rede", Title: msg.TUIAreaRede, Short: msg.TUIAreaRedeShort, Tabs: []tui.Tab{
 			newRedeTab(ctx, deps, th),

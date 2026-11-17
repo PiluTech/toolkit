@@ -1,0 +1,16 @@
+ toolkit  [1 USB]                                    v0.1.0
+────────────────────────────────────────────────────────────
+ ! Aplicado, aguardando confirmação              [x] fechar
+ MODO EMPRESA: USB PERMITIDOS · [experimental] · só Windows
+ ! experimental: ainda não foi testado numa máquina real (a
+   verificar em VM). Nada se aplica por padrão e nada muda
+   antes de você confirmar. Isto reduz o risco, não o
+   elimina: um dispositivo que clona o VID/PID de um
+   permitido passa.
+ edição pro · administrador: sim
+ ! Aplicado, aguardando confirmação. REVERTE SOZINHO às
+   12:10. n mantém (cancela a reversão); d desfaz agora.
+─ USB conectados agora ─────────────────────────────────────
+─────────────────────────────────────────── ↓ mais 7 linhas
+ Aplicado: aguardando a sua confirmação.
+ n manter…  d desfazer…  p ver plano  ? ajuda  q sair

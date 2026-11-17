@@ -65,6 +65,7 @@ toolkit recipe list
 toolkit recipe run wsl-dev
 toolkit recipe status
 toolkit diagnostico              # saúde da máquina, só leitura: o que está ruim e o que fazer (docs/diagnostico.md)
+toolkit usb                     # modo empresa: USB permitidos (Windows, EXPERIMENTAL; veja docs/usb.md): só lê o estado; aplicar/confirmar/desfazer
 toolkit rede                    # análise da rede, só leitura: IPs, Wi-Fi, DNS, portas em escuta, firewall (docs/rede.md)
 toolkit otimizacao              # Windows: o que pesa na máquina (CPU, memória, disco, inicialização), só leitura (docs/otimizacao.md)
 toolkit rede ip --servico-ip URL # IP público, SÓ sob pedido, com serviço que você informa e confirmação (sem serviço padrão)

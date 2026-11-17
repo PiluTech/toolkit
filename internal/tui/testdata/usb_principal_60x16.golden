@@ -1,0 +1,16 @@
+ toolkit  [1 USB]                                    v0.1.0
+────────────────────────────────────────────────────────────
+ MODO EMPRESA: USB PERMITIDOS · [experimental] · só Windows
+ ! experimental: ainda não foi testado numa máquina real (a
+   verificar em VM). Nada se aplica por padrão e nada muda
+   antes de você confirmar. Isto reduz o risco, não o
+   elimina: um dispositivo que clona o VID/PID de um
+   permitido passa.
+ edição pro · administrador: sim
+ Estado: nunca aplicado nesta máquina. espaço marca ou
+   desmarca; p mostra o plano.
+─ USB conectados agora ─────────────────────────────────────
+   [x] Teclado USB FFFF:0001 classe USB · essencial
+─────────────────────────────────────────── ↓ mais 7 linhas
+ USB permitidos (experimental) — nada muda antes de confir…
+ ↑↓ dispositivo  espaço marcar  p ver plano  ? ajuda  q sair

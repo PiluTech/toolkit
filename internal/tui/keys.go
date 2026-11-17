@@ -94,6 +94,7 @@ var actionKeys = []KeyDef{
 	{Key: "f", Label: "seguir o fim", Help: "liga e desliga o seguir o fim do log."},
 	{Key: "o", Label: "IP público", Confirms: true, Help: "consulta o IP público num serviço que você configurou, depois da confirmação."},
 	{Key: "w", Label: "portal cativo", Confirms: true, Help: "sonda o portal cativo num endereço que você configurou, depois da confirmação."},
+	{Key: "n", Label: "manter", Confirms: true, Help: "mantém o que foi aplicado e cancela a reversão automática, depois da confirmação."},
 	{Key: "u", Label: "versão nova", Help: "abre as notas da versão nova (quando há)."},
 }
 

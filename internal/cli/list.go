@@ -62,6 +62,8 @@ type Deps struct {
 	Otim OtimDeps
 	// Priv são os pontos injetáveis do `toolkit privacidade` (zero = o Windows real e o backup na pasta de estado).
 	Priv PrivDeps
+	// Usb são os pontos injetáveis do `toolkit usb` (zero = o Windows real e o backup em C:\ProgramData\toolkit).
+	Usb UsbDeps
 	// AppsNat são os pontos injetáveis do `toolkit apps-nativos` (zero = o Windows real e o backup por SID na pasta de estado).
 	AppsNat AppsNatDeps
 	// GitHubToken devolve o token da API de releases do GitHub (nil = variável GITHUB_TOKEN). Só vai ao api.github.com.

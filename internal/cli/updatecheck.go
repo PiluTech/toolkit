@@ -71,6 +71,9 @@ func skipsUpdateCheck(cmd *cobra.Command) bool {
 	if cmd.Parent() != nil && cmd.Parent().Name() == "completion" {
 		return true
 	}
+	if cmd.Name() == "reverter" && cmd.Parent() != nil && cmd.Parent().Name() == "usb" {
+		return true // a tarefa de reversão (SYSTEM, sem terminal) nunca consulta versão nova
+	}
 	if f := cmd.Flags().Lookup("json"); f != nil && f.Value.String() == "true" {
 		return true // --json: nem uma linha a mais, nem em stderr
 	}

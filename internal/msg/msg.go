@@ -137,6 +137,7 @@ const (
 	TUIAreaHistoricoShort   = "Hist"
 	TUISecaoAnalise         = "Análise"
 	TUISecaoAnaliseShort    = "Anál"
+	TUISecaoUSB             = "USB permitidos (experimental)"
 	TUISecaoOtimizacao      = "Otimização"
 	TUISecaoOtimizacaoShort = "Otim"
 	TUISecaoExecucoes       = "Execuções"
@@ -147,24 +148,28 @@ const (
 
 // Início da TUI: um objetivo por linha (título, uma frase didática e, quando vale, uma etiqueta de estado ou requisito).
 const (
-	TUIInicioApps           = "Instalar programas"
-	TUIInicioAppsDesc       = "Escolha os programas do catálogo e instale todos de uma vez."
-	TUIInicioReceitas       = "Preparar a máquina com uma receita"
-	TUIInicioReceitasDesc   = "Uma receita faz vários passos em sequência e continua após reiniciar."
-	TUIInicioSaude          = "Ver a saúde da máquina"
-	TUIInicioSaudeDesc      = "Diagnóstico só de leitura: hardware, série, UUID, MAC e o que está ruim."
-	TUIInicioNativos        = "Remover apps nativos do Windows"
-	TUIInicioNativosDesc    = "Remove só os apps do Windows que você escolher, depois de ver o plano."
-	TUIInicioOtimizacao     = "Deixar o Windows mais leve"
-	TUIInicioOtimizacaoDesc = "Lê o que pesa na máquina (CPU, memória, disco, inicialização) e diz o que fazer; e reduz as animações do usuário (experimental), com backup e desfazer."
-	TUIInicioPrivacidade    = "Proteger a privacidade do Windows"
-	TUIInicioPrivDesc       = "Ajustes de privacidade, um por um, com confirmação e como desfazer."
-	TUIInicioRede           = "Analisar a rede"
-	TUIInicioRedeDesc       = "IPs, Wi-Fi, DNS e portas da máquina."
-	TUIInicioHistorico      = "Ver o que já rodou"
-	TUIInicioHistoricoDesc  = "O que já rodou e o que falhou, com o registro de cada execução."
-	TUIInicioTagSoWindows   = "! só Windows"
-	TUIInicioTagAdmin       = "! pede administrador para alguns itens"
+	TUIInicioApps            = "Instalar programas"
+	TUIInicioAppsDesc        = "Escolha os programas do catálogo e instale todos de uma vez."
+	TUIInicioReceitas        = "Preparar a máquina com uma receita"
+	TUIInicioReceitasDesc    = "Uma receita faz vários passos em sequência e continua após reiniciar."
+	TUIInicioSaude           = "Ver a saúde da máquina"
+	TUIInicioSaudeDesc       = "Diagnóstico só de leitura: hardware, série, UUID, MAC e o que está ruim."
+	TUIInicioNativos         = "Remover apps nativos do Windows"
+	TUIInicioNativosDesc     = "Remove só os apps do Windows que você escolher, depois de ver o plano."
+	TUIInicioOtimizacao      = "Deixar o Windows mais leve"
+	TUIInicioOtimizacaoDesc  = "Lê o que pesa na máquina (CPU, memória, disco, inicialização) e diz o que fazer; e reduz as animações do usuário (experimental), com backup e desfazer."
+	TUIInicioPrivacidade     = "Proteger a privacidade do Windows"
+	TUIInicioPrivDesc        = "Ajustes de privacidade, um por um, com confirmação e como desfazer."
+	TUIInicioRede            = "Analisar a rede"
+	TUIInicioRedeDesc        = "IPs, Wi-Fi, DNS e portas da máquina."
+	TUIInicioUSB             = "Permitir só os USB conhecidos (modo empresa) — experimental"
+	TUIInicioUSBDesc         = "Só Windows. Experimental, não testado numa máquina real: libera os USB conectados hoje e bloqueia os demais, com prova dos dispositivos essenciais, reversão automática e desfazer. Reduz o risco, não o elimina."
+	TUIInicioHistorico       = "Ver o que já rodou"
+	TUIInicioHistoricoDesc   = "O que já rodou e o que falhou, com o registro de cada execução."
+	TUIInicioTagSoWindows    = "! só Windows"
+	TUIInicioTagAdmin        = "! pede administrador para alguns itens"
+	TUIInicioTagUSB          = "! experimental · pede administrador"
+	TUIInicioTagExperimental = "! experimental"
 )
 
 // Textos do comando diagnostico.
@@ -249,6 +254,39 @@ const (
 	AnimUndoNothing        = "O backup existe, mas tudo já está como antes: nada a restaurar."
 	AnimBackupRemoved      = "O backup foi removido."
 	AnimUndoHeader         = "O que será restaurado (valor atual -> original):"
+)
+
+// Textos de `toolkit usb` (só Windows; EXPERIMENTAL; escreve em HKLM e cria uma tarefa do sistema).
+const (
+	UsbShort        = "Modo empresa: permitir só os USB conhecidos (EXPERIMENTAL, só Windows; mostra o estado)"
+	UsbLong         = "EXPERIMENTAL: ainda não foi executado numa máquina real (A VERIFICAR em VM; veja docs/usb.md). Sem subcomando só LÊ e mostra o estado (nada muda e não exige administrador). `usb aplicar` mostra o plano com a PROVA de que teclado, mouse, disco e controladores continuam permitidos, e só depois do [s/N] grava a política de restrição de instalação de dispositivos, com backup protegido e reversão automática (`usb confirmar` mantém; `usb desfazer` restaura). Limite honesto: um dispositivo que clona o VID/PID de um permitido passa. Isto reduz o risco, não o elimina."
+	UsbApplyShort   = "Mostra o plano e aplica a política de USB permitidos (EXPERIMENTAL; administrador; com reversão automática)"
+	UsbApplyLong    = "Lê o PnP, prova que os dispositivos essenciais continuam permitidos e mostra o plano. Sem prova, RECUSA e não muda nada. Depois da confirmação [s/N] (sem terminal exige --yes): backup protegido -> tarefa de reversão criada e conferida -> política. Se você não rodar `toolkit usb confirmar` dentro do prazo, a tarefa restaura o estado anterior sozinha. Exige administrador (o toolkit nunca eleva sozinho). EXPERIMENTAL."
+	UsbConfirmShort = "Confirma o modo empresa e cancela a reversão automática (exige administrador)"
+	UsbUndoShort    = "Desfaz o modo empresa de USB (restaura o snapshot; EXPERIMENTAL)"
+	UsbUndoLong     = "Restaura EXATAMENTE o snapshot validado (preservando políticas de outras origens) e remove a tarefa de reversão. Se o snapshot sumiu ou é inválido depois de uma aplicação, diz ESTADO ORIGINAL DESCONHECIDO, não escreve nada e mostra a recuperação manual. Exige administrador."
+	UsbRevertShort  = "Uso interno da tarefa de reversão (restaura o snapshot)"
+
+	FlagUsbPrazo = "minutos até a reversão automática, se você não confirmar (padrão 10, mínimo 2, máximo 60)"
+
+	UsbOnlyWindows   = "o comando usb só existe no Windows (este sistema é %s); nada foi alterado"
+	UsbConfirmApply  = "Aplicar o modo empresa de USB (EXPERIMENTAL)? Reverte sozinho se você não confirmar no prazo."
+	UsbConfirmUndo   = "Restaurar o estado anterior do modo empresa de USB?"
+	UsbWarnPrefix    = "! Aviso: "
+	UsbStale         = "o estado mudou desde o plano mostrado; nada foi alterado; veja o plano de novo"
+	UsbNeedsAdmin    = "o modo empresa de USB exige administrador: abra o terminal como administrador (botão direito, \"Executar como administrador\") e rode de novo; nada foi alterado (o toolkit nunca eleva sozinho)"
+	UsbApplied       = "Aplicado: %d entrada(s) na política. REVERTE SOZINHO às %s se você não rodar `toolkit usb confirmar` antes. Backup protegido em %s. Para desfazer: toolkit usb desfazer. Isto reduz o risco, não o elimina."
+	UsbAppliedPart   = "A aplicação falhou no meio e o registro foi restaurado na hora (nada ficou aplicado)."
+	UsbConfirmed     = "Confirmado: a reversão automática foi cancelada e o modo empresa continua aplicado. Para desfazer: toolkit usb desfazer."
+	UsbRestored      = "Restaurado: %d valor(es). A tarefa de reversão e o backup foram removidos."
+	UsbNothingToUndo = "Nada a desfazer: o toolkit nunca aplicou o modo empresa de USB nesta máquina."
+	UsbDryRunApply   = "--dry-run: nada foi alterado."
+
+	UsbStateClean   = "Estado: nunca aplicado nesta máquina."
+	UsbStateArmed   = "Estado: APLICADO, aguardando confirmação. Reverte sozinho às %s (próximo disparo da tarefa) se você não rodar `toolkit usb confirmar`."
+	UsbStateActive  = "Estado: aplicado e confirmado. `toolkit usb desfazer` restaura."
+	UsbStateStale   = "Estado: há um backup de uma aplicação que não chegou ao fim; `toolkit usb desfazer` limpa."
+	UsbStateUnknown = "Estado: ESTADO ORIGINAL DESCONHECIDO. Rode `toolkit usb desfazer --dry-run` para ver a recuperação manual."
 )
 
 // Textos do comando privacidade (só Windows).

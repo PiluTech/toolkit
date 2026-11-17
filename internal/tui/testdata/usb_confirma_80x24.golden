@@ -1,0 +1,24 @@
+ toolkit  [1 USB permitidos (experimental)]                              v0.1.0
+────────────────────────────────────────────────────────────────────────────────
+ PERMITIR SÓ OS USB CONHECIDOS? (EXPERIMENTAL)
+ Libera 1 dispositivo(s) USB conectado(s) agora; 1 desmarcado(s) ficam fora da
+   lista (a política bloquearia 1 ao reconectar). Reverte SOZINHO em 10
+   minuto(s) se você não manter (tecla n).
+ ! aviso: EXPERIMENTAL, não testado numa máquina real. RISCO: se algo der errado
+   o teclado pode travar; tenha um segundo teclado ou mouse de reserva já
+   permitido. Reduz o risco, não o elimina: um dispositivo que clona o VID/PID
+   de um permitido passa.
+ Backup: snapshot protegido em C:\ProgramData\toolkit (só SYSTEM e
+   Administradores), relido e conferido; a tarefa de reversão é criada e
+   conferida ANTES da primeira chave. Falha em qualquer passo = nenhuma
+   alteração.
+ Como desfazer: n mantém (cancela a reversão); sem ação, volta sozinho em 10
+   min; d desfaz. Recuperação manual (WinRE, outra conta de administrador)
+   abaixo.
+
+ Modo empresa: permitir só os USB conhecidos (Windows) [EXPERIMENTAL]
+ ↓ mais 16 linhas
+ >[ Cancelar ]<    [ Aplicar ]
+────────────────────────────────────────────────────────────────────────────────
+ Confirmação aberta: nada muda até você confirmar.
+ Tab botão  Enter ativa  s confirma  Esc cancela  ↑↓ rolar  ? ajuda  q sair

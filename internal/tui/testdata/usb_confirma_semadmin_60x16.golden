@@ -1,0 +1,16 @@
+ toolkit  [1 USB]                                    v0.1.0
+────────────────────────────────────────────────────────────
+ PERMITIR SÓ OS USB CONHECIDOS? (EXPERIMENTAL)
+ Libera 1 dispositivo(s) USB conectado(s) agora; 1
+   desmarcado(s) ficam fora da lista (a política bloquearia
+   1 ao reconectar). Reverte SOZINHO em 10 minuto(s) se você
+   não manter (tecla n).
+ ! aviso: Sem administrador: nada será alterado. Cancele,
+   abra o terminal como administrador (botão direito,
+   "Executar como administrador") e tente de novo. O toolkit
+   nunca eleva sozinho. EXPERIMENTAL, não testado numa
+ ↓ mais 34 linhas
+ >[ Cancelar ]<   ( Aplicar: sem administrador )
+────────────────────────────────────────────────────────────
+ Confirmação aberta: não dá para confirmar agora, só cance…
+ Enter cancela  Esc cancela  ↑↓ rolar  ? ajuda  q sair

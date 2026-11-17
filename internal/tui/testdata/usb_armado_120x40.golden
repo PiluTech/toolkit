@@ -1,0 +1,40 @@
+ toolkit  [1 USB permitidos (experimental)]                                                                      v0.1.0
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ MODO EMPRESA: USB PERMITIDOS · [experimental] · só Windows
+ ! experimental: ainda não foi testado numa máquina real (a verificar em VM). Nada se aplica por padrão e nada muda
+   antes de você confirmar. Isto reduz o risco, não o elimina: um dispositivo que clona o VID/PID de um permitido passa.
+ edição pro · administrador: sim
+ ! Aplicado, aguardando confirmação. REVERTE SOZINHO às 12:10. n mantém (cancela a reversão); d desfaz agora.
+─ USB conectados agora ─────────────────────────────────────────────────────────────────────────────────────────────────
+ >     Teclado USB  FFFF:0001  classe USB · essencial (teclado, mouse ou outro HID) -> conectado
+       Pendrive USB  FFFF:0003  classe USB -> conectado
+
+ A prova de que teclado, mouse, disco e controladores continuam permitidos aparece no plano (tecla p ou a). Sem prova, o
+   toolkit recusa e não muda nada.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ USB permitidos (experimental) — nada muda antes de confirmar
+ n manter…  d desfazer…  p ver plano  c ler de novo  ? ajuda  q sair
