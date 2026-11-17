@@ -56,13 +56,17 @@ type Detector struct {
 	macAt    time.Time        // quando a varredura foi feita (vale cacheTTL)
 	macBuilt bool
 
-	// leitura do registro do Windows (windows.go): uma por prazo, para todos os apps. winMu fica preso durante a
-	// leitura de propósito (perguntas simultâneas esperam a mesma).
-	winMu    sync.Mutex
+	// leitura do registro do Windows (windows.go): uma por prazo, para todos os apps. winSem deixa UMA leitura
+	// rodar por vez e quem espera respeita o próprio contexto; winSt guarda o cache (lock curto, nunca preso durante
+	// a leitura); winGen é a geração: Invalidate a incrementa sem esperar ninguém e a leitura que já estava rodando
+	// não vira cache.
+	winSem   chan struct{}
+	winSt    sync.Mutex
 	winOut   []byte
 	winOK    bool
 	winAt    time.Time
 	winBuilt bool
+	winGen   uint64
 }
 
 // cacheTTL é por quanto tempo a varredura de .app por bundle_id é reaproveitada: a TUI pergunta o estado de
@@ -82,13 +86,16 @@ func (d *Detector) Invalidate() {
 	d.mu.Lock()
 	d.macIndex, d.macBuilt = nil, false
 	d.mu.Unlock()
-	d.winMu.Lock()
+	d.winSt.Lock()
+	d.winGen++ // a leitura em andamento (se houver) termina sem virar cache; ninguém espera por ela aqui
 	d.winOut, d.winBuilt = nil, false
-	d.winMu.Unlock()
+	d.winSt.Unlock()
 }
 
 // New cria o detector sobre o Runner (só leituras).
-func New(r exec.Runner, o Options) *Detector { return &Detector{rn: r, opts: o} }
+func New(r exec.Runner, o Options) *Detector {
+	return &Detector{rn: r, opts: o, winSem: make(chan struct{}, 1)}
+}
 
 // Find procura o app segundo o bloco detect do catálogo para o SO do detector. ok é false quando não há bloco,
 // quando nada foi achado ou quando a leitura falhou; o erro só vem do cancelamento do contexto.

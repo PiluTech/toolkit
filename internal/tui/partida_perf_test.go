@@ -285,3 +285,90 @@ func TestRunClosedReleSoSecoesJaAbertas(t *testing.T) {
 		t.Fatalf("releituras: a=%d b=%d (esperado 1 e 0)", a.reloads, b.reloads)
 	}
 }
+
+// relogioTab anima (pede quadro a cada tickMsg) enquanto busy for verdadeiro.
+type relogioTab struct {
+	fakeTab
+	busy bool
+	th   Theme
+}
+
+func (a *relogioTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
+	switch msg.(type) {
+	case tickMsg:
+		if a.busy {
+			return a, a.th.Tick()
+		}
+	case tea.KeyPressMsg:
+		a.busy = true
+		return a, a.th.Tick()
+	}
+	return a, nil
+}
+
+// runNow executa o comando e devolve as mensagens que saem na hora (o pedido de quadro); o quadro de verdade
+// (tea.Tick, 100 ms) é só contado, não esperado: o relógio é conduzido à mão pelo teste.
+func runNow(cmd tea.Cmd) (wants int, others int) {
+	if cmd == nil {
+		return 0, 0
+	}
+	msg := cmd()
+	switch v := msg.(type) {
+	case nil:
+	case tea.BatchMsg:
+		for _, c := range v {
+			w, o := runNow(c)
+			wants, others = wants+w, others+o
+		}
+	case tickWantMsg:
+		wants++
+	default:
+		others++
+	}
+	return wants, others
+}
+
+// O relógio de quadros PARA quando nada anima e RELIGA quando algo volta a animar, sem acumular relógios.
+func TestRelogioDeQuadrosParaEReliga(t *testing.T) {
+	th := Theme{Mono: true, Dark: true}
+	a := &relogioTab{fakeTab: fakeTab{title: "A", short: "A"}, th: th, busy: true}
+	m := New(Options{}, a)
+	m.Init()
+	// três seções pedindo quadro ao mesmo tempo: um só relógio é armado
+	_, cmd := m.Update(tickWantMsg{})
+	if cmd == nil || !m.ticking {
+		t.Fatal("o primeiro pedido arma o relógio")
+	}
+	for i := 0; i < 5; i++ {
+		if _, c := m.Update(tickWantMsg{}); c != nil {
+			t.Fatal("pedidos com o relógio armado são ignorados (um relógio só)")
+		}
+	}
+	// o quadro chegou: a aba ainda anima, pede o próximo, e a raiz rearma UM relógio
+	_, cmd = m.Update(tickMsg{})
+	if m.ticking {
+		t.Fatal("ao receber o quadro o relógio se desarma até alguém pedir o próximo")
+	}
+	wants, _ := runNow(cmd)
+	if wants != 1 {
+		t.Fatalf("a aba animando pede 1 quadro, pediu %d", wants)
+	}
+	if _, c := m.Update(tickWantMsg{}); c == nil || !m.ticking {
+		t.Fatal("o pedido rearma o relógio")
+	}
+	// a aba terminou: o quadro seguinte não pede nada e o relógio PARA
+	a.busy = false
+	_, cmd = m.Update(tickMsg{})
+	if wants, _ = runNow(cmd); wants != 0 || m.ticking {
+		t.Fatalf("sem nada animando o relógio para: pedidos=%d ticking=%v", wants, m.ticking)
+	}
+	// algo volta a animar (uma tecla na aba): religa
+	_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	wants, _ = runNow(cmd)
+	if wants != 1 {
+		t.Fatalf("a aba que volta a animar pede quadro: %d", wants)
+	}
+	if _, c := m.Update(tickWantMsg{}); c == nil || !m.ticking {
+		t.Fatal("o relógio religa")
+	}
+}
