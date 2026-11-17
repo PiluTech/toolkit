@@ -102,7 +102,7 @@ plano diz que ele ficou fora da lista mas que a política **não o bloquearia**.
 4. **backup**: `usb-backup.json` (atômico) com SHA-256 do conteúdo, de cada alvo da lista fechada (inclusive "não existia"), e `usb-restrictions-backup.reg`
    (com hash) quando a chave já existia; relido e comparado com o gravado;
 5. cópia do binário na pasta protegida (hash da cópia = hash do original);
-6. **tarefa de reversão** criada (SYSTEM, execução única, `StartWhenAvailable`, **até 3 novas tentativas, 1 por minuto**, se o programa sair com erro; comando fixo) e **conferida**: existe, habilitada, programa e argumento **exatos**,
+6. **tarefa de reversão** criada (SYSTEM, execução única, `StartWhenAvailable`, **até 3 novas tentativas, 1 por minuto**, se o programa sair com erro, E o gatilho repete a cada minuto por 30 min (não depende de o Agendador tratar a saída com erro como falha; o desfazer apaga a tarefa ao concluir e a repetição para sozinha; o `reverter` é idempotente); comando fixo) e **conferida**: existe, habilitada, programa e argumento **exatos**,
    SYSTEM, próximo disparo no futuro e dentro do prazo (com folga de 2 min);
 7. **só então** as chaves, na ordem segura: `AllowDenyLayered` primeiro (sem ela a negação venceria a liberação), a lista de IDs, e a negação **por último**;
 8. releitura: cada entrada tem de estar como gravada.
@@ -126,10 +126,10 @@ O Apply seguinte apaga o rastro velho. Se a reversão falhar, o backup e a taref
 "confirmado" se a política ainda está aplicada.
 
 **Preparação.** A árvore do registro é lida de novo logo antes da primeira escrita; se mudou na janela (GPO/MDM), o aplicar aborta sem escrever. Se o toolkit
-foi iniciado de uma pasta que usuário comum grava (fora de Program Files e Windows), o plano avisa: a tarefa executa uma CÓPIA dele.
+foi iniciado de uma pasta que usuário comum grava (fora de Program Files e Windows\System32; Windows\Temp e Windows\Tasks contam como graváveis), o plano avisa: a tarefa executa uma CÓPIA dele.
 
 **Pasta protegida já existente.** `C:\ProgramData\toolkit` pode ter sido criada por um usuário comum antes. Além do dono e da ACL da pasta, o toolkit refaz a ACL
-e o dono de cada FILHO (`icacls /reset` e `/setowner`, nunca na pasta raiz), recusa link (ponto de reparse) dentro dela e apaga um `.reg` velho antes do export.
+e o dono de cada FILHO (`icacls /reset` e `/setowner`, por caminho ABSOLUTO `C:\Windows\System32\icacls.exe`, nunca pelo PATH e nunca na pasta raiz) e RELÊ a ACL de cada filho por SDDL (dono Administradores; só SYSTEM e Administradores com FullControl herdado): qualquer outra coisa recusa o aplicar antes de escrever (a conferência cobre o primeiro nível da pasta), recusa link (ponto de reparse) dentro dela e apaga um `.reg` velho antes do export.
 Antes de importar o `.reg` no roteiro manual, confira o SHA-256 dele com o que está no `usb-backup.json` (`Get-FileHash`).
 
 ## Desfazer garantido
