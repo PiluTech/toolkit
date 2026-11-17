@@ -48,6 +48,8 @@ type UsbInfo struct {
 	IsAdmin   bool
 	State     string
 	Reason    string // motivo do estado desconhecido
+	// RevertNote é o rastro da última reversão automática ("a reversão automática rodou e falhou: ..."); vazio = nenhum.
+	RevertNote string
 	Deadline  string // "HH:MM" da reversão automática (estado armed)
 	Devices   []UsbDevice
 }
@@ -196,6 +198,7 @@ func (t *UsbTab) setNotice(s string, warn bool) { t.notice, t.warn = textsafe.Li
 
 func cleanUsbInfo(i UsbInfo) UsbInfo {
 	i.OS, i.Edition, i.Reason, i.Deadline = textsafe.Line(i.OS), textsafe.Line(i.Edition), textsafe.Line(i.Reason), textsafe.Line(i.Deadline)
+	i.RevertNote = textsafe.Line(i.RevertNote)
 	ds := make([]UsbDevice, len(i.Devices))
 	for k, d := range i.Devices {
 		ds[k] = UsbDevice{Key: d.Key, Name: textsafe.Line(d.Name), VIDPID: textsafe.Line(d.VIDPID), Class: textsafe.Line(d.Class), Essential: d.Essential}
@@ -732,7 +735,16 @@ func dash(s string) string {
 	return s
 }
 
+// stateLines é o estado e, se a reversão automática já rodou, o que ela fez (sucesso ou falha).
 func (t *UsbTab) stateLines(w int) []string {
+	out := t.stateBase(w)
+	if t.info.RevertNote != "" {
+		out = append(out, wrapLine(" "+t.theme.Warn().Render(SymWarn+" ")+t.info.RevertNote+".", w)...)
+	}
+	return out
+}
+
+func (t *UsbTab) stateBase(w int) []string {
 	switch t.info.State {
 	case UsbArmed:
 		when := ""

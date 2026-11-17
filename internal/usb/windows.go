@@ -410,7 +410,7 @@ func (w *windowsSystem) ExportReg(ctx context.Context, file string) error {
 // Scripts FIXOS (ASCII, sem aspas duplas). A pasta é sempre a constante ProtectedDir.
 const protectDirScript = `$ErrorActionPreference='Stop'
 $d='` + ProtectedDir + `'
-if(Test-Path -LiteralPath $d){ $i=Get-Item -LiteralPath $d -Force; if(($i.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){ throw 'reparse point' } } else { New-Item -ItemType Directory -Path $d | Out-Null }
+if(Test-Path -LiteralPath $d){ $i=Get-Item -LiteralPath $d -Force; if(($i.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){ throw 'reparse point' }; foreach($c in @(Get-ChildItem -LiteralPath $d -Force)){ if(($c.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){ throw 'reparse point dentro da pasta' } } } else { New-Item -ItemType Directory -Path $d | Out-Null }
 $sys=New-Object System.Security.Principal.SecurityIdentifier('S-1-5-18')
 $adm=New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')
 $acl=New-Object System.Security.AccessControl.DirectorySecurity
@@ -418,6 +418,8 @@ $acl.SetOwner($adm)
 $acl.SetAccessRuleProtection($true,$false)
 foreach($s in @($sys,$adm)){ $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($s,'FullControl','ContainerInherit,ObjectInherit','None','Allow'))) }
 Set-Acl -LiteralPath $d -AclObject $acl
+foreach($c in @(Get-ChildItem -LiteralPath $d -Force)){ & icacls.exe $c.FullName /reset /t /c /l | Out-Null; if($LASTEXITCODE -ne 0){ throw 'icacls reset' }; & icacls.exe $c.FullName /setowner '*S-1-5-32-544' /t /c /l | Out-Null; if($LASTEXITCODE -ne 0){ throw 'icacls setowner' } }
+[IO.File]::Delete((Join-Path $d '` + RegFile + `'))
 `
 
 const readDirScript = `$ErrorActionPreference='Stop'
@@ -558,7 +560,7 @@ func armTaskScript(minutes int) string {
 $a=New-ScheduledTaskAction -Execute '` + taskExe() + `' -Argument '` + RevertArgs + `'
 $t=New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(` + strconv.Itoa(minutes) + `))
 $p=New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
-$s=New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
+$s=New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 Register-ScheduledTask -TaskName '` + TaskName + `' -TaskPath '` + TaskPath + `' -Action $a -Trigger $t -Principal $p -Settings $s | Out-Null
 `
 }

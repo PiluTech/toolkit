@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"time"
 
@@ -140,6 +141,9 @@ func runUsbState(ctx context.Context, out io.Writer, deps Deps) error {
 	if err != nil {
 		return usbErr(err)
 	}
+	if st.RevertNote != "" {
+		_, _ = fmt.Fprintln(out, textsafe.Line(st.RevertNote)+".")
+	}
 	switch st.Kind {
 	case usb.StatusClean:
 		_, _ = fmt.Fprintln(out, msg.UsbStateClean)
@@ -171,7 +175,7 @@ func runUsbApply(ctx context.Context, out io.Writer, deps Deps, f usbFlags) erro
 		return usbErr(err)
 	}
 	plan.Prazo = f.prazo
-	_, _ = fmt.Fprint(out, textsafe.Multiline(plan.Format()))
+	_, _ = fmt.Fprint(out, textsafe.Multiline(plan.Format()+usbExeWarningText()))
 	if !plan.OK() {
 		return fmt.Errorf("recusado, nada foi alterado: %w", usbErr(plan.Err()))
 	}
@@ -274,7 +278,7 @@ func runUsbRevert(ctx context.Context, out io.Writer, deps Deps) error {
 	if err != nil {
 		return err
 	}
-	res, err := usb.Undo(ctx, e.sys, e.store)
+	res, err := usb.Revert(ctx, e.sys, e.store) // SYSTEM, sem IsAdmin; grava o rastro na pasta protegida
 	if err != nil {
 		return usbErr(err)
 	}
@@ -284,4 +288,17 @@ func runUsbRevert(ctx context.Context, out io.Writer, deps Deps) error {
 	}
 	_, _ = fmt.Fprintf(out, msg.UsbRestored+"\n", res.Restored)
 	return nil
+}
+
+// usbExeWarningText é o aviso (com quebra de linha na frente) de que o toolkit roda de uma pasta que usuário comum grava;
+// vazio quando a pasta é de administrador. Só texto de exibição: nunca entra no plano comparado na confirmação.
+func usbExeWarningText() string {
+	p, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	if w := usb.ExeFolderWarning(p); w != "" {
+		return "\n" + msg.UsbWarnPrefix + w + "\n"
+	}
+	return ""
 }

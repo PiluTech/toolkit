@@ -97,6 +97,7 @@ func (b *usbBackend) Load(ctx context.Context) (tui.UsbInfo, error) {
 	if err != nil {
 		return tui.UsbInfo{}, cleanErr(err)
 	}
+	info.RevertNote = st.RevertNote
 	switch st.Kind {
 	case usb.StatusArmed:
 		info.State, info.Deadline = tui.UsbArmed, fmtDeadline(st.Task.Next)
@@ -121,7 +122,7 @@ func (b *usbBackend) Plan(ctx context.Context, excluded []string) (tui.UsbPlan, 
 	}
 	text := plan.Format()
 	id := b.prepare(&usbPrepared{kind: "apply", text: text, excluded: excluded, prazo: plan.Prazo})
-	out := tui.UsbPlan{ID: id, Text: textsafe.Multiline(text), OK: plan.OK(), Prazo: plan.Prazo, IsAdmin: plan.IsAdmin, Refusal: textsafe.Line(strings.Join(plan.Refusals, "; "))}
+	out := tui.UsbPlan{ID: id, Text: textsafe.Multiline(text + usbExeWarningText()), OK: plan.OK(), Prazo: plan.Prazo, IsAdmin: plan.IsAdmin, Refusal: textsafe.Line(strings.Join(plan.Refusals, "; "))}
 	for _, u := range plan.Units {
 		switch {
 		case u.Selected:

@@ -797,3 +797,12 @@ func TestUsbTabSemEstadoUtilizavelSENuncaAplica(t *testing.T) {
 		t.Fatal("a confirmação invisível tem de ser fechada")
 	}
 }
+
+func TestUsbTabMostraORastroDaReversaoAutomatica(t *testing.T) {
+	be := newFakeUsb(UsbActive, true)
+	be.info.RevertNote = "a reversão automática rodou e falhou: um valor gravado pelo toolkit foi alterado por outra origem"
+	out := uview(usbTab(t, be), 100, 28)
+	if !strings.Contains(strings.Join(strings.Fields(out), " "), "a reversão automática rodou e falhou") {
+		t.Fatalf("a TUI não mostra o rastro da reversão:\n%s", out)
+	}
+}

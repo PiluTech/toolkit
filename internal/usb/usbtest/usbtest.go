@@ -168,7 +168,14 @@ type MemStore struct {
 	sn      *usb.Snapshot
 	corrupt bool
 	Fail    bool
+	note    string
 }
+
+// SaveRevertResult e LoadRevertResult implementam usb.RevertLogger (o rastro da reversão automática, em memória).
+func (m *MemStore) SaveRevertResult(note string) error { m.note = note; return nil }
+
+// LoadRevertResult implementa usb.RevertLogger.
+func (m *MemStore) LoadRevertResult() string { return m.note }
 
 // Folder implementa usb.Store.
 func (m *MemStore) Folder() string { return `C:\ProgramData\toolkit` }

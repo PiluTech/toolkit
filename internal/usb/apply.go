@@ -29,6 +29,18 @@ type ApplyResult struct {
 	BackupPath string
 }
 
+// ExeFolderWarning avisa quando o toolkit em execução está numa pasta que usuário comum pode gravar: é a cópia DELE que
+// a tarefa de reversão (SYSTEM) executa daqui a minutos. Vazio = pasta de administrador (Program Files, Windows).
+func ExeFolderWarning(exePath string) string {
+	p := strings.ToLower(strings.ReplaceAll(exePath, "/", `\`))
+	for _, ok := range []string{`c:\program files\`, `c:\program files (x86)\`, `c:\windows\`} {
+		if strings.HasPrefix(p, ok) {
+			return ""
+		}
+	}
+	return "o toolkit foi iniciado de " + textsafe.Line(exePath) + ", uma pasta que um usuário comum pode alterar: a tarefa de reversão (SYSTEM) executa uma CÓPIA dele. Rode de Program Files ou de uma pasta só de administradores."
+}
+
 func taskExe() string { return ProtectedDir + `\` + RevertBinary }
 
 var systemUsers = []string{"SYSTEM", "S-1-5-18", `NT AUTHORITY\SYSTEM`}
@@ -119,6 +131,10 @@ func Apply(ctx context.Context, sys System, st Store, o ApplyOptions) (*ApplyRes
 		sn.Targets = append(sn.Targets, Target{Path: e.Path, Existed: false, Want: e.Value})
 	}
 
+	if rl, ok := st.(RevertLogger); ok {
+		_ = rl.SaveRevertResult("") // rastro de uma reversão anterior não vale para esta aplicação
+	}
+
 	// (b) backup protegido, relido e conferido
 	abort := func(cause error) (*ApplyResult, error) {
 		_ = sys.DeleteTask(ctx)
@@ -169,6 +185,14 @@ func Apply(ctx context.Context, sys System, st Store, o ApplyOptions) (*ApplyRes
 		return abort(fmt.Errorf("tarefa de reversão não conferida (nada foi alterado): %w", err))
 	}
 	res.Deadline = ti.Next
+
+	// (d) a árvore é relida logo antes da primeira escrita: a preparação leva segundos (vários powershell.exe) e uma
+	// GPO/MDM pode ter gravado na janela; o snapshot diz que o valor não existia e o desfazer o apagaria.
+	if tr2, rerr := sys.ReadTree(ctx); rerr != nil {
+		return abort(fmt.Errorf("não deu para reler a chave antes de gravar (nada foi alterado): %w", rerr))
+	} else if !reflect.DeepEqual(tr2, tr) {
+		return abort(fmt.Errorf("%w: a chave Restrictions mudou durante a preparação (nada foi alterado)", ErrExistingPolicy))
+	}
 
 	// (e) as chaves, na ordem segura
 	for _, e := range entries {
@@ -230,6 +254,9 @@ type Status struct {
 	Task     TaskInfo
 	Tree     RegTree
 	Reason   string
+	// RevertNote é o resultado da última execução da reversão automática ("a reversão automática rodou e falhou: ...");
+	// vazio = ela nunca rodou (ou o Apply seguinte apagou o rastro).
+	RevertNote string
 }
 
 // ReadStatus lê o registro, a tarefa e o backup. Falha de leitura é ERRO (nunca vira "limpo").
@@ -243,6 +270,9 @@ func ReadStatus(ctx context.Context, sys System, st Store) (*Status, error) {
 		return nil, fmt.Errorf("não deu para ler a tarefa de reversão: %w", err)
 	}
 	s := &Status{Task: ti, Tree: tr}
+	if rl, ok := st.(RevertLogger); ok {
+		s.RevertNote = rl.LoadRevertResult()
+	}
 	sn, lerr := st.Load()
 	switch {
 	case lerr != nil && errors.Is(lerr, ErrBackupInvalid):
@@ -396,6 +426,31 @@ type UndoResult struct {
 // chave Restrictions às cegas; só remove o que o toolkit criou. Estado original desconhecido ou conflito = erro, sem escrever.
 // Exige administrador (conferido antes de qualquer escrita).
 func Undo(ctx context.Context, sys System, st Store) (*UndoResult, error) {
+	return undo(ctx, sys, st, true)
+}
+
+// Revert é o desfazer que a TAREFA de reversão executa (como SYSTEM, sem terminal): o mesmo caminho do Undo, mas SEM a
+// pergunta IsAdmin (outro powershell.exe que pode falhar no contexto SYSTEM e devolveria ErrNeedsAdmin sem escrever
+// nada; a própria tarefa já prova o SYSTEM, e sem direito o reg.exe falha sozinho). O resultado (sucesso ou erro) é
+// gravado na pasta protegida: `toolkit usb` e a TUI mostram "a reversão rodou e falhou: ...".
+func Revert(ctx context.Context, sys System, st Store) (*UndoResult, error) {
+	res, err := undo(ctx, sys, st, false)
+	note := ""
+	switch {
+	case err != nil:
+		note = "a reversão automática rodou e falhou: " + textsafe.Line(err.Error())
+	case res.Nothing:
+		note = "a reversão automática rodou: nada a restaurar"
+	default:
+		note = fmt.Sprintf("a reversão automática rodou e restaurou %d valor(es)", res.Restored)
+	}
+	if rl, ok := st.(RevertLogger); ok {
+		_ = rl.SaveRevertResult(note)
+	}
+	return res, err
+}
+
+func undo(ctx context.Context, sys System, st Store, needAdmin bool) (*UndoResult, error) {
 	p, err := BuildUndo(ctx, sys, st)
 	if err != nil {
 		return nil, err
@@ -408,7 +463,7 @@ func Undo(ctx context.Context, sys System, st Store) (*UndoResult, error) {
 	case UndoConflict:
 		return nil, fmt.Errorf("%w: %s", ErrConflict, textsafe.Line(p.Reason))
 	}
-	if !sys.IsAdmin(ctx) {
+	if needAdmin && !sys.IsAdmin(ctx) {
 		return nil, ErrNeedsAdmin
 	}
 	sn := p.Status.Snapshot
@@ -524,6 +579,15 @@ func Confirm(ctx context.Context, sys System, st Store) error {
 	}
 	if ti, err := sys.ReadTask(ctx); err != nil || ti.Exists {
 		return fmt.Errorf("a tarefa de reversão continua existindo depois de removida")
+	}
+	// remover a tarefa não para uma execução que já começou: confere que a política AINDA está aplicada antes de dizer
+	// "confirmado"
+	after, err := ReadStatus(ctx, sys, st)
+	if err != nil {
+		return fmt.Errorf("a tarefa foi removida, mas não deu para conferir a política: %w", err)
+	}
+	if after.Kind != StatusActive {
+		return fmt.Errorf("a tarefa foi removida, mas a política já não está aplicada (a reversão automática estava rodando): veja `toolkit usb`")
 	}
 	return nil
 }

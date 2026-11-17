@@ -335,3 +335,20 @@ func TestUsbRevertEHidden(t *testing.T) {
 		}
 	}
 }
+
+// A reversão automática que falha deixa rastro e `toolkit usb` o mostra (antes: um erro mudo num processo SYSTEM).
+func TestUsbReverterFalhaDeixaRastroNoStatus(t *testing.T) {
+	sys, st := usbtest.NewSys(), &usbtest.MemStore{}
+	d := usbDeps(t, sys, st, "windows", false, "")
+	if _, err := runUsb(t, d, "aplicar", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	sys.Tree.Entries["AllowDenyLayered"] = usb.DWORD(0) // outra origem mudou um valor gravado: o desfazer recusa
+	if _, err := runUsb(t, d, "reverter"); err == nil {
+		t.Fatal("o reverter deveria falhar com o conflito")
+	}
+	out, err := runUsb(t, d)
+	if err != nil || !strings.Contains(out, "a reversão automática rodou e falhou") {
+		t.Fatalf("o status não mostra a falha da reversão: %v\n%s", err, out)
+	}
+}

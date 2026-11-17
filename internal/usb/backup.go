@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/PiluTech/toolkit/internal/privacidade"
+	"github.com/PiluTech/toolkit/internal/textsafe"
 )
 
 // maxBackupBytes limita o arquivo de backup lido (é dado não confiável).
@@ -145,6 +146,43 @@ type Store interface {
 	Remove() error
 	RegPath() string
 	FileSHA256(path string) (string, error)
+}
+
+// RevertLogger é o Store que guarda o rastro da reversão automática (opcional: FileStore o implementa).
+type RevertLogger interface {
+	// SaveRevertResult grava o texto do resultado (vazio apaga o rastro).
+	SaveRevertResult(note string) error
+	// LoadRevertResult devolve o texto gravado, já limpo (vazio = nenhum).
+	LoadRevertResult() string
+}
+
+// RevertResultFile é o arquivo do rastro, dentro da pasta protegida.
+const RevertResultFile = "usb-revert-result.txt"
+
+// SaveRevertResult grava o rastro (até 600 bytes, 0600); vazio apaga.
+func (s FileStore) SaveRevertResult(note string) error {
+	path := filepath.Join(s.Dir, RevertResultFile)
+	if note == "" {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	if len(note) > 600 {
+		note = note[:600]
+	}
+	return os.WriteFile(path, []byte(note), 0o600)
+}
+
+// LoadRevertResult lê o rastro (limite de tamanho; texto de fora passa por textsafe).
+func (s FileStore) LoadRevertResult() string {
+	f, err := os.Open(filepath.Join(s.Dir, RevertResultFile))
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+	b, _ := io.ReadAll(io.LimitReader(f, 700))
+	return textsafe.Line(string(b))
 }
 
 // FileStore é o Store em arquivo (usb-backup.json, escrita atômica, 0600).

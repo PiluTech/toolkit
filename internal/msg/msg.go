@@ -272,6 +272,7 @@ const (
 	UsbOnlyWindows   = "o comando usb só existe no Windows (este sistema é %s); nada foi alterado"
 	UsbConfirmApply  = "Aplicar o modo empresa de USB (EXPERIMENTAL)? Reverte sozinho se você não confirmar no prazo."
 	UsbConfirmUndo   = "Restaurar o estado anterior do modo empresa de USB?"
+	UsbWarnPrefix    = "! Aviso: "
 	UsbStale         = "o estado mudou desde o plano mostrado; nada foi alterado; veja o plano de novo"
 	UsbNeedsAdmin    = "o modo empresa de USB exige administrador: abra o terminal como administrador (botão direito, \"Executar como administrador\") e rode de novo; nada foi alterado (o toolkit nunca eleva sozinho)"
 	UsbApplied       = "Aplicado: %d entrada(s) na política. REVERTE SOZINHO às %s se você não rodar `toolkit usb confirmar` antes. Backup protegido em %s. Para desfazer: toolkit usb desfazer. Isto reduz o risco, não o elimina."

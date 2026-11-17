@@ -102,7 +102,7 @@ plano diz que ele ficou fora da lista mas que a política **não o bloquearia**.
 4. **backup**: `usb-backup.json` (atômico) com SHA-256 do conteúdo, de cada alvo da lista fechada (inclusive "não existia"), e `usb-restrictions-backup.reg`
    (com hash) quando a chave já existia; relido e comparado com o gravado;
 5. cópia do binário na pasta protegida (hash da cópia = hash do original);
-6. **tarefa de reversão** criada (SYSTEM, execução única, `StartWhenAvailable`, comando fixo) e **conferida**: existe, habilitada, programa e argumento **exatos**,
+6. **tarefa de reversão** criada (SYSTEM, execução única, `StartWhenAvailable`, **até 3 novas tentativas, 1 por minuto**, se o programa sair com erro; comando fixo) e **conferida**: existe, habilitada, programa e argumento **exatos**,
    SYSTEM, próximo disparo no futuro e dentro do prazo (com folga de 2 min);
 7. **só então** as chaves, na ordem segura: `AllowDenyLayered` primeiro (sem ela a negação venceria a liberação), a lista de IDs, e a negação **por último**;
 8. releitura: cada entrada tem de estar como gravada.
@@ -116,6 +116,21 @@ Sem `toolkit usb confirmar` dentro do prazo, a tarefa executa `toolkit usb rever
 (ou a tecla `n` na TUI, com confirmação própria e foco em Cancelar) confere que a tarefa é **exatamente** a do toolkit, remove só ela e mantém a política e o
 backup. Viabilidade (tarefa rodando sem sessão e com o teclado bloqueado, depois de reiniciar, ACL, comportamento se a máquina desligar antes do prazo):
 **A VERIFICAR em VM**.
+
+**Reversão que falha deixa rastro.** O `reverter` (SYSTEM) NÃO pergunta administrador por outro PowerShell (a própria tarefa prova o SYSTEM; sem direito o
+`reg.exe` falha sozinho e nada é escrito às cegas) e grava o resultado, de sucesso ou de erro, em `usb-revert-result.txt` na pasta protegida. `toolkit usb` e a
+seção da TUI mostram "a reversão automática rodou e falhou: ..." (um valor mudado por GPO/MDM entre o aplicar e a reversão vira conflito e a reversão recusa).
+O Apply seguinte apaga o rastro velho. Se a reversão falhar, o backup e a tarefa NÃO são apagados.
+
+**Confirmar com a reversão já rodando.** Remover a tarefa não para uma execução em andamento: depois de remover, o `confirmar` relê o estado e só diz
+"confirmado" se a política ainda está aplicada.
+
+**Preparação.** A árvore do registro é lida de novo logo antes da primeira escrita; se mudou na janela (GPO/MDM), o aplicar aborta sem escrever. Se o toolkit
+foi iniciado de uma pasta que usuário comum grava (fora de Program Files e Windows), o plano avisa: a tarefa executa uma CÓPIA dele.
+
+**Pasta protegida já existente.** `C:\ProgramData\toolkit` pode ter sido criada por um usuário comum antes. Além do dono e da ACL da pasta, o toolkit refaz a ACL
+e o dono de cada FILHO (`icacls /reset` e `/setowner`, nunca na pasta raiz), recusa link (ponto de reparse) dentro dela e apaga um `.reg` velho antes do export.
+Antes de importar o `.reg` no roteiro manual, confira o SHA-256 dele com o que está no `usb-backup.json` (`Get-FileHash`).
 
 ## Desfazer garantido
 
@@ -175,7 +190,7 @@ origem; aplica sem a prova, sem o backup protegido ou sem a tarefa conferida; re
 6. ACL da pasta protegida: `Set-Acl` com dono Administradores, o SDDL exato que o Windows devolve (`O:BAG:SYD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)` é o esperado),
    criação prévia da pasta por usuário comum.
 7. Saída de `reg query /s` e `reg export` (formato, tipos, nomes de valor com espaços, `(Default)`), por idioma.
-8. Detecção de administrador quando o processo roda como SYSTEM (a tarefa de reversão).
+8. O `usb reverter` como SYSTEM sem sessão (sem a pergunta de administrador), as novas tentativas do Agendador e o `icacls /reset` dos filhos da pasta protegida.
 9. WinRE e Modo Seguro: comandos do roteiro de recuperação.
 10. Estabilidade do ID de instância (decisão 6: hoje só ID de hardware).
 
