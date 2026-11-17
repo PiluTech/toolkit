@@ -30,10 +30,10 @@ type ApplyResult struct {
 }
 
 // ExeFolderWarning avisa quando o toolkit em execução está numa pasta que usuário comum pode gravar: é a cópia DELE que
-// a tarefa de reversão (SYSTEM) executa daqui a minutos. Vazio = pasta de administrador (Program Files, Windows).
+// a tarefa de reversão (SYSTEM) executa daqui a minutos. Vazio = pasta de administrador (Program Files, Windows\System32; Windows\Temp e Windows\Tasks são graváveis por usuário comum).
 func ExeFolderWarning(exePath string) string {
 	p := strings.ToLower(strings.ReplaceAll(exePath, "/", `\`))
-	for _, ok := range []string{`c:\program files\`, `c:\program files (x86)\`, `c:\windows\`} {
+	for _, ok := range []string{`c:\program files\`, `c:\program files (x86)\`, `c:\windows\system32\`} {
 		if strings.HasPrefix(p, ok) {
 			return ""
 		}

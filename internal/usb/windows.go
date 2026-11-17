@@ -408,6 +408,9 @@ func (w *windowsSystem) ExportReg(ctx context.Context, file string) error {
 // --- pasta protegida ---
 
 // Scripts FIXOS (ASCII, sem aspas duplas). A pasta é sempre a constante ProtectedDir.
+// icaclsExe é por caminho ABSOLUTO (nunca pelo PATH: o icacls roda com privilégio).
+const icaclsExe = `C:\Windows\System32\icacls.exe`
+
 const protectDirScript = `$ErrorActionPreference='Stop'
 $d='` + ProtectedDir + `'
 if(Test-Path -LiteralPath $d){ $i=Get-Item -LiteralPath $d -Force; if(($i.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){ throw 'reparse point' }; foreach($c in @(Get-ChildItem -LiteralPath $d -Force)){ if(($c.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){ throw 'reparse point dentro da pasta' } } } else { New-Item -ItemType Directory -Path $d | Out-Null }
@@ -418,19 +421,69 @@ $acl.SetOwner($adm)
 $acl.SetAccessRuleProtection($true,$false)
 foreach($s in @($sys,$adm)){ $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($s,'FullControl','ContainerInherit,ObjectInherit','None','Allow'))) }
 Set-Acl -LiteralPath $d -AclObject $acl
-foreach($c in @(Get-ChildItem -LiteralPath $d -Force)){ & icacls.exe $c.FullName /reset /t /c /l | Out-Null; if($LASTEXITCODE -ne 0){ throw 'icacls reset' }; & icacls.exe $c.FullName /setowner '*S-1-5-32-544' /t /c /l | Out-Null; if($LASTEXITCODE -ne 0){ throw 'icacls setowner' } }
+foreach($c in @(Get-ChildItem -LiteralPath $d -Force)){ & '` + icaclsExe + `' $c.FullName /reset /t /c /l | Out-Null; if($LASTEXITCODE -ne 0){ throw 'icacls reset' }; & '` + icaclsExe + `' $c.FullName /setowner '*S-1-5-32-544' /t /c /l | Out-Null; if($LASTEXITCODE -ne 0){ throw 'icacls setowner' } }
 [IO.File]::Delete((Join-Path $d '` + RegFile + `'))
 `
 
 const readDirScript = `$ErrorActionPreference='Stop'
 $d='` + ProtectedDir + `'
 $i=Get-Item -LiteralPath $d -Force
-[pscustomobject]@{reparse=(($i.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0);sddl=(Get-Acl -LiteralPath $d).GetSecurityDescriptorSddlForm('All')} | ConvertTo-Json -Compress
+$ch=@()
+foreach($c in @(Get-ChildItem -LiteralPath $d -Force)){ $ch+=[pscustomobject]@{name=[string]$c.Name;reparse=(($c.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0);sddl=(Get-Acl -LiteralPath $c.FullName).GetSecurityDescriptorSddlForm('All')} }
+[pscustomobject]@{reparse=(($i.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0);sddl=(Get-Acl -LiteralPath $d).GetSecurityDescriptorSddlForm('All');children=$ch} | ConvertTo-Json -Compress -Depth 3
 `
 
-type dirInfo struct {
+type childInfo struct {
+	Name    string `json:"name"`
 	Reparse bool   `json:"reparse"`
 	SDDL    string `json:"sddl"`
+}
+
+type dirInfo struct {
+	Reparse  bool        `json:"reparse"`
+	SDDL     string      `json:"sddl"`
+	Children []childInfo `json:"children"`
+}
+
+// checkChildSDDL confere a ACL de um FILHO da pasta protegida depois do icacls /reset e /setowner: dono Administradores,
+// DACL que HERDA (sem P) e só duas ACEs de permissão FullControl herdadas (flag ID) para SYSTEM e Administradores. Um
+// arquivo plantado por usuário comum, com ACL própria dele, é recusado. (O /t do icacls reseta a subárvore; a conferência
+// por SDDL cobre o primeiro nível, que é onde ficam o backup, o .reg e a cópia do binário.)
+func checkChildSDDL(name, sddl string) error {
+	bad := func(why string) error {
+		return fmt.Errorf("a ACL de %q na pasta protegida não é a esperada: %s", textsafe.Line(name), why)
+	}
+	o := reSDDLOwner.FindStringSubmatch(sddl)
+	if o == nil || (o[1] != "BA" && o[1] != "S-1-5-32-544") {
+		return bad("o dono não é Administradores")
+	}
+	d := reSDDLDACL.FindStringSubmatch(sddl)
+	if d == nil {
+		return bad("sem DACL")
+	}
+	if strings.Contains(d[1], "P") {
+		return bad("a DACL não herda da pasta")
+	}
+	aces := regexp.MustCompile(`\(([^)]*)\)`).FindAllStringSubmatch(d[2], -1)
+	got := map[string]bool{}
+	for _, a := range aces {
+		f := strings.Split(a[1], ";")
+		if len(f) != 6 || f[0] != "A" || f[2] != "FA" || !strings.Contains(f[1], "ID") {
+			return bad("há uma ACE que não é de FullControl herdado")
+		}
+		switch f[5] {
+		case "SY", "S-1-5-18":
+			got["SY"] = true
+		case "BA", "S-1-5-32-544":
+			got["BA"] = true
+		default:
+			return bad("há uma ACE para " + f[5])
+		}
+	}
+	if len(aces) != 2 || !got["SY"] || !got["BA"] {
+		return bad("deveria haver só SYSTEM e Administradores")
+	}
+	return nil
 }
 
 var (
@@ -495,7 +548,19 @@ func (w *windowsSystem) ProtectDir(ctx context.Context, dir string) error {
 	if info.Reparse {
 		return fmt.Errorf("a pasta protegida é um ponto de reparse (link): recusada")
 	}
-	return checkDirSDDL(info.SDDL)
+	if err := checkDirSDDL(info.SDDL); err != nil {
+		return err
+	}
+	// o icacls /c segue depois de um erro e o código de saída final não é garantido: relê cada filho e confere
+	for _, c := range info.Children {
+		if c.Reparse {
+			return fmt.Errorf("%q na pasta protegida é um ponto de reparse (link): recusado", textsafe.Line(c.Name))
+		}
+		if err := checkChildSDDL(c.Name, c.SDDL); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // stageSelf copia o toolkit em execução para dir e confere o SHA-256 da cópia.
@@ -558,7 +623,7 @@ func (w *windowsSystem) StageBinary(_ context.Context, dir string) (StagedBinary
 func armTaskScript(minutes int) string {
 	return `$ErrorActionPreference='Stop'
 $a=New-ScheduledTaskAction -Execute '` + taskExe() + `' -Argument '` + RevertArgs + `'
-$t=New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(` + strconv.Itoa(minutes) + `))
+$t=New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(` + strconv.Itoa(minutes) + `)) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Minutes 30)
 $p=New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
 $s=New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 Register-ScheduledTask -TaskName '` + TaskName + `' -TaskPath '` + TaskPath + `' -Action $a -Trigger $t -Principal $p -Settings $s | Out-Null
