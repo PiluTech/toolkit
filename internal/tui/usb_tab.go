@@ -50,8 +50,8 @@ type UsbInfo struct {
 	Reason    string // motivo do estado desconhecido
 	// RevertNote é o rastro da última reversão automática ("a reversão automática rodou e falhou: ..."); vazio = nenhum.
 	RevertNote string
-	Deadline  string // "HH:MM" da reversão automática (estado armed)
-	Devices   []UsbDevice
+	Deadline   string // "HH:MM" da reversão automática (estado armed)
+	Devices    []UsbDevice
 }
 
 // UsbPlan é um plano pronto para mostrar (texto já formatado). OK=false quando recusado (sem prova, edição, política
