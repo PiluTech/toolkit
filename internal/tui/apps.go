@@ -33,8 +33,17 @@ type AppStatus struct {
 	External        bool
 	ExternalManager string
 	ExternalWhere   string
-	Err             error // não deu para verificar
+	// DetectGap (só com Installed false): "incomplete" (leitura do registro incompleta) ou "not_applicable" (app
+	// sem detecção neste SO). O estado vira "não detectado", nunca "não instalado".
+	DetectGap string
+	Err       error // não deu para verificar
 }
+
+// Valores de AppStatus.DetectGap.
+const (
+	DetectIncomplete    = "incomplete"
+	DetectNotApplicable = "not_applicable"
+)
 
 // AppsBackend é o que a aba Apps precisa do resto do toolkit. A implementação real (catálogo + providers
 // sobre o Runner) fica em internal/cli; os testes usam um falso.
@@ -855,8 +864,11 @@ func (t *AppsTab) rowLine(i int, c cols) string {
 
 // Texto do estado "instalado fora do gerenciador": completo quando a coluna comporta, curto senão.
 const (
-	stateExternalFull  = "instalado (fora do %s)"
-	stateExternalShort = "instalado (fora)"
+	stateExternalFull         = "instalado (fora do %s)"
+	stateExternalShort        = "instalado (fora)"
+	stateUndetected           = "não detectado"
+	stateUndetectedShort      = "não detectado (parcial)"
+	stateUndetectedIncomplete = "não detectado (leitura incompleta)"
 )
 
 // externalText escolhe o texto de "instalado fora do gerenciador" que cabe em width colunas (com o símbolo).
@@ -887,6 +899,15 @@ func (t *AppsTab) stateText(a AppInfo, width int) (state, ver string) {
 		return externalText(st, width), st.Version
 	case st.Installed:
 		return SymOK + " instalado", st.Version
+	}
+	switch st.DetectGap {
+	case DetectIncomplete:
+		if full := SymPending + " " + stateUndetectedIncomplete; lipgloss.Width(full) <= width {
+			return full, ""
+		}
+		return SymPending + " " + stateUndetectedShort, ""
+	case DetectNotApplicable:
+		return SymPending + " " + stateUndetected, ""
 	}
 	return SymPending + " não instalado", ""
 }

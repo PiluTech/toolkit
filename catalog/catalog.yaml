@@ -2,8 +2,11 @@
 #
 # O bloco opcional `detect` diz como achar o app já instalado FORA do gerenciador (só leitura): o .app do .dmg no
 # macOS, o programa do instalador no Windows, o .desktop ou o snap no Linux. Só entram valores conhecidos; sem
-# certeza, o app fica sem o bloco (python não tem, e git só tem o do Windows: no macOS e no Linux ele é linha de
-# comando, sem app).
+# certeza, o app fica sem o bloco (python não tem: cada versão menor convive com as outras e o DisplayName
+# "Python 3.12.x (64-bit)" não separa a que o usuário pediu; e git só tem o do Windows: no macOS e no Linux ele é linha de
+# comando, sem app). No Windows, display_name casa com o DisplayName do registro Uninstall (nome exato, ou com
+# versão e "(x64 ...)" no fim: nunca por substring), e app_path é só evidência complementar (a chave existe em
+# App Paths), usada quando o Uninstall não tem o app; só entra para exe conhecido.
 apps:
   git:
     name: Git
@@ -57,7 +60,7 @@ apps:
     linux:   [{ provider: flatpak, id: org.mozilla.firefox }]
     detect:
       macos:   { app_bundle: Firefox.app, bundle_id: org.mozilla.firefox }
-      windows: { display_name: Mozilla Firefox }
+      windows: { display_name: Mozilla Firefox, app_path: firefox.exe }
       linux:   { desktop_id: firefox.desktop, snap: firefox }
 
   vlc:
@@ -99,14 +102,14 @@ apps:
     linux:   [{ provider: flatpak, id: com.brave.Browser }]
     detect:
       macos:   { app_bundle: "Brave Browser.app", bundle_id: com.brave.Browser }
-      windows: { display_name: Brave }
+      windows: { display_name: Brave, app_path: brave.exe }
 
   chrome:
     name: Google Chrome
     category: navegadores
     windows: [{ provider: winget, id: Google.Chrome }]
     detect:
-      windows: { display_name: Google Chrome }
+      windows: { display_name: Google Chrome, app_path: chrome.exe }
 
   libreoffice:
     name: LibreOffice
@@ -123,6 +126,8 @@ apps:
     category: utilitarios
     windows: [{ provider: winget, id: Giorgiotani.Peazip }]
     linux:   [{ provider: flatpak, id: io.github.peazip.PeaZip }]
+    detect:
+      windows: { display_name: PeaZip }
 
   # Acesso remoto (PR13, decisão 3 do plano): RustDesk (AGPL-3.0) entra SÓ com o aviso na tela. Ids verificados em
   # 2026-11-14: cask rustdesk (API do Homebrew, com sha256) e flatpak com.rustdesk.RustDesk (Flathub, verificado pelo

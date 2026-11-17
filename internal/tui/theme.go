@@ -51,12 +51,17 @@ func (t Theme) Spin(frame int) string {
 	return spinnerFrames[frame%len(spinnerFrames)]
 }
 
-// Tick agenda o próximo quadro do spinner; com o movimento reduzido não agenda nada.
+// tickWantMsg é o PEDIDO de um quadro do spinner: quem anima devolve Tick() e a raiz (Model) mantém UM só relógio de
+// quadros para todas as abas. Antes cada aba agendava o seu e todo quadro ia a todas as abas, que agendavam outro
+// cada uma: com K abas carregando os quadros multiplicavam por K a cada 100 ms (partida travada).
+type tickWantMsg struct{}
+
+// Tick pede o próximo quadro do spinner; com o movimento reduzido não pede nada.
 func (t Theme) Tick() tea.Cmd {
 	if t.NoMotion {
 		return nil
 	}
-	return tick()
+	return func() tea.Msg { return tickWantMsg{} }
 }
 
 // Paint pinta um trecho com cor SÓ no símbolo inicial (✓ ✗ ! ○ [x], o spinner), nunca na palavra ao lado: as cores

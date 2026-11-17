@@ -277,7 +277,7 @@ func (b *appsBackend) Status(ctx context.Context, id string) tui.AppStatus {
 	if err != nil {
 		return tui.AppStatus{Err: err}
 	}
-	out := tui.AppStatus{Installed: st.Installed, Version: st.Version}
+	out := tui.AppStatus{Installed: st.Installed, Version: st.Version, DetectGap: st.DetectGap}
 	if st.External != nil {
 		out.External, out.ExternalManager, out.ExternalWhere = true, st.External.Manager, st.External.Where
 		out.Version = st.External.Version

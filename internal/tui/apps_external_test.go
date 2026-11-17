@@ -60,3 +60,17 @@ func TestAppsInstaladoNormalContinuaIgual(t *testing.T) {
 		t.Fatalf("git instalado pelo gerenciador:\n%s", v)
 	}
 }
+
+func TestAppsSemDeteccaoCompletaDizNaoDetectado(t *testing.T) {
+	st := defaultStatus()
+	st["python"] = AppStatus{DetectGap: DetectIncomplete}
+	v := plain(loaded(t, &fakeBackend{apps: sampleApps(), status: st}).View(120, 19))
+	if !strings.Contains(v, "○ não detectado (parcial)") && !strings.Contains(v, "○ não detectado (leitura incompleta)") {
+		t.Fatalf("estado incompleto ausente:\n%s", v)
+	}
+	st["python"] = AppStatus{DetectGap: DetectNotApplicable}
+	v = plain(loaded(t, &fakeBackend{apps: sampleApps(), status: st}).View(120, 19))
+	if !strings.Contains(v, "○ não detectado") || strings.Contains(v, "leitura incompleta") {
+		t.Fatalf("estado sem detecção ausente:\n%s", v)
+	}
+}
